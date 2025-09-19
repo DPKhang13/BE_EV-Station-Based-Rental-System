@@ -14,6 +14,7 @@ public class Main {
             System.out.println("i = " + i);
             System.out.println("Khangngu");
             System.out.println("khangnguvcl");
+            System.out.printf("123");
         }
     }
 }
