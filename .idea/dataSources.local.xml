@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="dataSourceStorageLocal" created-in="IU-252.25557.131">
+    <data-source name="HSF302" uuid="a9fe1a72-6cea-426c-9eb0-c8f42adf439f">
+      <database-info product="Microsoft SQL Server" version="15.00.2145" jdbc-version="4.3" driver-name="Microsoft JDBC Driver 12.8 for SQL Server" driver-version="12.8.1.0" dbms="MSSQL" exact-version="15.0.2145" exact-driver-version="12.8">
+        <extra-name-characters>$#@</extra-name-characters>
+        <identifier-quote-string>&quot;</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="mixed" quoted-identifiers="mixed" />
+      <secret-storage>master_key</secret-storage>
+      <user-name>sa</user-name>
+      <schema-mapping>
+        <introspection-scope>
+          <node negative="1">
+            <node kind="database" qname="@">
+              <node kind="schema" qname="@" />
+            </node>
+            <node kind="database" qname="ev_rental_1" />
+          </node>
+        </introspection-scope>
+      </schema-mapping>
+    </data-source>
+    <data-source name="ProjectSWP" uuid="3d7a48c4-b45d-486d-b773-038576c507e0">
+      <database-info product="Microsoft SQL Server" version="15.00.2145" jdbc-version="4.3" driver-name="Microsoft JDBC Driver 12.8 for SQL Server" driver-version="12.8.1.0" dbms="MSSQL" exact-version="15.0.2145" exact-driver-version="12.8">
+        <extra-name-characters>$#@</extra-name-characters>
+        <identifier-quote-string>&quot;</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="mixed" quoted-identifiers="mixed" />
+      <secret-storage>master_key</secret-storage>
+      <user-name>sa</user-name>
+      <schema-mapping>
+        <introspection-scope>
+          <node kind="database">
+            <name qname="@" />
+            <name qname="ev_rental_1" />
+            <node kind="schema" qname="@" />
+          </node>
+        </introspection-scope>
+      </schema-mapping>
+    </data-source>
+  </component>
+</project>
