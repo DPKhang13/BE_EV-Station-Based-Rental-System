@@ -9,6 +9,7 @@ public class Main {
         System.out.printf("the first word is goodbye!");
         System.out.println("Chao moi nguoi nhe");
 
+        System.out.println("Chao moi nguoi nhe");
 
         }
 
