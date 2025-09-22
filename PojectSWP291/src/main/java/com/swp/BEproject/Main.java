@@ -9,6 +9,5 @@ public class Main {
         System.out.printf("the first word is goodbye!");
 
 
-        }
-
+    }
 }
