@@ -47,7 +47,7 @@ CREATE TABLE Customer (
 );
 
 CREATE TABLE Staff (
-    staff_id INT PRIMARY KEY IDENTITY(1,1),
+    staff_id INT PRIMARY KEY,
     email NVARCHAR(100),
     position NVARCHAR(50),
     station_id INT,
@@ -213,16 +213,16 @@ INSERT INTO [User] (full_name,password,phone,role,kyc_status) VALUES
 -- CUSTOMER
 -- ======================================
 INSERT INTO Customer (customer_id,email,license_number,cccd_number,cccd_front,cccd_back,license_photo) VALUES
-(1,'a1@gmail.com','AB123','123456789','url_cccdf1','url_cccdb1','url_license1'),
-(2,'a2@gmail.com','AB124','223456789','url_cccdf2','url_cccdb2','url_license2'),
-(3,'a3@gmail.com','AB125','323456789','url_cccdf3','url_cccdb3','url_license3'),
-(4,'a4@gmail.com','AB126','423456789','url_cccdf4','url_cccdb4','url_license4'),
-(5,'a5@gmail.com','AB127','523456789','url_cccdf5','url_cccdb5','url_license5'),
-(6,'a6@gmail.com','AB128','623456789','url_cccdf6','url_cccdb6','url_license6'),
-(7,'a7@gmail.com','AB129','723456789','url_cccdf7','url_cccdb7','url_license7'),
-(8,'a8@gmail.com','AB130','823456789','url_cccdf8','url_cccdb8','url_license8'),
-(9,'a9@gmail.com','AB131','923456789','url_cccdf9','url_cccdb9','url_license9'),
-(10,'a10@gmail.com','AB132','1023456789','url_cccdf10','url_cccdb10','url_license10');
+(SCOPE_IDENTITY(),'a1@gmail.com','AB123','123456789','url_cccdf1','url_cccdb1','url_license1'),
+(SCOPE_IDENTITY(),'a2@gmail.com','AB124','223456789','url_cccdf2','url_cccdb2','url_license2'),
+(SCOPE_IDENTITY(),'a3@gmail.com','AB125','323456789','url_cccdf3','url_cccdb3','url_license3'),
+(SCOPE_IDENTITY(),'a4@gmail.com','AB126','423456789','url_cccdf4','url_cccdb4','url_license4'),
+(SCOPE_IDENTITY(),'a5@gmail.com','AB127','523456789','url_cccdf5','url_cccdb5','url_license5'),
+(SCOPE_IDENTITY(),'a6@gmail.com','AB128','623456789','url_cccdf6','url_cccdb6','url_license6'),
+(SCOPE_IDENTITY(),'a7@gmail.com','AB129','723456789','url_cccdf7','url_cccdb7','url_license7'),
+(SCOPE_IDENTITY(),'a8@gmail.com','AB130','823456789','url_cccdf8','url_cccdb8','url_license8'),
+(SCOPE_IDENTITY(),'a9@gmail.com','AB131','923456789','url_cccdf9','url_cccdb9','url_license9'),
+(SCOPE_IDENTITY(),'a10@gmail.com','AB132','1023456789','url_cccdf10','url_cccdb10','url_license10');
 
 -- ======================================
 -- STAFF
