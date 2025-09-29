@@ -23,6 +23,20 @@ CREATE TABLE RentalStation (
     FOREIGN KEY (address_id) REFERENCES Address(address_id)
 );
 
+CREATE TABLE RentalTracking(
+    tracking_id INT PRIMARY KEY IDENTITY(1,1),
+    rental_order_id INT NOT NULL,
+    vehicle_id INT NOT NULL,
+    pickup_at DATETIME,
+    return_due_at DATETIME,
+    return_at DATETIME,
+    status NVARCHAR(20) DEFAULT 'ONGOING', -- ONGOING, CLOSED, LATE, DISPUTE
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE(),
+    CONSTRAINT fk_tracking_order FOREIGN KEY (rental_order_id) REFERENCES RentalOrder(order_id),
+    FOREIGN KEY (vehicle_id) REFERENCES Vehicle(vehicle_id)
+);
+
 -- ======================================
 -- USER & ROLE
 -- ======================================
