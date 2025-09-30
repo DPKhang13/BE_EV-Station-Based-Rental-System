@@ -9,7 +9,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.group6.projectswp391</groupId>
-    <artifactId>projectswp391</artifactId>
+    <artifactId>Rental_Car</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>projectswp391</name>
     <description>projectswp391</description>
