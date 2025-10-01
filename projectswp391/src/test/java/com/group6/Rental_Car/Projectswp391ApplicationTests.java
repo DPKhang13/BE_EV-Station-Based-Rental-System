@@ -1,4 +1,4 @@
-package com.group6.projectswp391;
+package com.group6.Rental_Car;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

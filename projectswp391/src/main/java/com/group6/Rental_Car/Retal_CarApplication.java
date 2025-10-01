@@ -7,8 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class Projectswp391Application {
 
     public static void main(String[] args) {
-        System.out.println("Hello");
-        System.out.println("ahihi");
+        SpringApplication.run(Projectswp391Application.class, args);
     }
 
 }
