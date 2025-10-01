@@ -23,7 +23,7 @@ public class RegisterController {
         // Check email đã tồn tại chưa
         if (userService.findByEmail(request.getEmail()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("❌ Email đã tồn tại!");
+                    .body(" Email đã tồn tại!");
         }
 
         // Map RegisterRequest -> User
@@ -35,11 +35,11 @@ public class RegisterController {
         user.setRole(Role.CUSTOMER);
         user.setStatus(UserStatus.NEED_OTP); // Chưa active, cần OTP sau khi login
 
-        // ✅ Lưu user vào DB
+        //  Lưu user vào DB
         userService.register(user);
 
         return ResponseEntity.ok(new RegisterResponse(
-                "✅ Đăng ký thành công! Vui lòng đăng nhập để nhận OTP và kích hoạt tài khoản.",
+                "Đăng ký thành công! Vui lòng đăng nhập để nhận OTP và kích hoạt tài khoản.",
                 "/login",
                 0
         ));

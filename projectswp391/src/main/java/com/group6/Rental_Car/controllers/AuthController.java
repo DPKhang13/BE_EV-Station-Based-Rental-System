@@ -34,7 +34,7 @@ public class AuthController {
                 .filter(user -> request.getPassword().equals(user.getPassword()));
 
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("❌ Sai email hoặc mật khẩu!");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(" Sai email hoặc mật khẩu!");
         }
 
         User user = userOpt.get();
@@ -50,7 +50,7 @@ public class AuthController {
         mailService.sendOtp(user.getEmail(), otp);
 
         return ResponseEntity.ok(Map.of(
-                "message", "🔐 OTP đã được gửi tới email, vui lòng xác nhận để tiếp tục.",
+                "message", " OTP đã được gửi tới email, vui lòng xác nhận để tiếp tục.",
                 "verifyUrl", "/verify-otp"
         ));
     }

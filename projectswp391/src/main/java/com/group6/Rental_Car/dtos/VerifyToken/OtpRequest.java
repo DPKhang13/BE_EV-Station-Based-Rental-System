@@ -6,5 +6,5 @@ import lombok.Data;
 @Data
 public class OtpRequest {
     private String otp;
-    private OtpType type; // REGISTER, LOGIN, FORGOT_PASSWORD...
+    private OtpType type; // REGISTER, LOGIN
 }
