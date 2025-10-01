@@ -52,7 +52,7 @@ public class UserServiceImpl implements UserService {
         String token = jwtUtil.generateToken(saved.getEmail(), saved.getRole().name());
 
         // Gửi token qua email
-        mailService.sendToken(saved.getEmail(), token);
+        mailService.sendOtp(saved.getEmail(), token);
 
         return saved;
     }

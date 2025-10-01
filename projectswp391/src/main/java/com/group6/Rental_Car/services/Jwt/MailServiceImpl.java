@@ -12,17 +12,20 @@ public class MailServiceImpl implements MailService {
     private final JavaMailSender mailSender;
 
     @Override
-    public void sendToken(String toEmail, String token) {
+    public void sendOtp(String toEmail, String otp) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setTo(toEmail);
-            message.setSubject("Your Login Token");
-            message.setText("Here is your login token: " + token);
+            message.setSubject("Your OTP Code");
+            message.setText("Mã OTP đăng nhập của bạn là: " + otp
+                    + "\nOTP này sẽ hết hạn sau 5 phút.");
 
-            mailSender.send(message); //  chỉ gửi 1 lần
-            System.out.println(" Token email sent to: " + toEmail);
+            mailSender.send(message);
+            System.out.println("✅ OTP email sent to: " + toEmail);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
+
 }
