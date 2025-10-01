@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.entities;
 import com.group6.Rental_Car.enums.Role;
+import com.group6.Rental_Car.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -32,6 +33,10 @@ public class User {
     @Enumerated(EnumType.STRING) // ánh xạ Enum Role -> NVARCHAR
     @Column(name = "role", length = 20, nullable = false)
     private Role role;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private UserStatus status;
 
     @Column(name = "kyc_status", length = 50)
     private String kycStatus;

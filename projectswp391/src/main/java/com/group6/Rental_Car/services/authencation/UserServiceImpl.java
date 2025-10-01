@@ -41,24 +41,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User register(User user) {
-        // Chuẩn hóa role về viết hoa
         if (user.getRole() != null) {
             user.setRole(Role.valueOf(user.getRole().name().toUpperCase()));
         }
-
-        User saved = userRepository.save(user);
-
-        // Sinh JWT token cho user mới
-        String token = jwtUtil.generateToken(saved.getEmail(), saved.getRole().name());
-
-        // Gửi token qua email
-        mailService.sendOtp(saved.getEmail(), token);
-
-        return saved;
+        // chỉ lưu user thôi
+        return userRepository.save(user);
     }
 
     @Override
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
+    }
+
+    @Override
+    public User save(User user) {
+        return userRepository.save(user);
     }
 }

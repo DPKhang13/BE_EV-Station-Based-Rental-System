@@ -1,7 +1,10 @@
 package com.group6.Rental_Car.controllers;
+import com.group6.Rental_Car.dtos.VerifyToken.OtpRequest;
 import com.group6.Rental_Car.dtos.VerifyToken.VerifyResponse;
 import com.group6.Rental_Car.dtos.authencation.LoginRequest;
 import com.group6.Rental_Car.entities.User;
+import com.group6.Rental_Car.enums.OtpType;
+import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.services.Jwt.MailService;
 import com.group6.Rental_Car.services.Otp.OtpService;
 import com.group6.Rental_Car.services.authencation.UserService;
@@ -24,86 +27,82 @@ public class AuthController {
     private final MailService mailService;
     private final OtpService otpService;
 
-    // Step 1: Login -> gửi token qua email, không trả về FE
+    // Step 1: Login
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         Optional<User> userOpt = userService.findByEmail(request.getEmail())
                 .filter(user -> request.getPassword().equals(user.getPassword()));
 
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Sai email hoặc mật khẩu!");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("❌ Sai email hoặc mật khẩu!");
         }
 
         User user = userOpt.get();
 
-        String otp = otpService.generateOtp(user.getEmail());
-        // Gửi token qua email
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            // User active -> login trực tiếp
+            String jwtToken = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
+            return ResponseEntity.ok(buildResponse(user, jwtToken));
+        }
+
+        // Nếu NEED_OTP thì gửi OTP để verify
+        String otp = otpService.generateOtp(user.getEmail(), OtpType.LOGIN, null);
         mailService.sendOtp(user.getEmail(), otp);
 
-        // Trả về link verify-token
-        return ResponseEntity.ok(new Object() {
-            public final String message = "Đăng nhập thành công. OTP đã gửi vào email!";
-            public final String verifyUrl = "/auth/verify-otp";
-        });
+        return ResponseEntity.ok(Map.of(
+                "message", "🔐 OTP đã được gửi tới email, vui lòng xác nhận để tiếp tục.",
+                "verifyUrl", "/verify-otp"
+        ));
     }
 
-    // Step 2: Verify token -> xác định role -> redirect
-    @PostMapping ("/verify-otp")
-
-    public ResponseEntity<?> verifyToken(@RequestBody Map<String, String> request) {
-        String otp = request.get("otp");
+    // Step 2: Verify OTP
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verifyOtp(@RequestBody OtpRequest request) {
+        String otp = request.getOtp();
         if (otp == null || otp.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("OTP is required");
-        }
-        else if (!otpService.validateOtp(otp)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("OTP không hợp lệ hoặc đã hết hạn!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(" OTP is required");
         }
 
-        // Lấy email từ OTP
+        if (!otpService.validateOtp(otp)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(" OTP không hợp lệ hoặc đã hết hạn!");
+        }
+
         String email = otpService.getEmailByOtp(otp);
         if (email == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Không tìm thấy email cho OTP này!");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(" Không tìm thấy email cho OTP này!");
         }
 
-        Optional<User> userOpt = userService.findByEmail(email);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Email không tồn tại!");
+        User user = userService.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException(" Không tìm thấy user!"));
+
+        // Nếu user chưa active -> active luôn
+        if (user.getStatus() == UserStatus.NEED_OTP) {
+            user.setStatus(UserStatus.ACTIVE);
+            userService.save(user);
         }
 
-        User user = userOpt.get();
-
-        // Xoá OTP sau khi dùng
         otpService.clearOtp(otp);
 
-        // Sinh JWT
-        final String jwtToken = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
-        final String roleName = user.getRole().name();
+        String jwtToken = jwtUtil.generateToken(user.getEmail(), user.getRole().name());
+        return ResponseEntity.ok(buildResponse(user, jwtToken));
+    }
 
-        // Điều hướng theo role
-        final String redirectUrl;
-        switch (roleName.toUpperCase()) {
-            case "CUSTOMER":
-                redirectUrl = "/customer";
-                break;
-            case "STAFF":
-                redirectUrl = "/staff";
-                break;
-            case "ADMIN":
-                redirectUrl = "/admin";
-                break;
-            default:
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Role không hợp lệ!");
-        }
+    // Helper để trả response gọn
+    private VerifyResponse buildResponse(User user, String jwtToken) {
+        String redirectUrl = switch (user.getRole().name().toUpperCase()) {
+            case "CUSTOMER" -> "/customer";
+            case "STAFF" -> "/staff";
+            case "ADMIN" -> "/admin";
+            default -> "/login";
+        };
 
-        VerifyResponse response = new VerifyResponse(
+        return new VerifyResponse(
                 jwtToken,
-                roleName,
+                user.getRole().name(),
                 redirectUrl,
                 user.getFullName(),
                 user.getPhone(),
                 user.getEmail()
         );
-
-        return ResponseEntity.ok(response);
     }
 }

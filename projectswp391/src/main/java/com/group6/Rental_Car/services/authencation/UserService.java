@@ -10,4 +10,5 @@ public interface UserService {
     Optional<LoginResponse> login(LoginRequest request);
     User register(User user);
     Optional<User> findByEmail(String email);
+    User save(User user);
 }
