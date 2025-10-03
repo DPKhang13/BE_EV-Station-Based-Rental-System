@@ -14,7 +14,6 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,20 +33,27 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     @Transactional
     public VehicleResponse createVehicle(VehicleRequest vehicleRequest) {
-        // 1) Kiểm tra stationId
+        // Kiểm tra stationId
         if (vehicleRequest.getStationId() == null) {
             throw new IllegalArgumentException("stationId is required");
         }
+        //Lấy thông tin station
         RentalStation station = stationRepository.findById(vehicleRequest.getStationId())
                 .orElseThrow(() -> new IllegalArgumentException("Station not found: " + vehicleRequest.getStationId()));
 
-        // 2) (khuyến nghị) kiểm tra trùng plateNumber
-        Vehicle dup = vehicleRepository.findByPlateNumber(vehicleRequest.getPlateNumber());
-        if (dup != null) {
+        //kiểm tra trùng plateNumber
+        Optional<Vehicle> dup = vehicleRepository.findByPlateNumber(vehicleRequest.getPlateNumber());
+        if (dup.isPresent()) {
             throw new IllegalStateException("Plate number already exists: " + vehicleRequest.getPlateNumber());
         }
 
-        // 3) Lập vehicle và gán station
+        String variant = vehicleRequest.getVariant();
+        if (variant != null && !variant.equalsIgnoreCase("air") &&
+                !variant.equalsIgnoreCase("pro") &&
+                !variant.equalsIgnoreCase("plus")) {
+            throw new IllegalArgumentException("Invalid variant value: " + variant);
+        }
+
         Vehicle v = new Vehicle();
         v.setStation(station);
         v.setPlateNumber(vehicleRequest.getPlateNumber());
@@ -59,19 +65,9 @@ public class VehicleServiceImpl implements VehicleService {
         return toResponse(v);
     }
 
+
     // Lấy danh sách xe (GET)
-    @Override
-    public VehicleListResponse getAllVehicles(VehicleListRequest vehicleListRequest) {
-        int page = (vehicleListRequest.getPage() == null || vehicleListRequest.getPage() < 0)
-                ? 0
-                : vehicleListRequest.getPage();
-        int size = (vehicleListRequest.getSize() == null || vehicleListRequest.getSize() <= 0)
-                ? 20  // Giá trị mặc định cho size
-                : vehicleListRequest.getSize();
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Vehicle> vehicles = vehicleRepository.findAll(pageable);
-
+    private VehicleListResponse buildVehicleListResponse(Page<Vehicle> vehicles) {
         VehicleListResponse response = new VehicleListResponse();
         response.setItems(
                 vehicles.getContent().stream().map(this::toResponse).collect(Collectors.toList())
@@ -86,12 +82,38 @@ public class VehicleServiceImpl implements VehicleService {
         return response;
     }
 
+    @Override
+    public VehicleListResponse getAllVehicles(VehicleListRequest vehicleListRequest) {
+        //chức năng phân trang để hiện thị 1 lượng thông tin nhất định
+        int page = (vehicleListRequest.getPage() == null || vehicleListRequest.getPage() < 0)
+                ? 0
+                : vehicleListRequest.getPage();
+        int size = (vehicleListRequest.getSize() == null || vehicleListRequest.getSize() <= 0)
+                ? 20  // Giá trị mặc định cho size
+                : vehicleListRequest.getSize();
+
+        Pageable pageable = PageRequest.of(page, size);
+        if (vehicleListRequest.getSearch() == null || vehicleListRequest.getSearch().isEmpty()) {
+            // Nếu không tìm kiếm, lấy tất cả sản phẩm với phân trang
+            Page<Vehicle> vehicles = vehicleRepository.findAll(pageable);
+
+            // Chuyển đổi dữ liệu và trả về
+            return buildVehicleListResponse(vehicles);
+        }
+
+        // Nếu có tìm kiếm, tìm kiếm sản phẩm theo variant
+        Page<Vehicle> vehicles = vehicleRepository.findByVariantContainingIgnoreCase(vehicleListRequest.getSearch(), pageable);
+
+        // Chuyển đổi dữ liệu và trả về
+        return buildVehicleListResponse(vehicles);
+    }
+
     // Cập nhật sản phẩm (PUT)
     @Override
     @Transactional
     public VehicleResponse updateVehicle(Long vehicleId, VehicleRequest vehicleRequest) {
-        Vehicle existingVehicle = vehicleRepository.findByPlateNumber(vehicleRequest.getPlateNumber());
-        if (existingVehicle != null && !existingVehicle.getVehicleId().equals(vehicleId)) {
+        Optional<Vehicle> existingVehicle = vehicleRepository.findByPlateNumber(vehicleRequest.getPlateNumber());
+        if (existingVehicle.isPresent() && !existingVehicle.get().getVehicleId().equals(vehicleId)) {
             throw new RuntimeException("Plate number already exists");
         }
         Optional<Vehicle> vehicleOptional = vehicleRepository.findById(vehicleId);
