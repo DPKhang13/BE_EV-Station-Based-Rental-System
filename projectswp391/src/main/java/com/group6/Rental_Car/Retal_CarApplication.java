@@ -1,13 +1,13 @@
-package com.group6.projectswp391;
+package com.group6.Rental_Car;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class Projectswp391Application {
+public class Retal_CarApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(Projectswp391Application.class, args);
+        SpringApplication.run(Retal_CarApplication.class, args);
     }
 
 }
