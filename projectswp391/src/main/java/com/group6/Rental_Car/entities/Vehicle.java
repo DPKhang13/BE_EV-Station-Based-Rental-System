@@ -21,15 +21,15 @@ public class Vehicle {
     @JoinColumn(name = "station_id", nullable = false)
     private RentalStation station;
 
-    @Column(name = "plate_number", length = 64, nullable = false)
+    @Column(name = "plate_number", length = 20, nullable = false, unique = true)
     private String plateNumber;
 
-    @Column(name = "status", length = 32, nullable = false)
+    @Column(name = "status", length = 50, nullable = false)
     private String status;
 
     @Column(name = "seat_count")
     private Integer seatCount;
 
-    @Column(name = "variant")
+    @Column(name = "variant", length = 50)
     private String variant;
 }

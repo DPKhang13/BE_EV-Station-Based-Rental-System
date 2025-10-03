@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class VehicleRequest {
+    private Long stationId;
     private String plateNumber;
     private String status;
     private int seatCount;

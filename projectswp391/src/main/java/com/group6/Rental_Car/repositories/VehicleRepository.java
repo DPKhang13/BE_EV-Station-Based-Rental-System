@@ -6,9 +6,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
-import java.util.UUID;
-
 public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
+    Vehicle findByPlateNumber(String plateNumber);
 
     @EntityGraph(attributePaths = {"station", "station.address"})
     @Query("SELECT v FROM Vehicle v")

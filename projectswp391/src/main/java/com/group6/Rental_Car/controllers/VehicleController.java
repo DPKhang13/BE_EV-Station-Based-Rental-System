@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/vehicles")
-@Tag(name = "Vehicle API", description = "Quản lí xe (creat, read, cập nhật, xóa")
+@Tag(name = "Vehicle API", description = "Quản lí xe (create, read, cập nhật, xóa")
 
 public class VehicleController {
     @Autowired
