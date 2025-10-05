@@ -1,4 +1,4 @@
-package com.group6.Rental_Car.dtos.LoginPage;
+package com.group6.Rental_Car.dtos.loginpage;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

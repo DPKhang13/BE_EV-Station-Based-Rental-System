@@ -1,4 +1,4 @@
-package com.group6.Rental_Car.dtos.OtpVerify;
+package com.group6.Rental_Car.dtos.otpverify;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
