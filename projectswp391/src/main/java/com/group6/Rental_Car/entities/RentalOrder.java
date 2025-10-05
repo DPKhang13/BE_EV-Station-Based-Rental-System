@@ -1,42 +1,41 @@
 package com.group6.Rental_Car.entities;
+
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "[RetalOrder]") // 'User' là keyword trong SQL Server nên để trong []
+@Table(name = "RentalOrder")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class RentalOrder {
-// nếu bảng bạn tên là order thì đổi lại thành "order"
 
-        @Id
-        @Column(name = "order_id", nullable = false)
-        private UUID orderId;
+    @Id
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    private UUID orderId;
 
-        @Column(name = "customer_id")
-        private UUID customerId;
 
-        @Column(name = "vehicle_id")
-        private Long vehicleId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id", nullable = false)
+    private User customer;
 
-        @Column(name = "start_time")
-        private LocalDateTime startTime;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vehicle_id", nullable = false)
+    private Vehicle vehicle;
 
-        @Column(name = "end_time")
-        private LocalDateTime endTime;
+    private LocalDateTime startTime;
 
-        @Column(name = "total_price")
-        private Double totalPrice;
+    private LocalDateTime endTime;
 
-        @Column(name = "status")
-        private String status;
+    private BigDecimal totalPrice;
 
-        // Getter & Setter
-    }
-
+    private String status;
+}

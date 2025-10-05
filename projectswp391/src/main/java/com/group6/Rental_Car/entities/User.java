@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -37,5 +38,11 @@ public class User {
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
+    @OneToMany(mappedBy = "customer", fetch = FetchType.LAZY)
+    private List<RentalOrder> rentalOrders;
+
+    @ManyToOne
+    @JoinColumn(name = "station_id")
+    private RentalStation rentalStation;
 
 }
