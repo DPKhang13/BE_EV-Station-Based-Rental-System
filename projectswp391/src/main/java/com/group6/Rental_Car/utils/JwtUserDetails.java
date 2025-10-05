@@ -20,14 +20,17 @@ public class JwtUserDetails implements UserDetails {
     private String password; // password từ DB (hash), nếu login bằng Google thì có thể để rỗng
     private String role;     // role của user
 
+
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role));
+        if (role == null) return List.of();
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role));
     }
 
     @Override
     public String getPassword() {
-        return this.password; // nếu login DB thì trả về password hash, nếu OAuth2 thì ""
+     return ""; // nếu login DB thì trả về password hash, nếu OAuth2 thì ""
     }
 
     @Override

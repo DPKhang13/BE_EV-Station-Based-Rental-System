@@ -1,4 +1,4 @@
-package com.group6.Rental_Car.dtos.LoginPage;
+package com.group6.Rental_Car.dtos.loginpage;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.group6.Rental_Car.enums.Role;

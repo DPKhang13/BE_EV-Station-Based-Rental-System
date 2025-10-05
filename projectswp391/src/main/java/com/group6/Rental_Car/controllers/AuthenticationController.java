@@ -1,9 +1,9 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.LoginPage.LoginRequest;
-import com.group6.Rental_Car.dtos.LoginPage.RegisterRequest;
-import com.group6.Rental_Car.dtos.LoginPage.RegisterResponse;
-import com.group6.Rental_Car.dtos.OtpVerify.OtpRequest;
+import com.group6.Rental_Car.dtos.loginpage.LoginRequest;
+import com.group6.Rental_Car.dtos.loginpage.RegisterRequest;
+import com.group6.Rental_Car.dtos.loginpage.RegisterResponse;
+import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import com.group6.Rental_Car.utils.JwtUtil;

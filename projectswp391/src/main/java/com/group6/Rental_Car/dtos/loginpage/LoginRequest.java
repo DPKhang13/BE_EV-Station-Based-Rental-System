@@ -1,4 +1,4 @@
-package com.group6.Rental_Car.dtos.LoginPage;
+package com.group6.Rental_Car.dtos.loginpage;
 
 import lombok.Getter;
 import lombok.Setter;

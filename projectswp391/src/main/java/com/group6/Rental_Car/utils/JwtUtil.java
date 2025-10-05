@@ -21,7 +21,7 @@ public class JwtUtil {
     public String generateAccessToken(JwtUserDetails userDetails) {
         return Jwts.builder()
                 .setSubject(userDetails.getUserId().toString()) // UUID -> String
-                .claim("role", userDetails.getRole())
+                .claim("role", userDetails.getRole())           // <-- dùng .claim()
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + accessExpirationMillis))
                 .signWith(accessKey, SignatureAlgorithm.HS256)
@@ -76,6 +76,7 @@ public class JwtUtil {
         Claims claims = parseClaims(token, key);
         UUID userId = UUID.fromString(claims.getSubject());
         String role = claims.get("role", String.class);
+
         return JwtUserDetails.builder()
                 .userId(userId)
                 .role(role)
