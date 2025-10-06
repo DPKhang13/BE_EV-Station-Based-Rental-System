@@ -5,7 +5,7 @@ import lombok.*;
 import java.util.List;
 
 @Entity
-@Table(name = "RentalStation")
+@Table(name = "rentalstation")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -15,17 +15,20 @@ public class RentalStation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "station_id")
     private Integer stationId;
 
-    private String stationName;
+    @Column(name = "name", nullable = false)
+    private String name;
 
-    private String address;
+    private String city;
+    private String district;
+    private String ward;
+    private String street;
 
-    // Một trạm có nhiều xe
     @OneToMany(mappedBy = "rentalStation", fetch = FetchType.LAZY)
     private List<Vehicle> vehicles;
 
-    // Một trạm có thể có nhiều nhân viên
     @OneToMany(mappedBy = "rentalStation", fetch = FetchType.LAZY)
     private List<User> users;
 }

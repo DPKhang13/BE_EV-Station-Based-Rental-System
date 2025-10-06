@@ -5,7 +5,7 @@ import lombok.*;
 import java.util.List;
 
 @Entity
-@Table(name = "Vehicle")
+@Table(name = "vehicle")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,7 +18,7 @@ public class Vehicle {
     private Long vehicleId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "station_id", nullable = false)
+    @JoinColumn(name = "station_id")
     private RentalStation rentalStation;
 
     @Column(unique = true, length = 20)
@@ -37,4 +37,7 @@ public class Vehicle {
     // Một xe có thể có một bảng giá
     @OneToOne(mappedBy = "vehicle", fetch = FetchType.LAZY)
     private PricingRule pricingRule;
+
+
+
 }
