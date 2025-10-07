@@ -7,19 +7,16 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class VehicleResponse {
-    private Long vehicleId;
-    private Integer stationId;
-    private String plateNumber;
-    private String status;
-    private String description;
+public class VehicleUpdateRequest {
 
-    // ===== Thuộc tính từ bảng vehicleattribute =====
+    // ===== Thông tin bảng vehicle =====
+    private String status;
+    private Integer stationId;
+
+    // ===== Thông tin thuộc tính (vehicleattribute) =====
     private String brand;
     private String color;
-    private String transmission;
     private Integer seatCount;
-    private Integer year;
     private String variant;
     private String batteryStatus;
     private String batteryCapacity;

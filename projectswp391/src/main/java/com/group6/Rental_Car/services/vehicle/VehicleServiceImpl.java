@@ -1,150 +1,88 @@
 package com.group6.Rental_Car.services.vehicle;
 
-import com.group6.Rental_Car.dtos.vehicle.VehicleListRequest;
-import com.group6.Rental_Car.dtos.vehicle.VehicleListResponse;
-import com.group6.Rental_Car.dtos.vehicle.VehicleRequest;
+import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
-import com.group6.Rental_Car.entities.RentalStation;
+import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.entities.Vehicle;
+import com.group6.Rental_Car.entities.VehicleAttribute;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.*;
+import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
-import java.util.Optional;
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class VehicleServiceImpl implements VehicleService {
 
-    @Autowired
-    private VehicleRepository vehicleRepository;
-    private final RentalStationRepository stationRepository;
+    private final VehicleRepository vehicleRepository;
+    private final RentalStationRepository rentalStationRepository;
+    private final VehicleAttributeService vehicleAttributeService; // <-- thay vì repository
+    private final ModelMapper modelMapper;
 
-    public VehicleServiceImpl(VehicleRepository vehicleRepository,
-                              RentalStationRepository stationRepository) {
-        this.vehicleRepository = vehicleRepository;
-        this.stationRepository = stationRepository;
-    }
-
-    // Tạo sản phẩm mới (POST)
     @Override
-    @Transactional
-    public VehicleResponse createVehicle(VehicleRequest vehicleRequest) {
-        // Kiểm tra stationId
-        if (vehicleRequest.getStationId() == null) {
-            throw new IllegalArgumentException("stationId is required");
-        }
-        //Lấy thông tin station
-        RentalStation station = stationRepository.findById(vehicleRequest.getStationId())
-                .orElseThrow(() -> new IllegalArgumentException("Station not found: " + vehicleRequest.getStationId()));
+    public VehicleResponse createVehicle(VehicleCreateRequest req) {
+        Vehicle vehicle = modelMapper.map(req, Vehicle.class);
 
-        //kiểm tra trùng plateNumber
-        Optional<Vehicle> dup = vehicleRepository.findByPlateNumber(vehicleRequest.getPlateNumber());
-        if (dup.isPresent()) {
-            throw new IllegalStateException("Plate number already exists: " + vehicleRequest.getPlateNumber());
+        if (req.getStationId() != null) {
+            var station = rentalStationRepository.findById(req.getStationId())
+                    .orElseThrow(() -> new RuntimeException("Rental Station not found"));
+            vehicle.setRentalStation(station);
         }
 
-        String variant = vehicleRequest.getVariant();
-        if (variant != null && !variant.equalsIgnoreCase("air") &&
-                !variant.equalsIgnoreCase("pro") &&
-                !variant.equalsIgnoreCase("plus")) {
-            throw new IllegalArgumentException("Invalid variant value: " + variant);
-        }
+        vehicleRepository.save(vehicle);
 
-        Vehicle v = new Vehicle();
-        v.setStation(station);
-        v.setPlateNumber(vehicleRequest.getPlateNumber());
-        v.setStatus(vehicleRequest.getStatus());
-        v.setSeatCount(vehicleRequest.getSeatCount());
-        v.setVariant(vehicleRequest.getVariant());
+        // gọi service attribute
+        VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, req);
 
-        v = vehicleRepository.save(v);
-        return toResponse(v);
-    }
-
-
-    // Lấy danh sách xe (GET)
-    private VehicleListResponse buildVehicleListResponse(Page<Vehicle> vehicles) {
-        VehicleListResponse response = new VehicleListResponse();
-        response.setItems(
-                vehicles.getContent().stream().map(this::toResponse).collect(Collectors.toList())
-        );
-        response.setPage(vehicles.getNumber());
-        response.setSize(vehicles.getSize());
-        response.setTotalElements(vehicles.getTotalElements());
-        response.setTotalPages(vehicles.getTotalPages());
-        response.setFirst(vehicles.isFirst());
-        response.setLast(vehicles.isLast());
-
-        return response;
+        return vehicleAttributeService.convertToDto(vehicle, attr);
     }
 
     @Override
-    public VehicleListResponse getAllVehicles(VehicleListRequest vehicleListRequest) {
-        //chức năng phân trang để hiện thị 1 lượng thông tin nhất định
-        int page = (vehicleListRequest.getPage() == null || vehicleListRequest.getPage() < 0)
-                ? 0
-                : vehicleListRequest.getPage();
-        int size = (vehicleListRequest.getSize() == null || vehicleListRequest.getSize() <= 0)
-                ? 20  // Giá trị mặc định cho size
-                : vehicleListRequest.getSize();
-
-        Pageable pageable = PageRequest.of(page, size);
-        if (vehicleListRequest.getSearch() == null || vehicleListRequest.getSearch().isEmpty()) {
-            // Nếu không tìm kiếm, lấy tất cả sản phẩm với phân trang
-            Page<Vehicle> vehicles = vehicleRepository.findAll(pageable);
-
-            // Chuyển đổi dữ liệu và trả về
-            return buildVehicleListResponse(vehicles);
-        }
-
-        // Nếu có tìm kiếm, tìm kiếm sản phẩm theo variant
-        Page<Vehicle> vehicles = vehicleRepository.findByVariantContainingIgnoreCase(vehicleListRequest.getSearch(), pageable);
-
-        // Chuyển đổi dữ liệu và trả về
-        return buildVehicleListResponse(vehicles);
-    }
-
-    // Cập nhật sản phẩm (PUT)
-    @Override
-    @Transactional
-    public VehicleResponse updateVehicle(Long vehicleId, VehicleRequest vehicleRequest) {
-        Optional<Vehicle> existingVehicle = vehicleRepository.findByPlateNumber(vehicleRequest.getPlateNumber());
-        if (existingVehicle.isPresent() && !existingVehicle.get().getVehicleId().equals(vehicleId)) {
-            throw new RuntimeException("Plate number already exists");
-        }
-        Optional<Vehicle> vehicleOptional = vehicleRepository.findById(vehicleId);
-        Vehicle vehicle = vehicleOptional.orElseThrow(() -> new RuntimeException("Vehicle not found"));
-
-        vehicle.setPlateNumber(vehicleRequest.getPlateNumber());
-        vehicle.setStatus(vehicleRequest.getStatus());
-        vehicle.setSeatCount(vehicleRequest.getSeatCount());
-        vehicle.setVariant(vehicleRequest.getVariant());
-
-        vehicle = vehicleRepository.save(vehicle);
-        return toResponse(vehicle);
-    }
-
-    // Xóa sản phẩm (DELETE)
-    @Override
-    @Transactional
-    public void deleteVehicle(Long vehicleId) {
+    public VehicleResponse updateVehicle(Long vehicleId, VehicleUpdateRequest req) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new RuntimeException("Vehicle not found"));
 
+        modelMapper.map(req, vehicle);
+
+        if (req.getStationId() != null) {
+            var station = rentalStationRepository.findById(req.getStationId())
+                    .orElseThrow(() -> new RuntimeException("Rental Station not found"));
+            vehicle.setRentalStation(station);
+        }
+
+        vehicleRepository.save(vehicle);
+
+        VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, req);
+
+        return vehicleAttributeService.convertToDto(vehicle, attr);
+    }
+
+    @Override
+    public VehicleResponse getVehicleById(Long id) {
+        Vehicle vehicle = vehicleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Vehicle not found"));
+
+        var attr = vehicleAttributeService.findByVehicle(vehicle);
+        return vehicleAttributeService.convertToDto(vehicle, attr);
+    }
+
+    @Override
+    public void deleteVehicle(Long id) {
+        Vehicle vehicle = vehicleRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Vehicle not found"));
+
+        vehicleAttributeService.deleteByVehicle(vehicle);
         vehicleRepository.delete(vehicle);
     }
 
-    private VehicleResponse toResponse(Vehicle vehicle) {
-        VehicleResponse response = new VehicleResponse();
-        response.setVehicleId(vehicle.getVehicleId());
-        response.setPlateNumber(vehicle.getPlateNumber());
-        response.setStatus(vehicle.getStatus());
-        response.setSeatCount(vehicle.getSeatCount());
-        response.setVariant(vehicle.getVariant());
-        return response;
+    @Override
+    public List<VehicleResponse> getAllVehicles() {
+        return vehicleRepository.findAll().stream()
+                .map(v -> vehicleAttributeService.convertToDto(v, vehicleAttributeService.findByVehicle(v)))
+                .collect(Collectors.toList());
     }
 }
