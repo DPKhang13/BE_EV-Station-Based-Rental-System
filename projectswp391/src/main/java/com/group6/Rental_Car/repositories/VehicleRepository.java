@@ -9,5 +9,4 @@ import java.util.List;
 public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     List<Vehicle> findAll();
 
-
 }

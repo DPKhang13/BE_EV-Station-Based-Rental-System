@@ -12,6 +12,16 @@ public class VehicleResponse {
     private Integer stationId;
     private String plateNumber;
     private String status;
+    private String description;
+
+    // ===== Thuộc tính từ bảng vehicleattribute =====
+    private String brand;
+    private String color;
+    private String transmission;
     private Integer seatCount;
+    private Integer year;
     private String variant;
+    private String batteryStatus;
+    private String batteryCapacity;
+    private Integer rangeKm;
 }
