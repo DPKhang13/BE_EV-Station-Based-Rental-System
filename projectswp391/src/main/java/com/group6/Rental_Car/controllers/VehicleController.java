@@ -24,9 +24,9 @@ public class VehicleController {
     private ModelMapper modelMapper;
 
     @PostMapping("/create")
-    public ResponseEntity<?> create(@RequestBody VehicleCreateRequest vehicleCreateRequest,
+    public ResponseEntity<?> create(@RequestBody VehicleCreateRequest req,
                                     @AuthenticationPrincipal JwtUserDetails userDetails) {
-        VehicleResponse response = vehicleService.createVehicle(vehicleCreateRequest);
+        VehicleResponse response = vehicleService.createVehicle(req);
         return ResponseEntity.ok(response);
     }
     @GetMapping("/get")
@@ -36,9 +36,9 @@ public class VehicleController {
     }
     @PutMapping("/update/{vehicleId}")
     public ResponseEntity<?> updateVehicle(@PathVariable Long vehicleId,
-                                           @RequestBody VehicleUpdateRequest vehicleUpdateRequest,
+                                           @RequestBody VehicleUpdateRequest req,
                                            @AuthenticationPrincipal JwtUserDetails userDetails) {
-        VehicleResponse response = vehicleService.updateVehicle(vehicleId, vehicleUpdateRequest);
+        VehicleResponse response = vehicleService.updateVehicle(vehicleId, req);
         return ResponseEntity.ok(response);
     }
     @DeleteMapping("/deleted/{vehicleId}")
