@@ -23,14 +23,13 @@ public class OrderController {
     private RentalOrderService rentalOrderService;
 
     @PostMapping("/create")
-    public ResponseEntity<?> create(@RequestBody OrderCreateRequest orderCreateRequest,
-                                    @AuthenticationPrincipal JwtUserDetails userDetails) {
+    public ResponseEntity<?> create(@RequestBody OrderCreateRequest orderCreateRequest) {
         OrderResponse response = rentalOrderService.createOder(orderCreateRequest);
         return ResponseEntity.ok().body(response);
 
     }
     @GetMapping("/getAll")
-    public ResponseEntity<List<?>> getAll(@AuthenticationPrincipal JwtUserDetails userDetails) {
+    public ResponseEntity<List<?>> getAll() {
         List<OrderResponse> getOrder = rentalOrderService.getRentalOrders();
         return ResponseEntity.ok(getOrder);
 
@@ -44,15 +43,13 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
     @PutMapping("/update/{orderId}")
-    public ResponseEntity<?> update(@PathVariable UUID orderId, @RequestBody OrderUpdateRequest orderUpdateRequest,
-                                    @AuthenticationPrincipal JwtUserDetails userDetails) {
+    public ResponseEntity<?> update(@PathVariable UUID orderId, @RequestBody OrderUpdateRequest orderUpdateRequest) {
         OrderResponse response = rentalOrderService.updateOder(orderId, orderUpdateRequest);
         return ResponseEntity.ok().body(response);
 
     }
     @DeleteMapping("/delete/{orderId}")
-    public ResponseEntity<?> delete(@PathVariable UUID orderId,
-                                    @AuthenticationPrincipal JwtUserDetails userDetails) {
+    public ResponseEntity<?> delete(@PathVariable UUID orderId) {
         rentalOrderService.deleteOder(orderId);
         return ResponseEntity.ok("Deleted order successfully");
     }

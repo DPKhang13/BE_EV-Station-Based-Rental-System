@@ -32,17 +32,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        //  Cho phép Swagger mà không cần JWT
-                        .requestMatchers(
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html"
-                        ).permitAll()
-                        //  Cho phép các API public
-                        .requestMatchers("/api/auth/**").permitAll()
-
-                        //  Các request còn lại cần JWT
-                        .anyRequest().authenticated()
+                        .anyRequest().permitAll() // 🔓 Cho phép tất cả endpoint public
                 )
                 //  Thêm filter đã được Spring inject
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

@@ -30,7 +30,7 @@ public class VehicleController {
         return ResponseEntity.ok(response);
     }
     @GetMapping("/get")
-    public ResponseEntity<List<?>> getVehicleById( @AuthenticationPrincipal JwtUserDetails userDetails) {
+    public ResponseEntity<List<?>> getVehicleById() {
        List<VehicleResponse> vehicles = vehicleService.getAllVehicles();
        return ResponseEntity.ok(vehicles);
     }
