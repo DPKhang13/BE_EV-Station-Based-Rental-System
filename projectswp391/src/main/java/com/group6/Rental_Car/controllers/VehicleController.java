@@ -21,7 +21,7 @@ public class VehicleController {
     @Autowired
     private VehicleService vehicleService;
 
-    private ModelMapper modelMapper;
+
 
     @PostMapping("/create")
     public ResponseEntity<?> create(@RequestBody VehicleCreateRequest req,
