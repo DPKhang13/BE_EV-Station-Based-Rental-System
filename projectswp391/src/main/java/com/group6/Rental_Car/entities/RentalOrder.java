@@ -6,6 +6,7 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -38,4 +39,6 @@ public class RentalOrder {
     private BigDecimal totalPrice;
 
     private String status;
+    @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Payment> payments;
 }

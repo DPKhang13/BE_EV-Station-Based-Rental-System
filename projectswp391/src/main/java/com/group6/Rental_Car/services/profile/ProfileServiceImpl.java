@@ -24,7 +24,6 @@ public class ProfileServiceImpl implements ProfileService {
         User account = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
 
-        // Map các field KHÔNG NULL từ profile vào account
         modelMapper.map(profile, account);
 
         account = userRepository.save(account);

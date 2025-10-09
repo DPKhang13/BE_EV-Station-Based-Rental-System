@@ -26,9 +26,7 @@ public class Vehicle {
 
     private String status;
 
-    private Integer seatCount;
-
-    private String variant;
+    private String description;
 
     // Một xe có nhiều đơn thuê
     @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
@@ -38,6 +36,8 @@ public class Vehicle {
     @OneToOne(mappedBy = "vehicle", fetch = FetchType.LAZY)
     private PricingRule pricingRule;
 
+    @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<VehicleAttribute> attributes;
 
 
 }

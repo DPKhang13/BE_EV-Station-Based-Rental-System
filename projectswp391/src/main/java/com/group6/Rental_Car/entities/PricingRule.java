@@ -15,6 +15,7 @@ public class PricingRule {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "pricingrule_id")
     private Integer pricingRuleId;
 
     @OneToOne(fetch = FetchType.LAZY)

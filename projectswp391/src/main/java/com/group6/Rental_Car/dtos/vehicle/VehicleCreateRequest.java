@@ -7,9 +7,19 @@ import lombok.Data;
 @AllArgsConstructor
 public class VehicleCreateRequest {
 
-    private String plateNumber; // dùng khi create / update
-    private String status;      // tùy chọn
+    private String plateNumber;
+    private String status;
     private Integer stationId;
+    private String description;
+
+    private String brand;
+    private String color;
+    private String transmission = "automatic";
     private Integer seatCount;
-    private String variant;// dùng khi create / update
+    private Integer year = 2025;
+    private String variant;
+    private String batteryStatus;
+    private String batteryCapacity;
+    private Integer rangeKm;
 }
+
