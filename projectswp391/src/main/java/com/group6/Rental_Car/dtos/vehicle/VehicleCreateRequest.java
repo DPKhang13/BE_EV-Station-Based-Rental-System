@@ -8,10 +8,7 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class VehicleCreateRequest {
-    @Pattern(
-            regexp = "^[0-9]{2}[A-Z]-[0-9]{4,5}$",
-            message = "Plate number format is invalid (example: 30A-12345)"
-    )
+
     private String plateNumber;
     private String status;
     private Integer stationId;

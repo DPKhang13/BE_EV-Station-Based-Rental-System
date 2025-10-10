@@ -14,4 +14,5 @@ public class OrderResponse {
     private LocalDateTime endTime;
     private BigDecimal totalPrice;
     private String status;
+    private Integer couponId;
 }

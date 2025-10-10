@@ -41,4 +41,9 @@ public class RentalOrder {
     private String status;
     @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "coupon_id")
+    private Coupon coupon; // thêm liên kết coupon (optional)
 }
+

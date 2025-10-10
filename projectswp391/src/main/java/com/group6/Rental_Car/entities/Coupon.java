@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 
+import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
 
@@ -17,10 +18,11 @@ import java.time.LocalDate;
 public class Coupon {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    @Column(name = "coupon_id")
+    private Integer couponId;
 
     private String code;
-    private DecimalFormat discount;
+    private BigDecimal discount;
     private LocalDate validFrom;
     private LocalDate validTo;
     private String status;

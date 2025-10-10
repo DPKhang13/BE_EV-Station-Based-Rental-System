@@ -24,7 +24,7 @@ public class OrderController {
 
     @PostMapping("/create")
     public ResponseEntity<?> create(@RequestBody OrderCreateRequest orderCreateRequest) {
-        OrderResponse response = rentalOrderService.createOder(orderCreateRequest);
+        OrderResponse response = rentalOrderService.createOrder(orderCreateRequest);
         return ResponseEntity.ok().body(response);
 
     }
@@ -44,13 +44,13 @@ public class OrderController {
     }
     @PutMapping("/update/{orderId}")
     public ResponseEntity<?> update(@PathVariable UUID orderId, @RequestBody OrderUpdateRequest orderUpdateRequest) {
-        OrderResponse response = rentalOrderService.updateOder(orderId, orderUpdateRequest);
+        OrderResponse response = rentalOrderService.updateOrder(orderId, orderUpdateRequest);
         return ResponseEntity.ok().body(response);
 
     }
     @DeleteMapping("/delete/{orderId}")
     public ResponseEntity<?> delete(@PathVariable UUID orderId) {
-        rentalOrderService.deleteOder(orderId);
+        rentalOrderService.deleteOrder(orderId);
         return ResponseEntity.ok("Deleted order successfully");
     }
 
