@@ -6,7 +6,7 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.entities.VehicleAttribute;
 import com.group6.Rental_Car.exceptions.ConflictException;
-import com.group6.Rental_Car.exceptions.NotFoundException;
+import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +45,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         Integer stationId = requireNonNull(req.getStationId(), "stationId");
         var st = rentalStationRepository.findById(stationId)
-                .orElseThrow(() -> new NotFoundException("Station not found: " + stationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Station not found: " + stationId));
 
         String variant = normalizeNullableLower(req.getVariant());
         if (variant != null) ensureInSetIgnoreCase(variant, ALLOWED_VARIANT, "variant");
