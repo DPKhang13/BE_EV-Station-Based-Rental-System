@@ -5,6 +5,7 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.entities.VehicleAttribute;
+import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ConflictException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
@@ -45,7 +46,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         Integer stationId = requireNonNull(req.getStationId(), "stationId");
         var st = rentalStationRepository.findById(stationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Station not found: " + stationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Station : " + stationId));
 
         String variant = normalizeNullableLower(req.getVariant());
         if (variant != null) ensureInSetIgnoreCase(variant, ALLOWED_VARIANT, "variant");
@@ -57,7 +58,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
-                    .orElseThrow(() -> new RuntimeException("Rental Station not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station "));
             vehicle.setRentalStation(station);
         }
 
@@ -72,13 +73,13 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public VehicleResponse updateVehicle(Long vehicleId, VehicleUpdateRequest req) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle "));
 
         // status (nếu client gửi lên)
         if (req.getStatus() != null) {
             String status = req.getStatus().trim().toLowerCase();
             if (!status.equals("available") && !status.equals("rented") && !status.equals("maintenance")) {
-                throw new RuntimeException("status must be one of: available|rented|maintenance");
+                throw new BadRequestException("status must be one of: available|rented|maintenance");
             }
             vehicle.setStatus(status);
         }
@@ -86,7 +87,7 @@ public class VehicleServiceImpl implements VehicleService {
         // station (nếu client gửi lên)
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
-                    .orElseThrow(() -> new RuntimeException("Rental Station not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station "));
             vehicle.setRentalStation(station);
         }
 
@@ -97,26 +98,26 @@ public class VehicleServiceImpl implements VehicleService {
         if (req.getVariant() != null) {
             String variant = req.getVariant().trim().toLowerCase();
             if (!variant.equals("air") && !variant.equals("pro") && !variant.equals("plus")) {
-                throw new RuntimeException("variant must be one of: air|pro|plus");
+                throw new BadRequestException("variant must be one of: air|pro|plus");
             }
         }
         if (req.getSeatCount() != null && (req.getSeatCount() < 1 || req.getSeatCount() > 50)) {
-            throw new RuntimeException("seatCount must be in [1,50]");
+            throw new BadRequestException("seatCount must be in [1,50]");
         }
         if (req.getColor() != null && req.getColor().trim().length() > 50) {
-            throw new RuntimeException("color length must be <= 50");
+            throw new BadRequestException("color length must be <= 50");
         }
 
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
-                    .orElseThrow(() -> new RuntimeException("Rental Station not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station"));
             vehicle.setRentalStation(station);
         }
 
         if (req.getSeatCount() != null) {
             int seat = req.getSeatCount();
             if (seat != 4 && seat != 7) {
-                throw new RuntimeException("seatCount must be 4 or 7");
+                throw new BadRequestException("seatCount must be 4 or 7");
             }
         }
 
@@ -130,7 +131,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public VehicleResponse getVehicleById(Long id) {
         Vehicle vehicle = vehicleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle"));
 
         var attr = vehicleAttributeService.findByVehicle(vehicle);
         return vehicleAttributeService.convertToDto(vehicle, attr);
@@ -139,7 +140,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public void deleteVehicle(Long id) {
         Vehicle vehicle = vehicleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle"));
 
         vehicleAttributeService.deleteByVehicle(vehicle);
         vehicleRepository.delete(vehicle);
