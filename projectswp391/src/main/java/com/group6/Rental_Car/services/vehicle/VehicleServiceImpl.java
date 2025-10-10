@@ -17,13 +17,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static com.group6.Rental_Car.utils.VehicleValidationUtil.*;
+import static com.group6.Rental_Car.utils.ValidationUtil.*;
 
 @Service
 @RequiredArgsConstructor
 public class VehicleServiceImpl implements VehicleService {
     private static final Set<String> ALLOWED_STATUS = Set.of("available", "rented", "maintenance");
-    private static final Set<String> ALLOWED_VARIANT = Set.of("air", "pro", "plus"); //Null cũng hợp lệ
 
     private final VehicleRepository vehicleRepository;
     private final RentalStationRepository rentalStationRepository;
@@ -45,15 +44,12 @@ public class VehicleServiceImpl implements VehicleService {
 
         Integer stationId = requireNonNull(req.getStationId(), "stationId");
         var st = rentalStationRepository.findById(stationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Station not found: " + stationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Station: " + stationId));
 
-        String variant = normalizeNullableLower(req.getVariant());
-        if (variant != null) ensureInSetIgnoreCase(variant, ALLOWED_VARIANT, "variant");
-
+        //Validate seatCount && variant
         Integer seat = req.getSeatCount();
-        if (seat == null || (seat != 4 && seat != 7)) {
-            throw new RuntimeException("seatCount must be 4 or 7 (required)");
-        }
+        String normalizedVariant = validateVariantBySeatCount(seat, req.getVariant());
+
 
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
@@ -64,7 +60,18 @@ public class VehicleServiceImpl implements VehicleService {
         vehicleRepository.save(vehicle);
 
         // gọi service attribute
-        VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, req);
+        VehicleCreateRequest attrReq = new VehicleCreateRequest();
+        attrReq.setBrand(req.getBrand());
+        attrReq.setColor(req.getColor());
+        attrReq.setSeatCount(seat);
+        attrReq.setSeatCount(seat);
+        attrReq.setVariant(normalizedVariant);// << dùng biến đã validate/normalize
+        attrReq.setBatteryStatus(req.getBatteryStatus());
+        attrReq.setBatteryCapacity(req.getBatteryCapacity());
+        attrReq.setRangeKm(req.getRangeKm());
+
+        VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, attrReq);
+
 
         return vehicleAttributeService.convertToDto(vehicle, attr);
     }
@@ -92,35 +99,35 @@ public class VehicleServiceImpl implements VehicleService {
 
 
         modelMapper.map(req, vehicle);
+        vehicle = vehicleRepository.save(vehicle);
 
-        // VALIDATE attribute rồi update
-        if (req.getVariant() != null) {
-            String variant = req.getVariant().trim().toLowerCase();
-            if (!variant.equals("air") && !variant.equals("pro") && !variant.equals("plus")) {
-                throw new RuntimeException("variant must be one of: air|pro|plus");
-            }
-        }
-        if (req.getSeatCount() != null && (req.getSeatCount() < 1 || req.getSeatCount() > 50)) {
-            throw new RuntimeException("seatCount must be in [1,50]");
-        }
-        if (req.getColor() != null && req.getColor().trim().length() > 50) {
-            throw new RuntimeException("color length must be <= 50");
-        }
+        // Lấy attribute hiện tại để tính giá trị hiệu lực khi client chỉ gửi 1 trong 2
+        VehicleAttribute currentAttr = vehicleAttributeService.findByVehicle(vehicle);
 
-        if (req.getStationId() != null) {
-            var station = rentalStationRepository.findById(req.getStationId())
-                    .orElseThrow(() -> new RuntimeException("Rental Station not found"));
-            vehicle.setRentalStation(station);
+        Integer effectiveSeat = (req.getSeatCount() != null)
+                ? req.getSeatCount()
+                : (currentAttr != null ? currentAttr.getSeatCount() : null);
+
+        String effectiveVariantRaw = (req.getVariant() != null)
+                ? req.getVariant()
+                : (currentAttr != null ? currentAttr.getVariant() : null);
+
+        String normalizedVariant = null;
+        if (effectiveSeat != null || effectiveVariantRaw != null) {
+            normalizedVariant = validateVariantBySeatCount(effectiveSeat, effectiveVariantRaw);
         }
 
-        if (req.getSeatCount() != null) {
-            int seat = req.getSeatCount();
-            if (seat != 4 && seat != 7) {
-                throw new RuntimeException("seatCount must be 4 or 7");
-            }
+        VehicleUpdateRequest attrReq = new VehicleUpdateRequest();
+        if (req.getSeatCount() != null) attrReq.setSeatCount(effectiveSeat);
+        if (req.getVariant() != null || (effectiveSeat != null && currentAttr == null)) {
+            attrReq.setVariant(normalizedVariant);
         }
+        attrReq.setBrand(req.getBrand());
+        attrReq.setColor(req.getColor());
+        attrReq.setBatteryStatus(req.getBatteryStatus());
+        attrReq.setBatteryCapacity(req.getBatteryCapacity());
+        attrReq.setRangeKm(req.getRangeKm());
 
-        vehicleRepository.save(vehicle);
 
         VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, req);
 
