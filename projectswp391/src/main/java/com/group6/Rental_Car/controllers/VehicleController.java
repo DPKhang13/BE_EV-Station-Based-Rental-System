@@ -6,6 +6,7 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.services.vehicle.VehicleService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +25,7 @@ public class VehicleController {
 
 
     @PostMapping("/create")
-    public ResponseEntity<?> create(@RequestBody VehicleCreateRequest req,
+    public ResponseEntity<?> create(@Valid @RequestBody VehicleCreateRequest req,
                                     @AuthenticationPrincipal JwtUserDetails userDetails) {
         VehicleResponse response = vehicleService.createVehicle(req);
         return ResponseEntity.ok(response);

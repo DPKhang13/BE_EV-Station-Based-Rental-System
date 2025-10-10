@@ -1,12 +1,17 @@
 package com.group6.Rental_Car.dtos.vehicle;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @Data
 @AllArgsConstructor
 public class VehicleCreateRequest {
-
+    @Pattern(
+            regexp = "^[0-9]{2}[A-Z]-[0-9]{4,5}$",
+            message = "Plate number format is invalid (example: 30A-12345)"
+    )
     private String plateNumber;
     private String status;
     private Integer stationId;

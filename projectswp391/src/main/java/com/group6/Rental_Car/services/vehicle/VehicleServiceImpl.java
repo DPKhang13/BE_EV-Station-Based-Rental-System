@@ -53,7 +53,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         Integer seat = req.getSeatCount();
         if (seat == null || (seat != 4 && seat != 7)) {
-            throw new RuntimeException("seatCount must be 4 or 7 (required)");
+            throw new BadRequestException("seatCount must be 4 or 7 (required)");
         }
 
         if (req.getStationId() != null) {
