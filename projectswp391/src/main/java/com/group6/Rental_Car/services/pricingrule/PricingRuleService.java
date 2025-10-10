@@ -1,5 +1,7 @@
 package com.group6.Rental_Car.services.pricingrule;
 
+import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
+import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
 import com.group6.Rental_Car.entities.Coupon;
 import com.group6.Rental_Car.entities.PricingRule;
 import com.group6.Rental_Car.entities.Vehicle;
@@ -11,6 +13,6 @@ public interface PricingRuleService {
     PricingRule getPricingRuleByVehicle(Vehicle vehicle);
 
     BigDecimal calculateTotalPrice(PricingRule pricingRule, Coupon coupon);
-
-    List<PricingRule> getAllPricingRules();
+    List<PricingRuleResponse> getAllPricingRules();
+    PricingRuleResponse updatePricingRule(Long vehicleId,PricingRuleUpdateRequest req);
 }

@@ -14,8 +14,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -149,5 +152,20 @@ public class AuthenticationController {
                     .build();
         }
         return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    }
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        if (principal instanceof JwtUserDetails userDetails) {
+
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("userId", userDetails.getUserId());
+            userInfo.put("role", userDetails.getRole());
+            return ResponseEntity.ok(userInfo);
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "User not authenticated"));
+        }
     }
 }

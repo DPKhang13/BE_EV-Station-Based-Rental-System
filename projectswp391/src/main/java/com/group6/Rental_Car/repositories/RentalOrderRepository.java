@@ -10,5 +10,4 @@ import java.util.UUID;
 @Repository
 public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> {
     List<RentalOrder> findByCustomer_UserId(UUID customerId);
-    List<RentalOrder> findByStatus(String status);
 }

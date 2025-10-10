@@ -1,5 +1,7 @@
 package com.group6.Rental_Car.services.pricingrule;
 
+import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
+import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
 import com.group6.Rental_Car.entities.Coupon;
 import com.group6.Rental_Car.entities.PricingRule;
 import com.group6.Rental_Car.entities.Vehicle;
@@ -7,17 +9,21 @@ import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.PricingRuleRepository;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PricingRuleServiceImpl implements PricingRuleService {
 
     private final PricingRuleRepository pricingRuleRepository;
+    private final ModelMapper modelMapper;
+
 
     @Override
     public PricingRule getPricingRuleByVehicle(Vehicle vehicle) {
@@ -83,7 +89,37 @@ public class PricingRuleServiceImpl implements PricingRuleService {
     }
 
     @Override
-    public List<PricingRule> getAllPricingRules() {
-        return pricingRuleRepository.findAll();
+    public List<PricingRuleResponse> getAllPricingRules() {
+        return pricingRuleRepository.findAll()
+                .stream()
+                .map(rule -> {
+                    PricingRuleResponse response = modelMapper.map(rule, PricingRuleResponse.class);
+                    if (rule.getVehicle() != null) {
+                        response.setVehicleId(rule.getVehicle().getVehicleId());
+                    }
+                    return response;
+                })
+                .collect(Collectors.toList());
     }
+
+    @Override
+    public PricingRuleResponse updatePricingRule(Long vehicleId, PricingRuleUpdateRequest req) {
+        // 1️⃣ Tìm pricing rule theo vehicleId
+        PricingRule pricingRule = pricingRuleRepository.findByVehicle_VehicleId(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy quy tắc giá cho vehicleId = " + vehicleId));
+
+        pricingRule.setBaseHours(req.getBaseHours());
+        pricingRule.setBaseHoursPrice(req.getBaseHoursPrice());
+        pricingRule.setExtraHourPrice(req.getExtraHourPrice());
+        pricingRule.setDailyPrice(req.getDailyPrice());
+
+        PricingRule updated = pricingRuleRepository.save(pricingRule);
+        PricingRuleResponse response = modelMapper.map(updated, PricingRuleResponse.class);
+        if (updated.getVehicle() != null) {
+            response.setVehicleId(updated.getVehicle().getVehicleId());
+        }
+        return response;
+    }
+
+
 }

@@ -30,46 +30,34 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class RentalOrderServiceImpl implements RentalOrderService {
-
-
     private final UserRepository userRepository;
     private final VehicleRepository vehicleRepository;
     private final RentalOrderRepository rentalOrderRepository;
     private final PricingRuleService pricingRuleService;
     private final CouponService couponService;
-
     private final ModelMapper modelMapper;
-
-
     @Override
-
     public OrderResponse createOrder(OrderCreateRequest orderCreateRequest) {
 
         JwtUserDetails userDetails = (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         UUID customerId = userDetails.getUserId();
-
         User customer = userRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
         Vehicle vehicle = vehicleRepository.findById(orderCreateRequest.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
         PricingRule pricingRule = pricingRuleService.getPricingRuleByVehicle(vehicle);
-
-        // Tính total price
         Coupon coupon = null;
         if (orderCreateRequest.getCouponId() != null) {
             coupon = couponService.getCouponById(orderCreateRequest.getCouponId());
         }
         BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(pricingRule, coupon);
-
         RentalOrder rentalOrder = modelMapper.map(orderCreateRequest, RentalOrder.class);
         rentalOrder.setCustomer(customer);
         rentalOrder.setVehicle(vehicle);
         rentalOrder.setTotalPrice(totalPrice);
         rentalOrder.setStatus("PENDING");
         rentalOrder.setCoupon(coupon);
-
         rentalOrderRepository.save(rentalOrder);
-
 
         OrderResponse response = modelMapper.map(rentalOrder, OrderResponse.class);
         response.setVehicleId(rentalOrder.getVehicle().getVehicleId());
@@ -81,7 +69,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         return response;
     }
-
     @Override
     public OrderResponse updateOrder(UUID orderId, OrderUpdateRequest orderUpdateRequest) {
         RentalOrder rentalOrder = rentalOrderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Order not found"));
@@ -102,10 +89,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             BigDecimal newTotalPrice = pricingRuleService.calculateTotalPrice(pricingRule, coupon);
             rentalOrder.setTotalPrice(newTotalPrice);
         }
-
-
         rentalOrderRepository.save(rentalOrder);
-
         OrderResponse response = modelMapper.map(rentalOrder, OrderResponse.class);
         if (rentalOrder.getVehicle() != null) {
             response.setVehicleId(rentalOrder.getVehicle().getVehicleId());
@@ -117,26 +101,18 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         return response;
     }
-
     @Override
     public void deleteOrder(UUID orderId) {
-        // Nếu KHÔNG tồn tại -> báo lỗi
         if (!rentalOrderRepository.existsById(orderId)) {
             throw new ResourceNotFoundException("Order not found with id: " + orderId);
         }
-
-
-        // Nếu tồn tại -> xóa
         rentalOrderRepository.deleteById(orderId);
     }
-
     @Override
     public List<OrderResponse> getRentalOrders() {
         List<RentalOrder> orders = rentalOrderRepository.findAll();
-
         return orders.stream().map(order -> {
             OrderResponse response = modelMapper.map(order, OrderResponse.class);
-
             if (order.getVehicle() != null) {
                 response.setVehicleId(order.getVehicle().getVehicleId());
             }
@@ -146,15 +122,12 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             if (order.getTotalPrice() != null) {
                 response.setTotalPrice(order.getTotalPrice());
             }
-
             return response;
         }).collect(Collectors.toList());
     }
-
     @Override
     public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
         List<RentalOrder> orders = rentalOrderRepository.findByCustomer_UserId(customerId);
-
         return orders.stream().map(order -> {
             OrderResponse response = modelMapper.map(order, OrderResponse.class);
 
