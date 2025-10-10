@@ -6,8 +6,8 @@ import java.time.Instant;
 import java.util.Map;
 
 public class VehicleGlobalExceptionHandler {
-    @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<?> handleNotFound(NotFoundException ex) {
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<?> handleNotFound(ResourceNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
