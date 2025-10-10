@@ -14,5 +14,5 @@ public interface FeedbackService {
     void delete(Integer feedbackId);
 
     FeedbackResponse getById(Integer feedbackId);
-
+    List<FeedbackResponse> list();
 }

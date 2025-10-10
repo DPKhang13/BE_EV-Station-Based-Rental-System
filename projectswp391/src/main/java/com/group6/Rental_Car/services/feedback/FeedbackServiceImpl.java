@@ -14,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.group6.Rental_Car.utils.ValidationUtil.*;
 
@@ -85,5 +87,18 @@ public class FeedbackServiceImpl implements FeedbackService{
                 .orElseThrow(() -> new ResourceNotFoundException("Feedback not found: " + feedbackId));
         feedbackRepository.delete(fb);
     }
-
+    @Override
+    public List<FeedbackResponse> list() {
+        return feedbackRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+    private FeedbackResponse toResponse(Feedback fb) {
+        FeedbackResponse res = modelMapper.map(fb, FeedbackResponse.class);
+        if (fb.getOrder() != null) {
+            res.setOrderId(fb.getOrder().getOrderId());
+        }
+        return res;
+    }
 }
