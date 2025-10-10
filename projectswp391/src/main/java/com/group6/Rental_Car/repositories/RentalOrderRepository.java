@@ -5,6 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.UUID;
 
-public interface RetalOrderRepository extends JpaRepository<RentalOrder, UUID> {
+public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> {
 
 }

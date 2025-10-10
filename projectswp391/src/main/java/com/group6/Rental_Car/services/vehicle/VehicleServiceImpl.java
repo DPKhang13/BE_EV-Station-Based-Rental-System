@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static com.group6.Rental_Car.utils.VehicleValidationUtil.*;
+import static com.group6.Rental_Car.utils.ValidationUtil.*;
 
 @Service
 @RequiredArgsConstructor

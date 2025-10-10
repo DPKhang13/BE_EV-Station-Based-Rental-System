@@ -1,11 +1,13 @@
 package com.group6.Rental_Car.utils;
 
+import com.group6.Rental_Car.dtos.feedback.FeedbackResponse;
+import com.group6.Rental_Car.entities.Feedback;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 
 import java.util.Set;
 
-public class VehicleValidationUtil {
-    private VehicleValidationUtil() {
+public class ValidationUtil {
+    private ValidationUtil() {
     }
 
     public static String trim(String s) {
@@ -76,5 +78,17 @@ public class VehicleValidationUtil {
             }
             return variant;
         }
+    }
+
+    public static FeedbackResponse toResponse(Feedback fb) {
+        if (fb.getOrder() == null) {
+            throw new BadRequestException("Feedback has no order associated"); // defensive
+        }
+        FeedbackResponse dto = new FeedbackResponse();
+        dto.setFeedbackId(fb.getFeedbackId());
+        dto.setOrderId(fb.getOrder().getOrderId());
+        dto.setRating(fb.getRating());
+        dto.setComment(fb.getComment());
+        return dto;
     }
 }
