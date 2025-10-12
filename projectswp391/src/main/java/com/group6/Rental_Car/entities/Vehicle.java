@@ -2,34 +2,42 @@ package com.group6.Rental_Car.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
-
+import java.util.List;
 
 @Entity
-@Table(name = "[Vehicle]")
+@Table(name = "vehicle")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Vehicle {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "vehicle_id")
     private Long vehicleId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "station_id", nullable = false)
-    private RentalStation station;
+    @JoinColumn(name = "station_id")
+    private RentalStation rentalStation;
 
-    @Column(name = "plate_number", length = 64, nullable = false)
+    @Column(unique = true, length = 20)
     private String plateNumber;
 
-    @Column(name = "status", length = 32, nullable = false)
     private String status;
 
-    @Column(name = "seat_count")
-    private Integer seatCount;
+    private String description;
 
-    @Column(name = "variant")
-    private String variant;
+    // Một xe có nhiều đơn thuê
+    @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
+    private List<RentalOrder> rentalOrders;
+
+    // Một xe có thể có một bảng giá
+    @OneToOne(mappedBy = "vehicle", fetch = FetchType.LAZY)
+    private PricingRule pricingRule;
+
+    @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<VehicleAttribute> attributes;
+
+
 }

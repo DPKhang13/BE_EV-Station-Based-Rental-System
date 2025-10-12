@@ -1,18 +1,27 @@
 package com.group6.Rental_Car.dtos.vehicle;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
-@Getter
-@Setter
-public class VehicleResponse { //Response cho 1 san pham
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class VehicleResponse {
     private Long vehicleId;
+    private Integer stationId;
     private String plateNumber;
     private String status;
-    private int seatCount;
+    private String description;
+
+    // ===== Thuộc tính từ bảng vehicleattribute =====
+    private String brand;
+    private String color;
+    private String transmission;
+    private Integer seatCount;
+    private Integer year;
     private String variant;
-    private String stationName;
-    private String fullAddress;
-    }
+    private String batteryStatus;
+    private String batteryCapacity;
+    private Integer rangeKm;
+}

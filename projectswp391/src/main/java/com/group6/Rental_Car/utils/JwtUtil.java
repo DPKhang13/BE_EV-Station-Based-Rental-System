@@ -1,39 +1,91 @@
 package com.group6.Rental_Car.utils;
+import com.group6.Rental_Car.utils.JwtUserDetails;
+import io.jsonwebtoken.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 
-
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
-import javax.crypto.SecretKey;
+import java.security.Key;
 import java.util.Date;
+import java.util.UUID;
 
-@Component
+@AllArgsConstructor
+@Builder
 public class JwtUtil {
 
-    private final SecretKey secretKey;
-    private final long expiration = 1000 * 60 * 60; // 1 giờ
+    private final Key accessKey;
+    private final Key refreshKey;
+    private final long accessExpirationMillis;
+    private final long refreshExpirationMillis;
 
-    public JwtUtil(@Value("${jwt.secret}") String secret) {
-        this.secretKey = Keys.hmacShaKeyFor(secret.getBytes());
-    }
-
-    public String generateToken(String email, String role) {
+    // Tạo AccessToken chứa userId + role
+    public String generateAccessToken(JwtUserDetails userDetails) {
         return Jwts.builder()
-                .setSubject(email)
-                .claim("role", role)
+                .setSubject(userDetails.getUserId().toString()) // UUID -> String
+                .claim("role", userDetails.getRole())           // <-- dùng .claim()
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(secretKey, SignatureAlgorithm.HS256)
+                .setExpiration(new Date(System.currentTimeMillis() + accessExpirationMillis))
+                .signWith(accessKey, SignatureAlgorithm.HS256)
                 .compact();
     }
-    public Claims validateToken(String token) throws JwtException {
+
+    // Validate Access Token
+    public boolean validateAccessToken(String token) {
+        return validateToken(token, accessKey);
+    }
+
+    // Lấy user từ Access Token
+    public JwtUserDetails extractUserFromAccess(String token) {
+        return extractUserDetails(token, accessKey);
+    }
+
+    // Tạo Refresh Token chỉ chứa userId
+    public String generateRefreshToken(UUID userId) {
+        return Jwts.builder()
+                .setSubject(userId.toString())
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + refreshExpirationMillis))
+                .signWith(refreshKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // Validate Refresh Token
+    public boolean validateRefreshToken(String token) {
+        return validateToken(token, refreshKey);
+    }
+
+    // Lấy userId từ Refresh Token
+    public UUID extractUserIdFromRefresh(String token) {
+        Claims claims = parseClaims(token, refreshKey);
+        return UUID.fromString(claims.getSubject());
+    }
+
+    // ======= PRIVATE SUPPORT METHODS =======
+    private boolean validateToken(String token, Key key) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private JwtUserDetails extractUserDetails(String token, Key key) {
+        Claims claims = parseClaims(token, key);
+        UUID userId = UUID.fromString(claims.getSubject());
+        String role = claims.get("role", String.class);
+
+        return JwtUserDetails.builder()
+                .userId(userId)
+                .role(role)
+                .build();
+    }
+
+    private Claims parseClaims(String token, Key key) {
         return Jwts.parserBuilder()
-                .setSigningKey(secretKey)
+                .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();

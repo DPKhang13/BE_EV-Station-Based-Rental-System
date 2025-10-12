@@ -1,13 +1,12 @@
 package com.group6.Rental_Car.repositories;
 
 import com.group6.Rental_Car.entities.User;
-import com.group6.Rental_Car.enums.Role;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-
-public interface UserRepository extends JpaRepository<User, Integer> {
+import java.util.UUID;
+@Repository
+public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
-    Optional<User> findByEmailAndPasswordAndRole(String email, String password, Role role);
-
 }

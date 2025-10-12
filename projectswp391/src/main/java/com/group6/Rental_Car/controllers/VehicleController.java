@@ -1,50 +1,51 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.vehicle.VehicleListRequest;
-import com.group6.Rental_Car.dtos.vehicle.VehicleListResponse;
-import com.group6.Rental_Car.dtos.vehicle.VehicleRequest;
+import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
+import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.services.vehicle.VehicleService;
+import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/vehicles")
-@Tag(name = "Vehicle API", description = "Quản lí xe (creat, read, cập nhật, xóa")
-
+@Tag(name = "Vehicle Api", description ="create,update,deleted,getAll,getById")
 public class VehicleController {
     @Autowired
     private VehicleService vehicleService;
 
-    // 1. Tạo sản phẩm (POST)
-    @PostMapping("/create")
-    public ResponseEntity<VehicleResponse> createVehicle(@RequestBody VehicleRequest vehicleRequest) {
-        VehicleResponse vehicleResponse = vehicleService.createVehicle(vehicleRequest);
-        return ResponseEntity.status(201).body(vehicleResponse);
-    }
 
-    // 2. Lấy tất cả sản phẩm (GET)
-    @GetMapping
-    public ResponseEntity<VehicleListResponse> getAllVehicles(@ModelAttribute VehicleListRequest vehicleListRequest) {
-        VehicleListResponse response = vehicleService.getAllVehicles(vehicleListRequest);
+
+    @PostMapping("/create")
+    public ResponseEntity<?> create(@Valid @RequestBody VehicleCreateRequest req,
+                                    @AuthenticationPrincipal JwtUserDetails userDetails) {
+        VehicleResponse response = vehicleService.createVehicle(req);
         return ResponseEntity.ok(response);
     }
-
-    // 3. Cập nhật sản phẩm (PUT)
-    @PutMapping("/{vehicleId}/update")
-    public ResponseEntity<VehicleResponse> updateVehicle(@PathVariable Long vehicleId, @RequestBody VehicleRequest vehicleRequest) {
-        VehicleResponse vehicleResponse = vehicleService.updateVehicle(vehicleId, vehicleRequest);
-        return ResponseEntity.ok(vehicleResponse);
+    @GetMapping("/get")
+    public ResponseEntity<List<?>> getVehicleById() {
+       List<VehicleResponse> vehicles = vehicleService.getAllVehicles();
+       return ResponseEntity.ok(vehicles);
     }
-
-    // 4. Xóa sản phẩm (DELETE)
-    @DeleteMapping("/{vehicleId}/delete")
-    public ResponseEntity<Void> deleteVehicle(@PathVariable Long vehicleId) {
+    @PutMapping("/update/{vehicleId}")
+    public ResponseEntity<?> updateVehicle(@PathVariable Long vehicleId,
+                                           @RequestBody VehicleUpdateRequest req,
+                                           @AuthenticationPrincipal JwtUserDetails userDetails) {
+        VehicleResponse response = vehicleService.updateVehicle(vehicleId, req);
+        return ResponseEntity.ok(response);
+    }
+    @DeleteMapping("/deleted/{vehicleId}")
+    public ResponseEntity<?> deleteVehicle(@PathVariable Long vehicleId,
+                                           @AuthenticationPrincipal JwtUserDetails userDetails) {
         vehicleService.deleteVehicle(vehicleId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok("Vehicle deleted successfully");
     }
 }

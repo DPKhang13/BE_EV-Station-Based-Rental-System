@@ -1,11 +1,17 @@
 package com.group6.Rental_Car.entities;
+
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.enums.UserStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
+
+import java.util.List;
+import java.util.UUID;
 
 @Entity
-@Table(name = "[User]") // vì 'User' có thể là keyword trong SQL Server nên để trong []
+@Table(name = "[user]") // 'User' là keyword trong SQL Server nên để trong []
 @Getter
 @Setter
 @NoArgsConstructor
@@ -14,30 +20,29 @@ import lombok.*;
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // user_id INT AUTO INCREMENT
-    @Column(name = "user_id")
-    private Integer userId;
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
+    private UUID userId;
 
-    @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
-    @Column(name = "password", nullable = false, length = 100)
     private String password;
 
-    @Column(name = "phone", length = 20)
     private String phone;
-
-    @Column(name = "email",nullable = false, length = 100)
+    @NotNull
     private String email;
 
-    @Enumerated(EnumType.STRING) // ánh xạ Enum Role -> NVARCHAR
-    @Column(name = "role", length = 20, nullable = false)
+    @Enumerated(EnumType.STRING)
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status")
     private UserStatus status;
 
-    @Column(name = "kyc_status", length = 50)
-    private String kycStatus;
+    @OneToMany(mappedBy = "customer", fetch = FetchType.LAZY)
+    private List<RentalOrder> rentalOrders;
+
+    @ManyToOne
+    @JoinColumn(name = "station_id")
+    private RentalStation rentalStation;
+
 }
