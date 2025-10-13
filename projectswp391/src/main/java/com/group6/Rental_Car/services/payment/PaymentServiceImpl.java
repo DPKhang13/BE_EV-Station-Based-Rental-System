@@ -37,7 +37,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Value("${VNP_URL}")
     private String VNP_URL;
 
-    @Value("${VNP_RETURNURL:http://localhost:8080/api/payment/vnpay-callback}")
+    @Value("${VNP_RETURNURL}")
     private String RETURN_URL;
 
     @Override
