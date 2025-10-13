@@ -38,7 +38,7 @@ public class MaintenanceController {
     public ResponseEntity<MaintenanceResponse> getById(@PathVariable Integer maintenanceId) {
         return ResponseEntity.ok(maintenanceService.getById(maintenanceId));
     }
-    @GetMapping
+    @GetMapping("/getAllList")
     public ResponseEntity<List<MaintenanceResponse>> getAll() {
         return ResponseEntity.ok(maintenanceService.listAll());
     }
