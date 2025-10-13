@@ -8,6 +8,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FeedbackUpdateRequest {
-    private Integer rating;  // optional, 1..5
     private String comment;  // optional, <=255
 }
