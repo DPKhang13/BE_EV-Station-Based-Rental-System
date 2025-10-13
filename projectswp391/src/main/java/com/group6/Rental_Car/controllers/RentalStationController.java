@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/rentalstation")
 @RequiredArgsConstructor
-@Tag(name= "Api RentalStation", description = "Chinh sua va update dia chi tram")
+@Tag(name= "Api RentalStation", description = "Search, chinh sua va update dia chi tram")
 public class RentalStationController {
     @Autowired
     private RentalStationService rentalStationService;
