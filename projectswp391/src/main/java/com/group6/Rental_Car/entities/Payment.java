@@ -1,7 +1,9 @@
 package com.group6.Rental_Car.entities;
 
+import com.group6.Rental_Car.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -26,5 +28,16 @@ public class Payment {
 
     private String method;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 50)
+    private PaymentStatus status;
+
+    @Column(name = "txn_ref")
+    private String txnRef;
+
+    @Column(name = "bank_code")
+    private String bankCode;
+
+    @Column(name = "bank_tran_no")
+    private String bankTranNo;
 }
