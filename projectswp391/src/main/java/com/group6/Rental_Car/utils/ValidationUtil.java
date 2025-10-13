@@ -4,6 +4,7 @@ import com.group6.Rental_Car.dtos.feedback.FeedbackResponse;
 import com.group6.Rental_Car.entities.Feedback;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 public class ValidationUtil {
@@ -80,15 +81,35 @@ public class ValidationUtil {
         }
     }
 
-    public static FeedbackResponse toResponse(Feedback fb) {
-        if (fb.getOrder() == null) {
-            throw new BadRequestException("Feedback has no order associated"); // defensive
+
+    /** Yêu cầu value >= 0 (cho BigDecimal). Ném BadRequestException nếu vi phạm. */
+    public static void ensureNonNegative(BigDecimal value, String field) {
+        if (value == null) {
+            throw new BadRequestException(field + " is required");
         }
-        FeedbackResponse dto = new FeedbackResponse();
-        dto.setFeedbackId(fb.getFeedbackId());
-        dto.setOrderId(fb.getOrder().getOrderId());
-        dto.setRating(fb.getRating());
-        dto.setComment(fb.getComment());
-        return dto;
+        if (value.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException(field + " must be >= 0");
+        }
+    }
+
+    /** Overload: cho Integer (bỏ qua nếu null, hữu ích cho partial update). */
+    public static void ensureNonNegative(Integer value, String field) {
+        if (value != null && value < 0) {
+            throw new BadRequestException(field + " must be >= 0");
+        }
+    }
+
+    /** Overload: cho Long (bỏ qua nếu null). */
+    public static void ensureNonNegative(Long value, String field) {
+        if (value != null && value < 0L) {
+            throw new BadRequestException(field + " must be >= 0");
+        }
+    }
+
+    /** Overload: cho Double (bỏ qua nếu null). */
+    public static void ensureNonNegative(Double value, String field) {
+        if (value != null && value < 0d) {
+            throw new BadRequestException(field + " must be >= 0");
+        }
     }
 }

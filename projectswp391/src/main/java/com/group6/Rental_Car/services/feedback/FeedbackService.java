@@ -8,11 +8,8 @@ import java.util.List;
 
 public interface FeedbackService {
     FeedbackResponse create(FeedbackCreateRequest req);
-
     FeedbackResponse update(Integer feedbackId, FeedbackUpdateRequest req);
-
     void delete(Integer feedbackId);
-
     FeedbackResponse getById(Integer feedbackId);
     List<FeedbackResponse> list();
 }
