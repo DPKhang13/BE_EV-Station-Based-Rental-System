@@ -1,7 +1,6 @@
 package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.payment.PaymentDto;
-import com.group6.Rental_Car.dtos.payment.VNPayDto;
 import com.group6.Rental_Car.services.payment.PaymentService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -9,8 +8,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/payment")
