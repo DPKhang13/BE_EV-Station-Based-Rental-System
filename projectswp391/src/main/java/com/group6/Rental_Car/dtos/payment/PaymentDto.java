@@ -10,6 +10,7 @@ import lombok.*;
 public class PaymentDto {
     private String method;      // VNPay, Cash, Card...
     private String clientIp;    // IP client (127.0.0.1)
+    private String amount;
     private String orderInfo;   // Mô tả đơn hàng
     private boolean deposit;    // true = đặt cọc 50%
 }

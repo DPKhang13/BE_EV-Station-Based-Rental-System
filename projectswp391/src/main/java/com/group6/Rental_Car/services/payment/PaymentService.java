@@ -7,6 +7,5 @@ import com.group6.Rental_Car.dtos.payment.VNPayDto;
 import java.util.UUID;
 
 public interface PaymentService {
-    PaymentResponse createPayment(PaymentDto paymentDto, UUID orderId);
-    PaymentResponse handleVNPayCallback(VNPayDto vnPayDto);
+    PaymentResponse createPaymentUrl(PaymentDto paymentDto, UUID userId);
 }

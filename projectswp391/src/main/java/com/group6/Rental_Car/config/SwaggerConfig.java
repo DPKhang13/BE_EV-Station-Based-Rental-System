@@ -25,7 +25,7 @@ public class SwaggerConfig {
                         .description("Spring Boot REST API with Swagger")
                         .version("1.0.0"))
                 .servers(List.of(
-                        new Server().url("https://rentalcars.fivestu.site"),
+                        new Server().url("https://rentalcar-test.fivestu.site"),
                         new Server().url("http://localhost:8080")
                 ));
     }
