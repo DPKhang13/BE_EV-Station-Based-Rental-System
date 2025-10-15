@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,4 +46,6 @@ public class User {
     @JoinColumn(name = "station_id")
     private RentalStation rentalStation;
 
+    @OneToMany(mappedBy = "user",fetch = FetchType.LAZY)
+    private List<TransactionHistory>  transactionhistory =new ArrayList<>();
 }
