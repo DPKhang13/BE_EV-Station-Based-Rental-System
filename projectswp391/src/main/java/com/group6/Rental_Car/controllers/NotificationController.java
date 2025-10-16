@@ -33,6 +33,7 @@ public class NotificationController {
 
     @DeleteMapping("/delete/{notificationId}")
     public ResponseEntity<?> delete(@PathVariable Integer notificationId) {
+        notificationService.delete(notificationId);
         return ResponseEntity.ok("Deleted maintenance successfully");
     }
 

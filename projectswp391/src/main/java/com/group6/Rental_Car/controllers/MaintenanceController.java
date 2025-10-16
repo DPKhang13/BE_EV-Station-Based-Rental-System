@@ -31,6 +31,7 @@ public class MaintenanceController {
 
     @DeleteMapping("/delete/{maintenanceId}")
     public ResponseEntity<?> delete(@PathVariable Integer maintenanceId) {
+        maintenanceService.delete(maintenanceId);
         return ResponseEntity.ok("Deleted order successfully");
     }
 
