@@ -28,6 +28,9 @@ public class Vehicle {
 
     private String description;
 
+    @Column(name = "vehicle_name", length = 100)
+    private String vehicleName;
+
     // Một xe có nhiều đơn thuê
     @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
     private List<RentalOrder> rentalOrders;
