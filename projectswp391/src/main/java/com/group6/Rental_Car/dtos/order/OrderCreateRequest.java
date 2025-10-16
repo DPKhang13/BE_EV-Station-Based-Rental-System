@@ -12,6 +12,6 @@ public class OrderCreateRequest {
     private Long vehicleId;         // ID xe được chọn
     private LocalDateTime startTime; // Thời gian bắt đầu thuê
     private LocalDateTime endTime;   // Thời gian kết thúc thuê
-    private Integer couponId;        // Mã giảm giá (có thể null nếu không dùng)
+    private String couponCode;        // Mã giảm giá (có thể null nếu không dùng)
 
 }

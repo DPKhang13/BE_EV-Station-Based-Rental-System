@@ -46,8 +46,9 @@ public class CouponServiceImpl implements CouponService{
     }
 
     @Override
-    public Coupon getCouponById(Integer couponId) {
-        return couponRepository.findById(couponId)
-                .orElseThrow(() -> new ResourceNotFoundException("Coupon with id: " + couponId));
+    public Coupon getCouponByCode(String couponCode) {
+        return couponRepository.findByCodeIgnoreCase(couponCode)
+         .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with code: " + couponCode));
     }
+
 }

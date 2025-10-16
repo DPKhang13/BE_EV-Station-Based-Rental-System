@@ -11,5 +11,5 @@ public interface CouponService {
 
     List<Coupon> getAllCoupons();
 
-    Coupon getCouponById(Integer couponId);
+    Coupon getCouponByCode(String couponCode);
 }

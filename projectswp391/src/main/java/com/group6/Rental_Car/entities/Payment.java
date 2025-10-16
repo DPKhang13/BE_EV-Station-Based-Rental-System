@@ -32,12 +32,4 @@ public class Payment {
     @Column(name = "status", length = 50)
     private PaymentStatus status;
 
-    @Column(name = "txn_ref")
-    private String txnRef;
-
-    @Column(name = "bank_code")
-    private String bankCode;
-
-    @Column(name = "bank_tran_no")
-    private String bankTranNo;
 }

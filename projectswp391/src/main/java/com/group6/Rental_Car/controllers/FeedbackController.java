@@ -17,29 +17,29 @@ public class FeedbackController {
         this.feedbackService = feedbackService;
     }
 
-    @PostMapping
+    @PostMapping("/create")
     public ResponseEntity<FeedbackResponse> create(@RequestBody FeedbackCreateRequest req) {
         return ResponseEntity.ok(feedbackService.create(req));
     }
 
-    @PutMapping("/{feedbackId}")
+    @PutMapping("/update/{feedbackId}")
     public ResponseEntity<FeedbackResponse> update(@PathVariable Integer feedbackId,
                                                    @RequestBody FeedbackUpdateRequest req) {
         return ResponseEntity.ok(feedbackService.update(feedbackId, req));
     }
 
-    @DeleteMapping("/{feedbackId}")
+    @DeleteMapping("/delete/{feedbackId}")
     public ResponseEntity<Void> delete(@PathVariable Integer feedbackId) {
         feedbackService.delete(feedbackId);
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{feedbackId}")
+    @GetMapping("/getId/{feedbackId}")
     public ResponseEntity<FeedbackResponse> getById(@PathVariable Integer feedbackId) {
         return ResponseEntity.ok(feedbackService.getById(feedbackId));
     }
 
-    @GetMapping
+    @GetMapping("/showall")
     public ResponseEntity<List<FeedbackResponse>> list() {
         return ResponseEntity.ok(feedbackService.list());
     }

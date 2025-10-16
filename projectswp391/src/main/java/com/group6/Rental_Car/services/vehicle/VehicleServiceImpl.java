@@ -46,7 +46,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         Integer stationId = requireNonNull(req.getStationId(), "stationId");
         var st = rentalStationRepository.findById(stationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Station: " + stationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Station not found: " + stationId));
 
         //Validate seatCount && variant
         Integer seat = req.getSeatCount();
@@ -55,7 +55,7 @@ public class VehicleServiceImpl implements VehicleService {
 
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station "));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station not found "));
             vehicle.setRentalStation(station);
         }
 
@@ -81,7 +81,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public VehicleResponse updateVehicle(Long vehicleId, VehicleUpdateRequest req) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new ResourceNotFoundException("Vehicle "));
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found "));
 
         // status (nếu client gửi lên)
         if (req.getStatus() != null) {
@@ -95,7 +95,7 @@ public class VehicleServiceImpl implements VehicleService {
         // station (nếu client gửi lên)
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station "));
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station not found "));
             vehicle.setRentalStation(station);
         }
 
@@ -140,7 +140,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public VehicleResponse getVehicleById(Long id) {
         Vehicle vehicle = vehicleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Vehicle"));
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
         var attr = vehicleAttributeService.findByVehicle(vehicle);
         return vehicleAttributeService.convertToDto(vehicle, attr);
@@ -149,7 +149,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     public void deleteVehicle(Long id) {
         Vehicle vehicle = vehicleRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Vehicle not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
         vehicleAttributeService.deleteByVehicle(vehicle);
         vehicleRepository.delete(vehicle);

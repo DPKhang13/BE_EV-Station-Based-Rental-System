@@ -47,8 +47,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
         PricingRule pricingRule = pricingRuleService.getPricingRuleByVehicle(vehicle);
         Coupon coupon = null;
-        if (orderCreateRequest.getCouponId() != null) {
-            coupon = couponService.getCouponById(orderCreateRequest.getCouponId());
+        if (orderCreateRequest.getCouponCode() != null) {
+            coupon = couponService.getCouponByCode(orderCreateRequest.getCouponCode());
         }
         BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(pricingRule, coupon);
         RentalOrder rentalOrder = modelMapper.map(orderCreateRequest, RentalOrder.class);
@@ -63,7 +63,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         response.setVehicleId(rentalOrder.getVehicle().getVehicleId());
         response.setTotalPrice(totalPrice);
         if (rentalOrder.getCoupon() != null) {
-            response.setCouponId(rentalOrder.getCoupon().getCouponId());
+            response.setCouponCode(rentalOrder.getCoupon().getCode());
         }
 
 
@@ -83,8 +83,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             }
 
             Coupon coupon = null;
-            if (orderUpdateRequest.getCouponId() != null) {
-                coupon = couponService.getCouponById(orderUpdateRequest.getCouponId());
+            if (orderUpdateRequest.getCouponCode() != null) {
+                coupon = couponService.getValidCouponByCode(orderUpdateRequest.getCouponCode());
+                rentalOrder.setCoupon(coupon);
             }
             BigDecimal newTotalPrice = pricingRuleService.calculateTotalPrice(pricingRule, coupon);
             rentalOrder.setTotalPrice(newTotalPrice);
@@ -95,7 +96,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             response.setVehicleId(rentalOrder.getVehicle().getVehicleId());
         }
         if (rentalOrder.getCoupon() != null) {
-            response.setCouponId(rentalOrder.getCoupon().getCouponId());
+            response.setCouponCode(rentalOrder.getCoupon().getCode());
         }
         response.setTotalPrice(rentalOrder.getTotalPrice());
 
@@ -117,7 +118,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 response.setVehicleId(order.getVehicle().getVehicleId());
             }
             if (order.getCoupon() != null) {
-                response.setCouponId(order.getCoupon().getCouponId());
+                response.setCouponCode(order.getCoupon().getCode());
             }
             if (order.getTotalPrice() != null) {
                 response.setTotalPrice(order.getTotalPrice());
@@ -135,7 +136,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 response.setVehicleId(order.getVehicle().getVehicleId());
             }
             if (order.getCoupon() != null) {
-                response.setCouponId(order.getCoupon().getCouponId());
+                response.setCouponCode(order.getCoupon().getCode());
             }
             if (order.getTotalPrice() != null) {
                 response.setTotalPrice(order.getTotalPrice());
