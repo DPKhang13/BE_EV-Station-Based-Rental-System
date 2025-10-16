@@ -4,11 +4,13 @@ import com.group6.Rental_Car.config.VNpayConfig;
 import com.group6.Rental_Car.dtos.payment.PaymentDto;
 import com.group6.Rental_Car.dtos.payment.PaymentResponse;
 import com.group6.Rental_Car.entities.Payment;
+import com.group6.Rental_Car.entities.TransactionHistory;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.PaymentStatus;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.PaymentRepository;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
+import com.group6.Rental_Car.repositories.TransactionHistoryRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import com.group6.Rental_Car.utils.Utils;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -38,7 +42,11 @@ public class PaymentServiceImpl implements PaymentService {
     private final RentalOrderRepository rentalOrderRepository;
     @Autowired
     private final PaymentRepository paymentRepository;
-        public PaymentResponse createPaymentUrl(PaymentDto paymentDto, UUID userId){
+    @Autowired
+    private final TransactionHistoryRepository transactionHistoryRepository;
+
+
+    public PaymentResponse createPaymentUrl(PaymentDto paymentDto, UUID userId){
             User account = userRepositorys.findById(userId)
                     .orElseThrow(()-> new ResourceNotFoundException("Account not found"));
             var rentalOrder = rentalOrderRepository.findById(paymentDto.getOrderId())
@@ -56,14 +64,13 @@ public class PaymentServiceImpl implements PaymentService {
                     .status(PaymentStatus.PENDING)
                     .build();
             paymentRepository.save(payment);
-            String bankCode = null;
+            // Cấu hình VNPay params
             Map<String, String> vnpParamsMap = vnpayConfig.getVNPayConfig();
             vnpParamsMap.put("vnp_Amount", String.valueOf(amount));
-            if (bankCode != null && !bankCode.isEmpty()) {
-                vnpParamsMap.put("vnp_BankCode", bankCode);
-            }
             vnpParamsMap.put("vnp_IpAddr", paymentDto.getClientIp());
-            //build query url
+            // Gắn orderId làm mã tham chiếu VNPay
+            vnpParamsMap.put("vnp_TxnRef", payment.getPaymentId().toString());
+            vnpParamsMap.put("vnp_OrderInfo", "Payment for order " + rentalOrder.getOrderId());
             String queryUrl = Utils.getPaymentURL(vnpParamsMap, true);
             String hashData = Utils.getPaymentURL(vnpParamsMap, false);
             String vnpSecureHash = Utils.hmacSHA512(VNP_SECRET, hashData);
@@ -79,6 +86,57 @@ public class PaymentServiceImpl implements PaymentService {
                     .paymentUrl(paymentUrl)
                     .build();
         }
+    @Override
+    public PaymentResponse handleVNPayCallback(Map<String, String> vnpParams) {
+        // Tạo bản sao để có thể remove hoặc chỉnh sửa
+        Map<String, String> params = new HashMap<>(vnpParams);
+
+//        // Xử lý hash signature
+//        String vnpSecureHash = params.remove("vnp_SecureHash");
+//        String hashData = Utils.getPaymentURL(params, false);
+//        String computedHash = Utils.hmacSHA512(VNP_SECRET, hashData);
+//
+//        if (!computedHash.equals(vnpSecureHash)) {
+//            return PaymentResponse.builder()
+//                    .status(PaymentStatus.FAILED)
+//                    .message("Invalid VNPay signature")
+//                    .build();
+//        }
+
+        // Phần còn lại giữ nguyên
+        String responseCode = params.get("vnp_ResponseCode");
+        String txnRef = params.get("vnp_TxnRef");
+        BigDecimal amount = new BigDecimal(params.get("vnp_Amount"))
+                .divide(BigDecimal.valueOf(100));
+
+        UUID paymentId = UUID.fromString(txnRef);
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id " + txnRef));
+
+        if ("00".equals(responseCode)) {
+            payment.setStatus(PaymentStatus.SUCCESS);
+        } else {
+            payment.setStatus(PaymentStatus.FAILED);
+        }
+        paymentRepository.save(payment);
+
+        TransactionHistory transaction = TransactionHistory.builder()
+                .user(payment.getRentalOrder().getCustomer())
+                .amount(amount)
+                .type("00".equals(responseCode) ? "PAYMENT_SUCCESS" : "PAYMENT_FAILED")
+                .createdAt(LocalDateTime.now())
+                .build();
+        transactionHistoryRepository.save(transaction);
+
+        return PaymentResponse.builder()
+                .paymentId(payment.getPaymentId())
+                .orderId(payment.getRentalOrder().getOrderId())
+                .amount(amount)
+                .status(payment.getStatus())
+                .message("00".equals(responseCode) ? "Payment successful" : "Payment failed")
+                .build();
+    }
+
 }
 
 
