@@ -6,7 +6,7 @@ import  jakarta.persistence.*;
 
 @Entity
 @Table(
-        name= "EmployeeSchedule",
+        name= "employeeschedule",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_staff_date_shift",
                 // chan trung ca truc

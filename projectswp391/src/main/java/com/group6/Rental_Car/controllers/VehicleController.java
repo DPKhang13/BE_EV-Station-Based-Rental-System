@@ -7,7 +7,6 @@ import com.group6.Rental_Car.services.vehicle.VehicleService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,8 +31,8 @@ public class VehicleController {
     }
     @GetMapping("/get")
     public ResponseEntity<List<?>> getVehicleById() {
-       List<VehicleResponse> vehicles = vehicleService.getAllVehicles();
-       return ResponseEntity.ok(vehicles);
+        List<VehicleResponse> vehicles = vehicleService.getAllVehicles();
+        return ResponseEntity.ok(vehicles);
     }
     @PutMapping("/update/{vehicleId}")
     public ResponseEntity<?> updateVehicle(@PathVariable Long vehicleId,
