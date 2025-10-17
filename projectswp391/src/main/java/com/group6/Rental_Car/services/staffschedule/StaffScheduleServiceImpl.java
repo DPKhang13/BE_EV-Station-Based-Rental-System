@@ -103,9 +103,5 @@
             return employeeScheduleRepository.findAll(pageable).map(resMap()::map);
         }
 
-        public Page<StaffScheduleResponse> search(UUID userId, Integer stationId, LocalDate from, LocalDate to, String q, Pageable pageable) {
-            String kw = (q == null || q.isBlank()) ? null : q.trim();
-            return employeeScheduleRepository.search(userId, stationId, from, to, kw, pageable)
-                    .map(resMap()::map);
-        }
+
     }
