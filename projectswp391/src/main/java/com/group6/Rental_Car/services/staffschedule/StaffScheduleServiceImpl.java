@@ -28,8 +28,7 @@
         private final EmployeeScheduleRepository employeeScheduleRepository;
         private final RentalStationRepository stationRepository;
         private final UserRepository userRepository;
-        private final ModelMapper modelMapper;
-        private final EntityManagerFactory entityManagerFactory;
+
 
         @Override
         public StaffScheduleResponse create(StaffScheduleCreateRequest req) {
