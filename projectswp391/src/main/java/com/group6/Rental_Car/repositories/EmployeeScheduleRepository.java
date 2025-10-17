@@ -20,5 +20,19 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
             UUID userId, LocalDate shiftDate, String shiftTime, Integer scheduleId);
 
 
-
+    @Query("""
+      select s
+      from EmployeeSchedule s
+      where (:userId   is null or s.staff.userId = :userId)
+        and (:stationId is null or s.station.stationId = :stationId)
+        and (:fromDate is null or s.shiftDate >= :fromDate)
+        and (:toDate   is null or s.shiftDate <= :toDate)
+        and (:q is null or lower(s.shiftTime) like lower(concat('%', :q, '%')))
+      """)
+    Page<EmployeeSchedule> search(@Param("userId") UUID userId,
+                                  @Param("stationId") Integer stationId,
+                                  @Param("fromDate") LocalDate fromDate,
+                                  @Param("toDate") LocalDate toDate,
+                                  @Param("q") String q,
+                                  Pageable pageable);
 }
