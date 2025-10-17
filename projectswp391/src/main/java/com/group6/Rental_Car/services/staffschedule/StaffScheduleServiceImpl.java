@@ -29,6 +29,7 @@
         private final RentalStationRepository stationRepository;
         private final UserRepository userRepository;
 
+
         @Override
         public StaffScheduleResponse create(StaffScheduleCreateRequest req) {
             User staff = userRepository.findById(req.getUserId())
