@@ -64,4 +64,4 @@ d. Báo cáo & phân tích
 + Doanh thu theo điểm thuê.
 + Tỷ lệ sử dụng xe, giờ cao điểm.
 + AI gợi ý dự báo nhu cầu thuê để nâng cấp đội xe."
-+ dsfghjkkhgfdghjklhgjfdhjkjhgdfhghjfsgdfdhfguilytuerytruytuyiuoydt
+  
