@@ -54,11 +54,11 @@ public class AuthenticationController {
                 .build();
 
         ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(accountDtoResponse.getUserId()))
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(refreshTokenAge / 1000).path("/").build();
 
         ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(accessTokenAge / 1000).path("/").build();
 
         return ResponseEntity.ok()
@@ -78,16 +78,26 @@ public class AuthenticationController {
                 .build();
 
         ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(accountDtoResponse.getUserId()))
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(refreshTokenAge / 1000).path("/").build();
 
         ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(accessTokenAge / 1000).path("/").build();
+
+        Map<String, Object> responseBody = new HashMap<>();
+        responseBody.put("userId", accountDtoResponse.getUserId());
+        responseBody.put("role", accountDtoResponse.getRole().name());
+        responseBody.put("email", accountDtoResponse.getEmail());
+        responseBody.put("fullName", accountDtoResponse.getFullName());
+        responseBody.put("status", accountDtoResponse.getStatus());
+        responseBody.put("phone", accountDtoResponse.getPhone());
+
+
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
-                .body(accountDtoResponse);
+                .body(responseBody);
     }
 
     // ---------- VERIFY OTP ----------
@@ -102,11 +112,11 @@ public class AuthenticationController {
                 .build();
 
         ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(userResp.getUserId()))
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(refreshTokenAge / 1000).path("/").build();
 
         ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(accessTokenAge / 1000).path("/").build();
 
         return ResponseEntity.ok()
@@ -118,11 +128,11 @@ public class AuthenticationController {
     @PostMapping("/logout")
     public ResponseEntity<?> logout() {
         ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", "")
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(0).path("/").build();
 
         ResponseCookie accessCookie = ResponseCookie.from("AccessToken", "")
-                .httpOnly(true).secure(true).sameSite("None")
+                .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(0).path("/").build();
 
         return ResponseEntity.ok()
@@ -144,7 +154,7 @@ public class AuthenticationController {
                     .build();
 
             ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                    .httpOnly(true).secure(true).sameSite("None")
+                    .httpOnly(true).secure(false).sameSite("None")
                     .maxAge(accessTokenAge / 1000).path("/").build();
 
             return ResponseEntity.ok()
