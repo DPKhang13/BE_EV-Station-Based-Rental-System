@@ -17,7 +17,6 @@
     import org.springframework.data.domain.Page;
     import org.springframework.data.domain.Pageable;
     import org.springframework.stereotype.Service;
-
     import java.time.LocalDate;
     import java.util.List;
     import java.util.UUID;
@@ -29,8 +28,7 @@
         private final EmployeeScheduleRepository employeeScheduleRepository;
         private final RentalStationRepository stationRepository;
         private final UserRepository userRepository;
-        private final ModelMapper modelMapper;
-        private final EntityManagerFactory entityManagerFactory;
+
 
         @Override
         public StaffScheduleResponse create(StaffScheduleCreateRequest req) {
@@ -51,21 +49,9 @@
             employee.setShiftTime(shift);
 
            employee = employeeScheduleRepository.save(employee);
-           return resMap().map(employee);
+           return toResponse(employee);
         }
 
-        private TypeMap<EmployeeSchedule, StaffScheduleResponse> resMap() {
-            var tm = modelMapper.getTypeMap(EmployeeSchedule.class, StaffScheduleResponse.class);
-            if (tm == null) {
-                tm = modelMapper.createTypeMap(EmployeeSchedule.class, StaffScheduleResponse.class)
-                        .addMapping(EmployeeSchedule::getScheduleId, StaffScheduleResponse::setScheduleId)
-                        .addMapping(src -> src.getStaff().getUserId(), StaffScheduleResponse::setStaffId)
-                        .addMapping(src -> src.getStaff().getFullName(), StaffScheduleResponse::setStaffName)
-                        .addMapping(src -> src.getStation().getStationId(), StaffScheduleResponse::setStationId)
-                        .addMapping(src -> src.getStation().getName(), StaffScheduleResponse::setStationName);
-            }
-            return tm;
-        }
         @Override
         public StaffScheduleResponse update(Integer id, StaffScheduleUpdateRequest req) {
            EmployeeSchedule employee = employeeScheduleRepository.findById(id)
@@ -95,17 +81,29 @@
                 throw new RuntimeException("This staff already has a schedule for that date & shift");
             }
             employee  = employeeScheduleRepository.save(employee);
-            return resMap().map(employee);
+            return toResponse(employee);
         }
 
 
         public Page<StaffScheduleResponse> getAll(Pageable pageable) {
-            return employeeScheduleRepository.findAll(pageable).map(resMap()::map);
+            return employeeScheduleRepository.findAll(pageable).map(this::toResponse);
         }
 
         public Page<StaffScheduleResponse> search(UUID userId, Integer stationId, LocalDate from, LocalDate to, String q, Pageable pageable) {
             String kw = (q == null || q.isBlank()) ? null : q.trim();
             return employeeScheduleRepository.search(userId, stationId, from, to, kw, pageable)
-                    .map(resMap()::map);
+                    .map(this::toResponse);
+        }
+
+        private StaffScheduleResponse toResponse(EmployeeSchedule e) {
+            StaffScheduleResponse dto = new StaffScheduleResponse();
+            dto.setScheduleId(e.getScheduleId());
+            dto.setStaffId(e.getStaff().getUserId());
+            dto.setStaffName(e.getStaff().getFullName());
+            dto.setStationId(e.getStation().getStationId());
+            dto.setStationName(e.getStation().getName());
+            dto.setShiftDate(e.getShiftDate());
+            dto.setShiftTime(e.getShiftTime());
+            return dto;
         }
     }

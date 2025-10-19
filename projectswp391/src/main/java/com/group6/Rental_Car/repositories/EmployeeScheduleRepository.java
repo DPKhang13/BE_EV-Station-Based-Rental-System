@@ -19,16 +19,16 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
     boolean existsByStaff_UserIdAndShiftDateAndShiftTimeAndScheduleIdNot(
             UUID userId, LocalDate shiftDate, String shiftTime, Integer scheduleId);
 
+
     @Query("""
-     select s
-     from EmployeeSchedule s
-     where (:userId   is null or s.staff.userId = :userId)
-       and (:stationId is null or s.station.stationId = :stationId)
-       and (:fromDate is null or s.shiftDate >= :fromDate)
-       and (:toDate   is null or s.shiftDate <= :toDate)
-       and (:q is null or lower(s.shiftTime) like lower(concat('%', :q, '%')))
-     order by s.shiftDate desc, s.shiftTime asc
-  """)
+      select s
+      from EmployeeSchedule s
+      where (:userId   is null or s.staff.userId = :userId)
+        and (:stationId is null or s.station.stationId = :stationId)
+        and (:fromDate is null or s.shiftDate >= :fromDate)
+        and (:toDate   is null or s.shiftDate <= :toDate)
+        and (:q is null or lower(s.shiftTime) like lower(concat('%', :q, '%')))
+      """)
     Page<EmployeeSchedule> search(@Param("userId") UUID userId,
                                   @Param("stationId") Integer stationId,
                                   @Param("fromDate") LocalDate fromDate,
