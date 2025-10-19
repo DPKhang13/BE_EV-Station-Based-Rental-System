@@ -19,7 +19,6 @@ services:
       - key: SPRING_DATASOURCE_PASSWORD
         sync: false   # nhập password trong Dashboard sau khi deploy
 
-      # JPA / pool
       - key: SPRING_JPA_HIBERNATE_DDL_AUTO
         value: none
       - key: SPRING_JPA_SHOW_SQL
