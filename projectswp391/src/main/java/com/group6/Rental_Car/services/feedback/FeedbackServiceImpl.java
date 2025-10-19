@@ -59,10 +59,6 @@ public class FeedbackServiceImpl implements FeedbackService{
         Feedback fb = feedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new ResourceNotFoundException("Feedback not found: " + feedbackId));
 
-        if (req.getRating() != null) {
-            ensureRange(req.getRating(), 1, 5, "rating");
-            fb.setRating(req.getRating());
-        }
         if (req.getComment() != null) {
             String comment = trim(req.getComment());
             ensureMaxLength(comment, 255, "comment");

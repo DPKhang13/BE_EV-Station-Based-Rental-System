@@ -14,8 +14,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
             return new WebMvcConfigurer() {
                 @Override
                 public void addCorsMappings(CorsRegistry registry) {
-                    registry.addMapping("/**")
-                            .allowedOriginPatterns("*") // dùng pattern thay vì fixed origins
+                    registry.addMapping("/api/**")
+                            .allowedOrigins("http://localhost:5174",
+                                    "http://26.54.226.227:5174") // dùng pattern thay vì fixed origins
                             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                             .allowedHeaders("*")
                             .exposedHeaders("Authorization")

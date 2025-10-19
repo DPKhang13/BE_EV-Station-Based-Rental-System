@@ -10,8 +10,10 @@ import lombok.NoArgsConstructor;
 public class VehicleResponse {
     private Long vehicleId;
     private Integer stationId;
+    private String stationName;
     private String plateNumber;
     private String status;
+    private String vehicleName;
     private String description;
 
     // ===== Thuộc tính từ bảng vehicleattribute =====

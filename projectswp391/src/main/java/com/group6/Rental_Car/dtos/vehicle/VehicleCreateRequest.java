@@ -14,6 +14,7 @@ public class VehicleCreateRequest {
     private String plateNumber;
     private String status;
     private Integer stationId;
+    private String vehicleName;
     private String description;
 
     private String brand;

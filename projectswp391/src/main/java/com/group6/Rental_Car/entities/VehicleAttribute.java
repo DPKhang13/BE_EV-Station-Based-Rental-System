@@ -23,18 +23,14 @@ public class VehicleAttribute {
     @Column(name = "brand", length = 50)
     private String brand;
 
-
     private String color;
 
-
     private String transmission;
-
 
     private Integer seatCount;
 
     @Column(name = "year")
     private Integer year;
-
 
     private String variant;
 

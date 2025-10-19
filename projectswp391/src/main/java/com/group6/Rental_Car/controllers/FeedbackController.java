@@ -4,12 +4,14 @@ import com.group6.Rental_Car.dtos.feedback.FeedbackCreateRequest;
 import com.group6.Rental_Car.dtos.feedback.FeedbackResponse;
 import com.group6.Rental_Car.dtos.feedback.FeedbackUpdateRequest;
 import com.group6.Rental_Car.services.feedback.FeedbackService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
+@Tag(name = "Feedback Api", description ="rating, comments about service")
 @RequestMapping("/api/feedbacks")
 public class FeedbackController {
     private final FeedbackService feedbackService;
@@ -34,12 +36,12 @@ public class FeedbackController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/getId/{feedbackId}")
+    @GetMapping("/getById/{feedbackId}")
     public ResponseEntity<FeedbackResponse> getById(@PathVariable Integer feedbackId) {
         return ResponseEntity.ok(feedbackService.getById(feedbackId));
     }
 
-    @GetMapping("/showall")
+    @GetMapping("/getAllList")
     public ResponseEntity<List<FeedbackResponse>> list() {
         return ResponseEntity.ok(feedbackService.list());
     }

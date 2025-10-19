@@ -12,12 +12,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "[user]") // 'User' là keyword trong SQL Server nên để trong []
+@Table(name = "[User]") // 'User' là keyword trong SQL Server nên để trong []
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+
 public class User {
 
     @Id
@@ -48,4 +49,7 @@ public class User {
 
     @OneToMany(mappedBy = "user",fetch = FetchType.LAZY)
     private List<TransactionHistory>  transactionhistory =new ArrayList<>();
+
+    @OneToMany(mappedBy = "user",fetch = FetchType.LAZY)
+    private List<Notification>  notifications =new ArrayList<>();
 }
