@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: ./backend
+    container_name: rental_api
+    image: rental_api:latest
+    env_file:
+      - ./backend/.env   
+    ports:
+      - "${PORT:-8080}:8080"
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TZ: Asia/Ho_Chi_Minh
