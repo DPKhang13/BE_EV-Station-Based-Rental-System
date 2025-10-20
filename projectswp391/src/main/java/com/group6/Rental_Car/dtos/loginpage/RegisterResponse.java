@@ -13,12 +13,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class RegisterResponse {
-    @JsonIgnore
     private UUID userId;       // id vừa tạo
     private String fullName;   // tên người dùng
     private String email;      // email
     private String phone;
-    @JsonIgnore
     private Role role;         // quyền (Enum)
     private UserStatus status; // trạng thái
 }

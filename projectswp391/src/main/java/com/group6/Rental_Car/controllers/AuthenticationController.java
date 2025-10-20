@@ -85,19 +85,9 @@ public class AuthenticationController {
                 .httpOnly(true).secure(false).sameSite("None")
                 .maxAge(accessTokenAge / 1000).path("/").build();
 
-        Map<String, Object> responseBody = new HashMap<>();
-        responseBody.put("userId", accountDtoResponse.getUserId());
-        responseBody.put("role", accountDtoResponse.getRole().name());
-        responseBody.put("email", accountDtoResponse.getEmail());
-        responseBody.put("fullName", accountDtoResponse.getFullName());
-        responseBody.put("status", accountDtoResponse.getStatus());
-        responseBody.put("phone", accountDtoResponse.getPhone());
-
-
-
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
-                .body(responseBody);
+                .body(accountDtoResponse);
     }
 
     // ---------- VERIFY OTP ----------
@@ -162,20 +152,6 @@ public class AuthenticationController {
                     .build();
         }
         return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-    }
-    @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        if (principal instanceof JwtUserDetails userDetails) {
-
-            Map<String, Object> userInfo = new HashMap<>();
-            userInfo.put("userId", userDetails.getUserId());
-            userInfo.put("role", userDetails.getRole());
-            return ResponseEntity.ok(userInfo);
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "User not authenticated"));
-        }
     }
 }
