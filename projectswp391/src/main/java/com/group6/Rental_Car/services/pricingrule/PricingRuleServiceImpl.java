@@ -2,17 +2,20 @@ package com.group6.Rental_Car.services.pricingrule;
 
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
-import com.group6.Rental_Car.entities.Coupon;
-import com.group6.Rental_Car.entities.PricingRule;
+import com.group6.Rental_Car.entities.*;
+import com.group6.Rental_Car.enums.PaymentStatus;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
-import com.group6.Rental_Car.repositories.PricingRuleRepository;
+import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,8 +24,14 @@ import java.util.stream.Collectors;
 public class PricingRuleServiceImpl implements PricingRuleService {
 
     private final PricingRuleRepository pricingRuleRepository;
+    private final RentalOrderRepository rentalOrderRepository;
+    private final NotificationRepository notificationRepository;
+    private final PaymentRepository paymentRepository;
     private final ModelMapper modelMapper;
 
+    // =============================
+    //      LẤY RULE THEO XE
+    // =============================
     @Override
     public PricingRule getPricingRuleBySeatAndVariant(Integer seatCount, String variant) {
         return pricingRuleRepository.findBySeatCountAndVariantIgnoreCase(seatCount, variant)
@@ -31,56 +40,110 @@ public class PricingRuleServiceImpl implements PricingRuleService {
                 ));
     }
 
+    // =============================
+    //      TÍNH GIÁ CƠ BẢN THEO GIỜ / NGÀY
+    // =============================
     @Override
-    public BigDecimal calculateTotalPrice(PricingRule pricingRule, Coupon coupon) {
-        BigDecimal total = safeAdd(
-                pricingRule.getBaseHoursPrice(),
-                pricingRule.getExtraHourPrice(),
-                pricingRule.getDailyPrice()
-        );
+    public BigDecimal calculateRentalPrice(PricingRule pricingRule, long rentedHours) {
+        if (pricingRule == null || rentedHours <= 0)
+            throw new BadRequestException("Thiếu thông tin tính giá thuê");
 
+        BigDecimal total;
+
+        // Nếu thuê nguyên ngày (>= 24h) → tính theo daily_price
+        if (rentedHours >= 24) {
+            long days = (long) Math.ceil(rentedHours / 24.0);
+            total = pricingRule.getDailyPrice().multiply(BigDecimal.valueOf(days));
+        } else {
+            int baseHours = pricingRule.getBaseHours();
+            BigDecimal basePrice = safeValue(pricingRule.getBaseHoursPrice());
+            BigDecimal extraPrice = safeValue(pricingRule.getExtraHourPrice());
+
+            if (rentedHours <= baseHours) {
+                total = basePrice;
+            } else {
+                long extraHours = rentedHours - baseHours;
+                total = basePrice.add(extraPrice.multiply(BigDecimal.valueOf(extraHours)));
+            }
+        }
+
+        return total;
+    }
+
+    // =============================
+    //      TÍNH GIÁ TỔNG (CÓ PHẠT + COUPON)
+    // =============================
+    @Override
+    public BigDecimal calculateTotalPrice(PricingRule pricingRule, Coupon coupon,
+                                          Integer plannedHours, long actualHours) {
+        if (pricingRule == null)
+            throw new BadRequestException("Thiếu quy tắc giá");
+
+        // Giá thuê cơ bản
+        BigDecimal total = calculateRentalPrice(pricingRule, actualHours);
+
+        // Nếu vượt giờ dự kiến → cộng thêm phí phạt
+        if (plannedHours != null && actualHours > plannedHours) {
+            long exceededHours = actualHours - plannedHours;
+            BigDecimal penalty = pricingRule.getExtraHourPrice()
+                    .multiply(BigDecimal.valueOf(exceededHours)); // phí phạt mỗi giờ = extraHourPrice
+            total = total.add(penalty);
+        }
+
+        // Áp dụng coupon
         if (coupon != null) {
             validateCoupon(coupon);
             BigDecimal discount = safeValue(coupon.getDiscount());
-
             if (discount.compareTo(BigDecimal.ZERO) > 0) {
-                // < 1 => %; >= 1 => số tiền
                 if (discount.compareTo(BigDecimal.ONE) < 0) {
-                    total = total.subtract(total.multiply(discount));
+                    total = total.subtract(total.multiply(discount)); // % giảm
                 } else {
-                    total = total.subtract(discount);
+                    total = total.subtract(discount); // giảm cố định
                 }
-
                 if (total.compareTo(BigDecimal.ZERO) < 0)
                     total = BigDecimal.ZERO;
             }
         }
+
         return total;
     }
 
-    private BigDecimal safeAdd(BigDecimal... values) {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (BigDecimal v : values) {
-            if (v != null) sum = sum.add(v);
-        }
-        return sum;
-    }
+    @Transactional
+    public void handlePaymentSuccess(Payment payment) {
+        if (payment == null || payment.getRentalOrder() == null)
+            throw new BadRequestException("Thanh toán không hợp lệ");
 
-    private BigDecimal safeValue(BigDecimal v) {
-        return v != null ? v : BigDecimal.ZERO;
-    }
+        RentalOrder order = payment.getRentalOrder();
 
-    private void validateCoupon(Coupon coupon) {
-        LocalDate today = LocalDate.now();
-        if (coupon.getValidFrom() != null && today.isBefore(coupon.getValidFrom())) {
-            throw new BadRequestException("Coupon chưa có hiệu lực");
+        short type = payment.getType(); // SMALLINT trong DB
+
+        if (type == 1) {
+            // 1 = thanh toán đơn thuê xe
+            order.setStatus("IN_USE");
+            rentalOrderRepository.save(order);
+
+        } else if (type == 2) {
+            // 2 = thanh toán phí phạt
+            Notification notification = new Notification();
+            notification.setUser(order.getCustomer());
+            notification.setMessage("Bạn đã thanh toán phí phạt "
+                    + payment.getAmount() + "đ cho đơn thuê #" + order.getOrderId());
+            notification.setCreatedAt(LocalDateTime.now());
+            notificationRepository.save(notification);
+
+        } else if (type == 3) {
+            // 3 = hoàn tiền
+            Notification notification = new Notification();
+            notification.setUser(order.getCustomer());
+            notification.setMessage("Đã hoàn tiền "
+                    + payment.getAmount() + "đ cho đơn thuê #" + order.getOrderId());
+            notification.setCreatedAt(LocalDateTime.now());
+            notificationRepository.save(notification);
         }
-        if (coupon.getValidTo() != null && today.isAfter(coupon.getValidTo())) {
-            throw new BadRequestException("Coupon đã hết hạn");
-        }
-        if (!"active".equalsIgnoreCase(coupon.getStatus())) {
-            throw new BadRequestException("Coupon không khả dụng");
-        }
+
+        // Cập nhật trạng thái thanh toán
+        payment.setStatus(PaymentStatus.SUCCESS);
+        paymentRepository.save(payment);
     }
 
     @Override
@@ -105,5 +168,19 @@ public class PricingRuleServiceImpl implements PricingRuleService {
 
         PricingRule updated = pricingRuleRepository.save(rule);
         return modelMapper.map(updated, PricingRuleResponse.class);
+    }
+
+    private BigDecimal safeValue(BigDecimal v) {
+        return v != null ? v : BigDecimal.ZERO;
+    }
+
+    private void validateCoupon(Coupon coupon) {
+        LocalDate today = LocalDate.now();
+        if (coupon.getValidFrom() != null && today.isBefore(coupon.getValidFrom()))
+            throw new BadRequestException("Coupon chưa có hiệu lực");
+        if (coupon.getValidTo() != null && today.isAfter(coupon.getValidTo()))
+            throw new BadRequestException("Coupon đã hết hạn");
+        if (!"active".equalsIgnoreCase(coupon.getStatus()))
+            throw new BadRequestException("Coupon không khả dụng");
     }
 }

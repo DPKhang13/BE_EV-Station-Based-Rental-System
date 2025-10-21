@@ -18,6 +18,7 @@ public class PricingRule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "pricingrule_id")
     private Integer pricingRuleId;
+
     private Integer seatCount;
 
     private String variant;

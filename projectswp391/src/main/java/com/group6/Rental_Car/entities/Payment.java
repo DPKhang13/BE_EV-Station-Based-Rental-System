@@ -28,6 +28,8 @@ public class Payment {
 
     private String method;
 
+    private short type;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
     private PaymentStatus status;

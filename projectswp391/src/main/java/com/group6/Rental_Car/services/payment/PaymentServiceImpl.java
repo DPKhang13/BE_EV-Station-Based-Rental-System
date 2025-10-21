@@ -88,22 +88,8 @@ public class PaymentServiceImpl implements PaymentService {
         }
     @Override
     public PaymentResponse handleVNPayCallback(Map<String, String> vnpParams) {
-        // Tạo bản sao để có thể remove hoặc chỉnh sửa
         Map<String, String> params = new HashMap<>(vnpParams);
 
-//        // Xử lý hash signature
-//        String vnpSecureHash = params.remove("vnp_SecureHash");
-//        String hashData = Utils.getPaymentURL(params, false);
-//        String computedHash = Utils.hmacSHA512(VNP_SECRET, hashData);
-//
-//        if (!computedHash.equals(vnpSecureHash)) {
-//            return PaymentResponse.builder()
-//                    .status(PaymentStatus.FAILED)
-//                    .message("Invalid VNPay signature")
-//                    .build();
-//        }
-
-        // Phần còn lại giữ nguyên
         String responseCode = params.get("vnp_ResponseCode");
         String txnRef = params.get("vnp_TxnRef");
         BigDecimal amount = new BigDecimal(params.get("vnp_Amount"))

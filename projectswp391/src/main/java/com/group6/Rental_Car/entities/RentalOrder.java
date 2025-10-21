@@ -38,6 +38,12 @@ public class RentalOrder {
 
     private BigDecimal totalPrice;
 
+    private Integer plannedHours;
+
+    private Integer actualHours;
+
+    private BigDecimal penaltyFee;
+
     private String status;
     @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
