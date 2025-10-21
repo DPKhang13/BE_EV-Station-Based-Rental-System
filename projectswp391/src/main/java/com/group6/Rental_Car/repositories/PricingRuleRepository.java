@@ -13,7 +13,5 @@ import java.util.Optional;
 
 @Repository
 public interface PricingRuleRepository extends JpaRepository<PricingRule, Integer> {
-    Optional<PricingRule> findByVehicle(Vehicle vehicle);
-
-    Optional<PricingRule> findByVehicle_VehicleId(Long vehicleId);
+    Optional<PricingRule> findBySeatCountAndVariantIgnoreCase(Integer seatCount, String variant);
 }

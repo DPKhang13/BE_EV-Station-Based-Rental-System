@@ -3,9 +3,11 @@ package com.group6.Rental_Car.services.vehicle;
 import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
+import com.group6.Rental_Car.entities.PricingRule;
 import com.group6.Rental_Car.entities.Vehicle;
-import com.group6.Rental_Car.entities.VehicleAttribute;
-import com.group6.Rental_Car.repositories.VehicleAttributeRepository;
+import com.group6.Rental_Car.entities.VehicleModel;
+import com.group6.Rental_Car.repositories.VehicleModelRepository;
+import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.BeanUtils;
@@ -15,16 +17,17 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class VehicleAttributeServiceImpl implements VehicleAttributeService {
+public class VehicleModelServiceImpl implements VehicleModelService {
 
-    private final VehicleAttributeRepository vehicleAttributeRepository;
+    private final VehicleModelRepository vehicleModelRepository;
     private final ModelMapper modelMapper;
+    private final PricingRuleService pricingRuleService;
 
     @Override
-    public VehicleAttribute createOrUpdateAttribute(Vehicle vehicle, VehicleCreateRequest req) {
-        VehicleAttribute attr = vehicleAttributeRepository.findByVehicle(vehicle)
+    public VehicleModel createModel(Vehicle vehicle, VehicleCreateRequest req) {
+        VehicleModel attr = vehicleModelRepository.findByVehicle(vehicle)
                 .orElseGet(() -> {
-                    VehicleAttribute newAttr = new VehicleAttribute();
+                    VehicleModel newAttr = new VehicleModel();
                     newAttr.setVehicle(vehicle);
                     return newAttr;
                 });
@@ -38,39 +41,43 @@ public class VehicleAttributeServiceImpl implements VehicleAttributeService {
         attr.setBatteryStatus(req.getBatteryStatus());
         attr.setBatteryCapacity(req.getBatteryCapacity());
         attr.setRangeKm(req.getRangeKm());
-
-        return vehicleAttributeRepository.save(attr);
+        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
+                req.getSeatCount(), req.getVariant()
+        );
+        attr.setPricingRule(rule);
+        return vehicleModelRepository.save(attr);
     }
 
     @Override
-    public VehicleAttribute createOrUpdateAttribute(Vehicle vehicle, VehicleUpdateRequest req) {
-        VehicleAttribute attr = vehicleAttributeRepository.findByVehicle(vehicle)
+    public VehicleModel updateModel(Vehicle vehicle, VehicleUpdateRequest req) {
+        VehicleModel attr = vehicleModelRepository.findByVehicle(vehicle)
                 .orElseGet(() -> {
-                    VehicleAttribute newAttr = new VehicleAttribute();
+                    VehicleModel newAttr = new VehicleModel();
                     newAttr.setVehicle(vehicle);
                     return newAttr;
                 });
 
         BeanUtils.copyProperties(req, attr, getNullPropertyNames(req));
-        return vehicleAttributeRepository.save(attr);
+        return vehicleModelRepository.save(attr);
     }
 
     @Override
-    public VehicleAttribute findByVehicle(Vehicle vehicle) {
-        return vehicleAttributeRepository.findByVehicle(vehicle).orElse(null);
+    public VehicleModel findByVehicle(Vehicle vehicle) {
+        return vehicleModelRepository.findByVehicle(vehicle).orElse(null);
     }
 
     @Override
     public void deleteByVehicle(Vehicle vehicle) {
-        vehicleAttributeRepository.findByVehicle(vehicle)
-                .ifPresent(vehicleAttributeRepository::delete);
+        vehicleModelRepository.findByVehicle(vehicle)
+                .ifPresent(vehicleModelRepository::delete);
     }
 
     @Override
-    public VehicleResponse convertToDto(Vehicle vehicle, VehicleAttribute attr) {
+    public VehicleResponse convertToDto(Vehicle vehicle, VehicleModel attr) {
         VehicleResponse dto = modelMapper.map(vehicle, VehicleResponse.class);
         if (vehicle.getRentalStation() != null)
             dto.setStationId(vehicle.getRentalStation().getStationId());
+            dto.setStationName(vehicle.getRentalStation().getName());
         if (attr != null) {
             dto.setBrand(attr.getBrand());
             dto.setColor(attr.getColor());
@@ -81,6 +88,9 @@ public class VehicleAttributeServiceImpl implements VehicleAttributeService {
             dto.setBatteryStatus(attr.getBatteryStatus());
             dto.setBatteryCapacity(attr.getBatteryCapacity());
             dto.setRangeKm(attr.getRangeKm());
+            dto.setPricingRuleId(
+                    attr.getPricingRule() != null ? attr.getPricingRule().getPricingRuleId() : null
+            );
         }
         return dto;
     }

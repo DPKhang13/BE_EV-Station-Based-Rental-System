@@ -4,7 +4,7 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.entities.Vehicle;
-import com.group6.Rental_Car.entities.VehicleAttribute;
+import com.group6.Rental_Car.entities.VehicleModel;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ConflictException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
@@ -24,11 +24,11 @@ import static com.group6.Rental_Car.utils.ValidationUtil.*;
 @RequiredArgsConstructor
 public class VehicleServiceImpl implements VehicleService {
     private static final Set<String> ALLOWED_STATUS = Set.of("available", "rented", "maintenance");
-    private static final Set<String> ALLOWED_VARIANT = Set.of("air", "pro", "plus"); //Null cũng hợp lệ
+    private static final Set<String> ALLOWED_VARIANT = Set.of("air", "pro", "plus");
 
     private final VehicleRepository vehicleRepository;
     private final RentalStationRepository rentalStationRepository;
-    private final VehicleAttributeService vehicleAttributeService; // <-- thay vì repository
+    private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
 
     @Override
@@ -48,7 +48,6 @@ public class VehicleServiceImpl implements VehicleService {
         var st = rentalStationRepository.findById(stationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Station not found: " + stationId));
 
-        //Validate seatCount && variant
         Integer seat = req.getSeatCount();
         String normalizedVariant = validateVariantBySeatCount(seat, req.getVariant());
 
@@ -61,21 +60,19 @@ public class VehicleServiceImpl implements VehicleService {
 
         vehicleRepository.save(vehicle);
 
-        // gọi service attribute
         VehicleCreateRequest attrReq = new VehicleCreateRequest();
         attrReq.setBrand(req.getBrand());
         attrReq.setColor(req.getColor());
-        attrReq.setSeatCount(seat);
         attrReq.setSeatCount(seat);
         attrReq.setVariant(normalizedVariant);// << dùng biến đã validate/normalize
         attrReq.setBatteryStatus(req.getBatteryStatus());
         attrReq.setBatteryCapacity(req.getBatteryCapacity());
         attrReq.setRangeKm(req.getRangeKm());
 
-        VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, attrReq);
+        VehicleModel attr = vehicleModelService.createModel(vehicle, attrReq);
 
 
-        return vehicleAttributeService.convertToDto(vehicle, attr);
+        return vehicleModelService.convertToDto(vehicle, attr);
     }
 
     @Override
@@ -104,7 +101,7 @@ public class VehicleServiceImpl implements VehicleService {
         vehicle = vehicleRepository.save(vehicle);
 
         // Lấy attribute hiện tại để tính giá trị hiệu lực khi client chỉ gửi 1 trong 2
-        VehicleAttribute currentAttr = vehicleAttributeService.findByVehicle(vehicle);
+        VehicleModel currentAttr = vehicleModelService.findByVehicle(vehicle);
 
         Integer effectiveSeat = (req.getSeatCount() != null)
                 ? req.getSeatCount()
@@ -132,9 +129,9 @@ public class VehicleServiceImpl implements VehicleService {
 
         vehicleRepository.save(vehicle);
 
-        VehicleAttribute attr = vehicleAttributeService.createOrUpdateAttribute(vehicle, req);
+        VehicleModel attr = vehicleModelService.updateModel(vehicle, req);
 
-        return vehicleAttributeService.convertToDto(vehicle, attr);
+        return vehicleModelService.convertToDto(vehicle, attr);
     }
 
     @Override
@@ -142,8 +139,8 @@ public class VehicleServiceImpl implements VehicleService {
         Vehicle vehicle = vehicleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
-        var attr = vehicleAttributeService.findByVehicle(vehicle);
-        return vehicleAttributeService.convertToDto(vehicle, attr);
+        var attr = vehicleModelService.findByVehicle(vehicle);
+        return vehicleModelService.convertToDto(vehicle, attr);
     }
 
     @Override
@@ -151,14 +148,14 @@ public class VehicleServiceImpl implements VehicleService {
         Vehicle vehicle = vehicleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
-        vehicleAttributeService.deleteByVehicle(vehicle);
+        vehicleModelService.deleteByVehicle(vehicle);
         vehicleRepository.delete(vehicle);
     }
 
     @Override
     public List<VehicleResponse> getAllVehicles() {
         return vehicleRepository.findAll().stream()
-                .map(v -> vehicleAttributeService.convertToDto(v, vehicleAttributeService.findByVehicle(v)))
+                .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
                 .collect(Collectors.toList());
     }
 }
