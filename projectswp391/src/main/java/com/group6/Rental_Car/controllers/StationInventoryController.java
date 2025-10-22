@@ -9,6 +9,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -46,8 +48,8 @@ public class StationInventoryController {
             @RequestParam(required = false) Integer stationId,
             @RequestParam(required = false) Long vehicleId,
             @RequestParam(required = false) String q,
-            Pageable pageable
-    ) {
+            @PageableDefault(sort = "inventoryId", direction = Sort.Direction.DESC) Pageable pageable)
+     {
         return ResponseEntity.ok(stationInventoryService.search(stationId, vehicleId, q, pageable));
     }
 }

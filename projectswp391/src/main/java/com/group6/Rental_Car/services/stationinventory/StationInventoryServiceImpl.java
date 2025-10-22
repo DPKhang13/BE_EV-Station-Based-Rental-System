@@ -31,19 +31,17 @@ public class StationInventoryServiceImpl implements StationInventoryService {
 
         // mapping
 
-    private TypeMap<StationInventory, StationInventoryResponse> resMap(){
-        var tm = modelMapper.getTypeMap(StationInventory.class, StationInventoryResponse.class);
-        if (tm == null) {
-            tm = modelMapper.createTypeMap(StationInventory.class, StationInventoryResponse.class)
-                    .addMapping(StationInventory::getInventoryId, StationInventoryResponse::setInventoryId)
-                    .addMapping(src -> src.getStation().getStationId(), StationInventoryResponse::setStationId)
-                    .addMapping(src -> src.getStation().getName(), StationInventoryResponse::setStationName)
-                    .addMapping(src -> src.getVehicle().getVehicleId(), StationInventoryResponse::setVehicleId)
-                    .addMapping(src -> src.getVehicle().getPlateNumber(), StationInventoryResponse::setPlateNumber);
-        }
-        return tm;
-    }
 
+    private StationInventoryResponse toResp(StationInventory e) {
+        return StationInventoryResponse.builder()
+                .inventoryId(e.getInventoryId())
+                .stationId(e.getStation().getStationId())
+                .stationName(e.getStation().getName())
+                .vehicleId(e.getVehicle().getVehicleId())
+                .plateNumber(e.getVehicle().getPlateNumber())
+                .quantity(e.getQuantity())
+                .build();
+    }
     // helper
 
     private RentalStation resolveStation(Integer id){
@@ -69,7 +67,7 @@ public class StationInventoryServiceImpl implements StationInventoryService {
                 .build();
 
         entity = inventoryRepo.save(entity);
-        return resMap().map(entity);
+        return toResp(entity);
     }
 
     @Override
@@ -95,12 +93,12 @@ public class StationInventoryServiceImpl implements StationInventoryService {
             throw new ConflictException("This vehicle already exists in the station inventory");
         }
         entity = inventoryRepo.save(entity);
-        return resMap().map(entity);
+        return toResp(entity);
     }
 
     @Override
     public void delete(Integer id) {
-        if(inventoryRepo.existsById(id)){
+        if(!inventoryRepo.existsById(id)){
             throw new ResourceNotFoundException("Inventory not found: id=" + id);
         }
         inventoryRepo.deleteById(id);
@@ -108,12 +106,12 @@ public class StationInventoryServiceImpl implements StationInventoryService {
 
     @Override
     public Page<StationInventoryResponse> list(Pageable pageable) {
-        return inventoryRepo.findAll(pageable).map(resMap()::map);
+        return inventoryRepo.findAll(pageable).map(this::toResp);
     }
 
     @Override
     public Page<StationInventoryResponse> search(Integer stationId, Long vehicleId, String q, Pageable pageable) {
         String kw = (q==null || q.isBlank()) ? null :q.trim();
-        return inventoryRepo.search(stationId, vehicleId, kw, pageable).map(resMap()::map);
+        return inventoryRepo.search(stationId, vehicleId, kw, pageable).map(this::toResp);
     }
 }

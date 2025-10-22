@@ -3,17 +3,19 @@ package com.group6.Rental_Car.repositories;
 import com.group6.Rental_Car.entities.StationInventory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
-public interface StationInventoryRepository extends JpaRepository<StationInventory,Integer> {
+import java.util.UUID;
+
+public interface StationInventoryRepository extends JpaRepository<StationInventory, Integer> {
 
     boolean existsByStation_StationIdAndVehicle_VehicleId(Integer stationId, Long vehicleId);
 
-    boolean existsByStation_StationIdAndVehicle_VehicleIdAndInventoryIdNot(Integer stationId, Long vehicleId, Integer inventoryId);
+    boolean existsByStation_StationIdAndVehicle_VehicleIdAndInventoryIdNot(
+            Integer stationId, Long vehicleId, Integer inventoryId);
 
-    Page<StationInventory> findStation_StationId(Integer stationId, Pageable pageable);
+    Page<StationInventory> findByStation_StationId(Integer stationId, Pageable pageable);
 
     Page<StationInventory> findByVehicle_VehicleId(Long vehicleId, Pageable pageable);
 
@@ -29,5 +31,4 @@ public interface StationInventoryRepository extends JpaRepository<StationInvento
                                   @Param("vehicleId") Long vehicleId,
                                   @Param("q") String q,
                                   Pageable pageable);
-
 }

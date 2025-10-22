@@ -1,8 +1,12 @@
 package com.group6.Rental_Car.dtos.stationinventory;
 
-import lombok.Data;
+import lombok.*;
 
-@Data
+
+@Getter @Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class StationInventoryResponse {
 
     private Integer inventoryId;
