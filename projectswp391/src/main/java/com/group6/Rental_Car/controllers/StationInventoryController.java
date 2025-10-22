@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -39,7 +40,11 @@ public class StationInventoryController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<Page<StationInventoryResponse>> list(Pageable pageable) {
+    public ResponseEntity<Page<StationInventoryResponse>> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size);
         return ResponseEntity.ok(stationInventoryService.list(pageable));
     }
 
@@ -48,8 +53,10 @@ public class StationInventoryController {
             @RequestParam(required = false) Integer stationId,
             @RequestParam(required = false) Long vehicleId,
             @RequestParam(required = false) String q,
-            @PageableDefault(sort = "inventoryId", direction = Sort.Direction.DESC) Pageable pageable)
-     {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size); // KHÔNG sort
         return ResponseEntity.ok(stationInventoryService.search(stationId, vehicleId, q, pageable));
     }
 }
