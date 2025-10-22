@@ -74,31 +74,46 @@ public class PricingRuleServiceImpl implements PricingRuleService {
     //      TÍNH GIÁ TỔNG (CÓ PHẠT + COUPON)
     // =============================
     @Override
-    public BigDecimal calculateTotalPrice(PricingRule pricingRule, Coupon coupon,
-                                          Integer plannedHours, long actualHours) {
+    public BigDecimal calculateTotalPrice(PricingRule pricingRule,
+                                          Coupon coupon,
+                                          Integer plannedHours,
+                                          long actualHours) {
         if (pricingRule == null)
-            throw new BadRequestException("Thiếu quy tắc giá");
+            throw new BadRequestException("Thiếu thông tin quy tắc giá");
 
-        // Giá thuê cơ bản
-        BigDecimal total = calculateRentalPrice(pricingRule, actualHours);
+        if (plannedHours == null || plannedHours <= 0)
+            throw new BadRequestException("Thiếu thông tin thời lượng thuê");
 
-        // Nếu vượt giờ dự kiến → cộng thêm phí phạt
-        if (plannedHours != null && actualHours > plannedHours) {
-            long exceededHours = actualHours - plannedHours;
-            BigDecimal penalty = pricingRule.getExtraHourPrice()
-                    .multiply(BigDecimal.valueOf(exceededHours)); // phí phạt mỗi giờ = extraHourPrice
-            total = total.add(penalty);
+        long hours = (actualHours > 0) ? actualHours : plannedHours;
+
+        BigDecimal total;
+
+        // Nếu thuê >= 24 giờ thì tính theo giá ngày
+        if (hours >= 24) {
+            long days = hours / 24;
+            total = pricingRule.getDailyPrice().multiply(BigDecimal.valueOf(days));
+        } else {
+            int baseHours = pricingRule.getBaseHours();
+            BigDecimal basePrice = safeValue(pricingRule.getBaseHoursPrice());
+            BigDecimal extraPrice = safeValue(pricingRule.getExtraHourPrice());
+
+            if (hours <= baseHours) {
+                total = basePrice;
+            } else {
+                long extraHours = hours - baseHours;
+                total = basePrice.add(extraPrice.multiply(BigDecimal.valueOf(extraHours)));
+            }
         }
 
-        // Áp dụng coupon
+        // Áp dụng coupon nếu có
         if (coupon != null) {
             validateCoupon(coupon);
             BigDecimal discount = safeValue(coupon.getDiscount());
             if (discount.compareTo(BigDecimal.ZERO) > 0) {
                 if (discount.compareTo(BigDecimal.ONE) < 0) {
-                    total = total.subtract(total.multiply(discount)); // % giảm
+                    total = total.subtract(total.multiply(discount)); // giảm %
                 } else {
-                    total = total.subtract(discount); // giảm cố định
+                    total = total.subtract(discount); // giảm số tiền cụ thể
                 }
                 if (total.compareTo(BigDecimal.ZERO) < 0)
                     total = BigDecimal.ZERO;
@@ -107,6 +122,7 @@ public class PricingRuleServiceImpl implements PricingRuleService {
 
         return total;
     }
+
 
     @Transactional
     public void handlePaymentSuccess(Payment payment) {

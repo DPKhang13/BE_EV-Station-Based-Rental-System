@@ -14,4 +14,6 @@ public interface RentalOrderService {
     void deleteOrder(UUID orderId);
     List<OrderResponse> getRentalOrders();
     List<OrderResponse> findByCustomer_UserId(UUID customerId);
+    OrderResponse confirmPickup(UUID orderId);
+    OrderResponse confirmReturn(UUID orderId,Integer manualActualHours);
 }

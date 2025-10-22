@@ -13,5 +13,6 @@ public class OrderCreateRequest {
     private LocalDateTime startTime; // Thời gian bắt đầu thuê
     private LocalDateTime endTime;   // Thời gian kết thúc thuê
     private String couponCode;        // Mã giảm giá (có thể null nếu không dùng)
-
+    private Integer plannedHours;
+    private Integer actualHours;
 }

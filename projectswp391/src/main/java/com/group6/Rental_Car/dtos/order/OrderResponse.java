@@ -15,4 +15,7 @@ public class OrderResponse {
     private BigDecimal totalPrice;
     private String status;
     private String couponCode;
+    private Integer plannedHours;
+    private Integer actualHours;
+    private BigDecimal penaltyFee;
 }
