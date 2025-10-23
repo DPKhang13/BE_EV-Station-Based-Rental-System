@@ -68,14 +68,14 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             coupon = couponService.getCouponByCode(couponCode.trim());
         }
         BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(
-                rule, coupon, request.getPlannedHours(), request.getPlannedHours());
+                rule, coupon, request.getPlannedHours(), request.getActualHours());
 
         RentalOrder order = modelMapper.map(request, RentalOrder.class);
         order.setCustomer(customer);
         order.setVehicle(vehicle);
         order.setCoupon(coupon);
         order.setPlannedHours(request.getPlannedHours());
-        order.setActualHours(0);
+        order.setActualHours(request.getActualHours());
         order.setPenaltyFee(BigDecimal.ZERO);
         order.setTotalPrice(totalPrice);
         order.setStatus("PENDING");
@@ -111,7 +111,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return response;
     }
 
-    public OrderResponse confirmReturn(UUID orderId, Integer manualActualHours) {
+    public OrderResponse confirmReturn(UUID orderId, Integer ActualHours) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
@@ -120,11 +120,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         }
 
         order.setEndTime(LocalDateTime.now());
-
-        // ✅ Nếu staff nhập actualHours → dùng luôn, nếu không → tính tự động
         long actualHours;
-        if (manualActualHours != null && manualActualHours > 0) {
-            actualHours = manualActualHours;
+        if (ActualHours != null && ActualHours > 0) {
+            actualHours = ActualHours;
         } else {
             actualHours = Duration.between(order.getStartTime(), order.getEndTime()).toHours();
         }
@@ -135,12 +133,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
                 model.getSeatCount(), model.getVariant());
 
-        // ✅ Tính giá mới
         BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(
                 rule, order.getCoupon(), order.getPlannedHours(), actualHours);
         order.setTotalPrice(totalPrice);
 
-        // ✅ Nếu vượt giờ
         if (actualHours > order.getPlannedHours()) {
             long exceeded = actualHours - order.getPlannedHours();
             BigDecimal penalty = rule.getExtraHourPrice().multiply(BigDecimal.valueOf(exceeded));
@@ -153,7 +149,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setStatus("RETURNED");
         rentalOrderRepository.save(order);
 
-        // ✅ Response
         OrderResponse response = modelMapper.map(order, OrderResponse.class);
         if (order.getVehicle() != null)
             response.setVehicleId(order.getVehicle().getVehicleId());

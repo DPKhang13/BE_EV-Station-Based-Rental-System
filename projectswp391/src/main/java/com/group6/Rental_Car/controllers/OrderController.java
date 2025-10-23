@@ -3,6 +3,7 @@ package com.group6.Rental_Car.controllers;
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
+import com.group6.Rental_Car.dtos.order.OrderReturnRequest;
 import com.group6.Rental_Car.services.order.RentalOrderService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -71,20 +72,14 @@ public class OrderController {
         return ResponseEntity.ok("Deleted order successfully");
     }
 
-    // ==============================
-    // 6️⃣ Nhân viên xác nhận giao xe (Pickup)
-    // ==============================
     @PostMapping("/{orderId}/pickup")
     public ResponseEntity<OrderResponse> confirmPickup(@PathVariable UUID orderId) {
         OrderResponse response = rentalOrderService.confirmPickup(orderId);
         return ResponseEntity.ok(response);
     }
 
-    // ==============================
-    // 7️⃣ Nhân viên xác nhận trả xe (Return)
-    // ==============================
     @PostMapping("/{orderId}/return")
-    public ResponseEntity<OrderResponse> confirmReturn(
+    public ResponseEntity<?> confirmReturn(
             @PathVariable UUID orderId,
             @RequestBody(required = false) OrderReturnRequest request
     ) {

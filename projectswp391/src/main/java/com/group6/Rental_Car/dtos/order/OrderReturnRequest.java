@@ -5,6 +5,6 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class OrderReturnResquest {
+public class OrderReturnRequest {
     private Integer actualHours;
 }
