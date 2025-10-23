@@ -22,28 +22,17 @@ import java.util.UUID;
 public class OrderController {
 
     private final RentalOrderService rentalOrderService;
-
-    // ==============================
-    // 1️⃣ Tạo đơn thuê xe (User)
-    // ==============================
     @PostMapping("/create")
     public ResponseEntity<OrderResponse> create(@RequestBody OrderCreateRequest request) {
         OrderResponse response = rentalOrderService.createOrder(request);
         return ResponseEntity.ok(response);
     }
-
-    // ==============================
-    // 2️⃣ Lấy tất cả đơn (Admin/Staff)
-    // ==============================
     @GetMapping("/getAll")
     public ResponseEntity<List<OrderResponse>> getAll() {
         List<OrderResponse> orders = rentalOrderService.getRentalOrders();
         return ResponseEntity.ok(orders);
     }
 
-    // ==============================
-    // 3️⃣ Lấy danh sách đơn của chính khách hàng
-    // ==============================
     @GetMapping("/get/my-orders")
     public ResponseEntity<List<OrderResponse>> getMyOrders(@AuthenticationPrincipal JwtUserDetails userDetails) {
         UUID customerId = userDetails.getUserId();
@@ -51,9 +40,6 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
 
-    // ==============================
-    // 4️⃣ Cập nhật đơn (Admin/Staff)
-    // ==============================
     @PutMapping("/update/{orderId}")
     public ResponseEntity<OrderResponse> update(
             @PathVariable UUID orderId,
@@ -63,9 +49,6 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
-    // ==============================
-    // 5️⃣ Xóa đơn (Admin)
-    // ==============================
     @DeleteMapping("/delete/{orderId}")
     public ResponseEntity<String> delete(@PathVariable UUID orderId) {
         rentalOrderService.deleteOrder(orderId);

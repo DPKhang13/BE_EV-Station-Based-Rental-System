@@ -157,41 +157,7 @@
             return total;
         }
 
-        // =============================
-        //      XỬ LÝ THANH TOÁN THÀNH CÔNG
-        // =============================
-        @Transactional
-        public void handlePaymentSuccess(Payment payment) {
-            if (payment == null || payment.getRentalOrder() == null)
-                throw new BadRequestException("Thanh toán không hợp lệ");
 
-            RentalOrder order = payment.getRentalOrder();
-            short type = payment.getType(); // SMALLINT trong DB
-
-            switch (type) {
-                case 1 -> { // Thanh toán thuê xe
-                    order.setStatus("IN_USE");
-                    rentalOrderRepository.save(order);
-                }
-                case 2 -> { // Thanh toán phí phạt
-                    Notification n = new Notification();
-                    n.setUser(order.getCustomer());
-                    n.setMessage("Bạn đã thanh toán phí phạt " + payment.getAmount() + "đ cho đơn #" + order.getOrderId());
-                    n.setCreatedAt(LocalDateTime.now());
-                    notificationRepository.save(n);
-                }
-                case 3 -> { // Hoàn tiền
-                    Notification n = new Notification();
-                    n.setUser(order.getCustomer());
-                    n.setMessage("Đã hoàn tiền " + payment.getAmount() + "đ cho đơn #" + order.getOrderId());
-                    n.setCreatedAt(LocalDateTime.now());
-                    notificationRepository.save(n);
-                }
-            }
-
-            payment.setStatus(PaymentStatus.SUCCESS);
-            paymentRepository.save(payment);
-        }
 
         // =============================
         //      QUẢN LÝ RULE

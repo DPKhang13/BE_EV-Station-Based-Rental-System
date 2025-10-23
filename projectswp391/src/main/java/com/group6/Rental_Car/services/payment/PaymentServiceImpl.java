@@ -3,21 +3,18 @@ package com.group6.Rental_Car.services.payment;
 import com.group6.Rental_Car.config.VNpayConfig;
 import com.group6.Rental_Car.dtos.payment.PaymentDto;
 import com.group6.Rental_Car.dtos.payment.PaymentResponse;
-import com.group6.Rental_Car.entities.Payment;
-import com.group6.Rental_Car.entities.TransactionHistory;
-import com.group6.Rental_Car.entities.User;
+import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.enums.PaymentStatus;
+import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
-import com.group6.Rental_Car.repositories.PaymentRepository;
-import com.group6.Rental_Car.repositories.RentalOrderRepository;
-import com.group6.Rental_Car.repositories.TransactionHistoryRepository;
-import com.group6.Rental_Car.repositories.UserRepository;
+import com.group6.Rental_Car.repositories.*;
 import com.group6.Rental_Car.utils.Utils;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -44,6 +41,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     @Autowired
     private final TransactionHistoryRepository transactionHistoryRepository;
+    @Autowired
+    private final NotificationRepository notificationRepository;
 
 
     public PaymentResponse createPaymentUrl(PaymentDto paymentDto, UUID userId){
@@ -61,6 +60,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .rentalOrder(rentalOrder)
                     .amount(totalPrice)
                     .method(paymentDto.getMethod())
+                    .paymentType((short) 1)
                     .status(PaymentStatus.PENDING)
                     .build();
             paymentRepository.save(payment);
@@ -84,6 +84,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .status(payment.getStatus())
                     .message("Create VNPay payment successfully!")
                     .paymentUrl(paymentUrl)
+                    .paymentType(payment.getPaymentType())
                     .build();
         }
     @Override
@@ -98,9 +99,11 @@ public class PaymentServiceImpl implements PaymentService {
         UUID paymentId = UUID.fromString(txnRef);
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id " + txnRef));
-
+        RentalOrder order = payment.getRentalOrder();
         if ("00".equals(responseCode)) {
             payment.setStatus(PaymentStatus.SUCCESS);
+            order.setStatus("PAYMENT_SUCCESS");
+            handlePaymentSuccess(payment);
         } else {
             payment.setStatus(PaymentStatus.FAILED);
         }
@@ -119,10 +122,49 @@ public class PaymentServiceImpl implements PaymentService {
                 .orderId(payment.getRentalOrder().getOrderId())
                 .amount(amount)
                 .status(payment.getStatus())
-                .message("00".equals(responseCode) ? "Payment successful" : "Payment failed")
+                .message("00".equals(responseCode) ? "PAYMENT_SUCCESS" : "PAYMENT_FAILED")
                 .build();
     }
+    @Transactional
+    public void handlePaymentSuccess(Payment payment) {
+        RentalOrder order = payment.getRentalOrder();
+        short type = payment.getPaymentType();
 
+        switch (type) {
+            case 1 -> { //  Thanh toán đơn thuê
+                order.setStatus("PAYMENT_SUCCESS");
+                rentalOrderRepository.save(order);
+
+                Notification notify = new Notification();
+                notify.setUser(order.getCustomer());
+                notify.setMessage("Thanh toán thuê xe thành công cho đơn #" + order.getOrderId() + ".");
+                notify.setCreatedAt(LocalDateTime.now());
+                notificationRepository.save(notify);
+            }
+            case 2 -> {
+                order.setPenaltyFee(BigDecimal.ZERO);
+                rentalOrderRepository.save(order);
+
+                Notification notify = new Notification();
+                notify.setUser(order.getCustomer());
+                notify.setMessage("Bạn đã thanh toán phí phạt "
+                        + payment.getAmount() + "đ cho đơn #" + order.getOrderId());
+                notify.setCreatedAt(LocalDateTime.now());
+                notificationRepository.save(notify);
+            }
+            case 3 -> { //  Hoàn tiền
+                Notification notify = new Notification();
+                notify.setUser(order.getCustomer());
+                notify.setMessage("Đã hoàn tiền " + payment.getAmount() + "đ cho đơn #" + order.getOrderId());
+                notify.setCreatedAt(LocalDateTime.now());
+                notificationRepository.save(notify);
+            }
+            default -> throw new IllegalArgumentException("Loại thanh toán không hợp lệ: " + type);
+        }
+
+        payment.setStatus(PaymentStatus.SUCCESS);
+        paymentRepository.save(payment);
+    }
 }
 
 

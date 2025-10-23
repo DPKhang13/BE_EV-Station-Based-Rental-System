@@ -28,7 +28,7 @@ public class Payment {
 
     private String method;
 
-    private short type;
+    private short paymentType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
