@@ -94,7 +94,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        if (!"PENDING".equalsIgnoreCase(order.getStatus())) {
+        if (!"PAYMENT_SUCCESS".equalsIgnoreCase(order.getStatus())
+                &&  !"PAYMENT_FAILED".equalsIgnoreCase(order.getStatus())
+                && !"PENDING".equalsIgnoreCase(order.getStatus())) {
             throw new BadRequestException("Đơn này không thể xác nhận pickup khi trạng thái là: " + order.getStatus());
         }
 

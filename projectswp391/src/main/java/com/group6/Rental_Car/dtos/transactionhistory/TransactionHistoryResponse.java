@@ -14,6 +14,7 @@ import java.util.UUID;
 public class TransactionHistoryResponse {
     private UUID transactionId;
     private BigDecimal amount;
+    private String status;
     private String type;
     private LocalDateTime createdAt;
 
@@ -21,6 +22,7 @@ public class TransactionHistoryResponse {
         return TransactionHistoryResponse.builder()
                 .transactionId(entity.getTransactionId())
                 .amount(entity.getAmount())
+                .status(entity.getStatus())
                 .type(entity.getType())
                 .createdAt(entity.getCreatedAt())
                 .build();

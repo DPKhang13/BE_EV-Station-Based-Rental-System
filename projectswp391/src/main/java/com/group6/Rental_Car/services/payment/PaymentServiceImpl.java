@@ -51,16 +51,23 @@ public class PaymentServiceImpl implements PaymentService {
             var rentalOrder = rentalOrderRepository.findById(paymentDto.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Rental order not found"));
             BigDecimal totalPrice = rentalOrder.getTotalPrice();
+            if (paymentDto.getPaymentType() == 2 && paymentDto.getPaymentType() != null){
+                totalPrice = rentalOrder.getPenaltyFee();
+            }
             //set true la dat coc 50%
-            if (paymentDto.isDeposit()) {
+            else if (paymentDto.isDeposit() && (paymentDto.getPaymentType() == null || paymentDto.getPaymentType() == 1)) {
                 totalPrice = totalPrice.multiply(BigDecimal.valueOf(0.5));
             }
             long amount = totalPrice.multiply(BigDecimal.valueOf(100)).longValue();
+            if (paymentDto.getPaymentType() == 1 && paymentDto.getPaymentType() == null){
+                rentalOrder.setStatus("PENDING");
+                rentalOrderRepository.save(rentalOrder);
+            }
             Payment payment = Payment.builder()
                     .rentalOrder(rentalOrder)
                     .amount(totalPrice)
                     .method(paymentDto.getMethod())
-                    .paymentType((short) 1)
+                    .paymentType(paymentDto.getPaymentType())
                     .status(PaymentStatus.PENDING)
                     .build();
             paymentRepository.save(payment);
@@ -109,20 +116,14 @@ public class PaymentServiceImpl implements PaymentService {
         }
         paymentRepository.save(payment);
 
-        TransactionHistory transaction = TransactionHistory.builder()
-                .user(payment.getRentalOrder().getCustomer())
-                .amount(amount)
-                .type("00".equals(responseCode) ? "PAYMENT_SUCCESS" : "PAYMENT_FAILED")
-                .createdAt(LocalDateTime.now())
-                .build();
-        transactionHistoryRepository.save(transaction);
-
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
                 .orderId(payment.getRentalOrder().getOrderId())
                 .amount(amount)
+                .method(payment.getMethod())
                 .status(payment.getStatus())
                 .message("00".equals(responseCode) ? "PAYMENT_SUCCESS" : "PAYMENT_FAILED")
+                .paymentType(payment.getPaymentType())
                 .build();
     }
     @Transactional
@@ -135,29 +136,34 @@ public class PaymentServiceImpl implements PaymentService {
                 order.setStatus("PAYMENT_SUCCESS");
                 rentalOrderRepository.save(order);
 
-                Notification notify = new Notification();
-                notify.setUser(order.getCustomer());
-                notify.setMessage("Thanh toán thuê xe thành công cho đơn #" + order.getOrderId() + ".");
-                notify.setCreatedAt(LocalDateTime.now());
-                notificationRepository.save(notify);
+                TransactionHistory transactionHistory = new TransactionHistory();
+                transactionHistory.setUser(order.getCustomer());
+                transactionHistory.setAmount(payment.getAmount());
+                transactionHistory.setCreatedAt(LocalDateTime.now());
+                transactionHistory.setType("Payment for order ");
+                transactionHistory.setStatus("PAYMENT_SUCCESS");
+                transactionHistoryRepository.save(transactionHistory);
             }
             case 2 -> {
                 order.setPenaltyFee(BigDecimal.ZERO);
                 rentalOrderRepository.save(order);
 
-                Notification notify = new Notification();
-                notify.setUser(order.getCustomer());
-                notify.setMessage("Bạn đã thanh toán phí phạt "
-                        + payment.getAmount() + "đ cho đơn #" + order.getOrderId());
-                notify.setCreatedAt(LocalDateTime.now());
-                notificationRepository.save(notify);
+                TransactionHistory transactionHistory = new TransactionHistory();
+                transactionHistory.setUser(order.getCustomer());
+                transactionHistory.setAmount(payment.getAmount());
+                transactionHistory.setCreatedAt(LocalDateTime.now());
+                transactionHistory.setType("Payment for paymentFee ");
+                transactionHistory.setStatus("PAYMENT_SUCCESS");
+                transactionHistoryRepository.save(transactionHistory);
             }
             case 3 -> { //  Hoàn tiền
-                Notification notify = new Notification();
-                notify.setUser(order.getCustomer());
-                notify.setMessage("Đã hoàn tiền " + payment.getAmount() + "đ cho đơn #" + order.getOrderId());
-                notify.setCreatedAt(LocalDateTime.now());
-                notificationRepository.save(notify);
+                TransactionHistory transactionHistory = new TransactionHistory();
+                transactionHistory.setUser(order.getCustomer());
+                transactionHistory.setAmount(payment.getAmount());
+                transactionHistory.setCreatedAt(LocalDateTime.now());
+                transactionHistory.setType("Refund for order ");
+                transactionHistory.setStatus("REFUND");
+                transactionHistoryRepository.save(transactionHistory);
             }
             default -> throw new IllegalArgumentException("Loại thanh toán không hợp lệ: " + type);
         }
