@@ -26,4 +26,5 @@ public class VehicleResponse {
     private String batteryStatus;
     private String batteryCapacity;
     private Integer rangeKm;
+    private Integer pricingRuleId;
 }

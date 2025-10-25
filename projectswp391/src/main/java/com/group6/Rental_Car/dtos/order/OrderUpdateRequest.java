@@ -7,5 +7,5 @@ import java.util.UUID;
 public class OrderUpdateRequest {
     private String status;
     private Long vehicleId;
-    private Integer couponId;
+    private String couponCode;
 }

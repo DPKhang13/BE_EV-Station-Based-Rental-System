@@ -20,23 +20,23 @@ public class MaintenanceController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<?> create(@RequestBody MaintenanceCreateRequest req) {
+    public ResponseEntity<MaintenanceResponse> create(@RequestBody MaintenanceCreateRequest req) {
         return ResponseEntity.ok(maintenanceService.create(req));
     }
 
     @PutMapping("/update/{maintenanceId}")
-    public ResponseEntity<?> update(@PathVariable Integer maintenanceId, @RequestBody MaintenanceUpdateRequest req) {
+    public ResponseEntity<MaintenanceResponse> update(@PathVariable Integer maintenanceId, @RequestBody MaintenanceUpdateRequest req) {
         return ResponseEntity.ok(maintenanceService.update(maintenanceId, req));
     }
 
     @DeleteMapping("/delete/{maintenanceId}")
     public ResponseEntity<?> delete(@PathVariable Integer maintenanceId) {
         maintenanceService.delete(maintenanceId);
-        return ResponseEntity.ok("Deleted order successfully");
+        return ResponseEntity.ok("Deleted maintenance successfully");
     }
 
     @GetMapping("/getById/{maintenanceId}")
-    public ResponseEntity<?> getById(@PathVariable Integer maintenanceId) {
+    public ResponseEntity<MaintenanceResponse> getById(@PathVariable Integer maintenanceId) {
         return ResponseEntity.ok(maintenanceService.getById(maintenanceId));
     }
     @GetMapping("/getAllList")

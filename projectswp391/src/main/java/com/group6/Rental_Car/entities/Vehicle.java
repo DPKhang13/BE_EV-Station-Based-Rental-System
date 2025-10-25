@@ -35,12 +35,8 @@ public class Vehicle {
     @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
     private List<RentalOrder> rentalOrders;
 
-    // Một xe có thể có một bảng giá
-    @OneToOne(mappedBy = "vehicle", fetch = FetchType.LAZY)
-    private PricingRule pricingRule;
-
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<VehicleAttribute> attributes;
+    private List<VehicleModel> attributes;
 
 
 }

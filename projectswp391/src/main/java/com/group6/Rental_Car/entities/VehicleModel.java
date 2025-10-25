@@ -4,12 +4,12 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "vehicleattribute")
+@Table(name = "vehiclemodel")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class VehicleAttribute {
+public class VehicleModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -19,6 +19,10 @@ public class VehicleAttribute {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pricingrule_id", referencedColumnName = "pricingrule_id")
+    private PricingRule pricingRule;
 
     @Column(name = "brand", length = 50)
     private String brand;

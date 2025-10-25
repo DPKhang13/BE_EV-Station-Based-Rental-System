@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.services.otpmailsender;
 
+import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -16,56 +17,54 @@ public class OtpMailServiceImpl implements OtpMailService {
 
     private final JavaMailSender mailSender;
 
-    // Lưu OTP kèm thời gian hết hạn
-    private final Map<String, OtpEntry> otpStore = new ConcurrentHashMap<>();
-    private static final long OTP_TTL_MILLIS = 5 * 60 * 1000; // 5 phút
+    // Lưu OTP tạm: key = otp, value = record(email, expiredAt)
+    private final Map<String, OtpRecord> otpStore = new ConcurrentHashMap<>();
+
+    private static final long OTP_EXPIRATION_MS = 5 * 60 * 1000; // 5 phút
 
     @Override
     public String generateAndSendOtp(String email) {
-        String otp = String.valueOf(new Random().nextInt(900000) + 100000); // 6 số
+        String otp = String.format("%06d", new Random().nextInt(999999)); // 6 digits
+        Instant expiredAt = Instant.now().plusMillis(OTP_EXPIRATION_MS);
 
-        otpStore.put(email, new OtpEntry(otp, Instant.now().plusMillis(OTP_TTL_MILLIS)));
+        otpStore.put(otp, new OtpRecord(email, expiredAt));
 
-        // Gửi mail
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(email);
-        message.setSubject("Xác thực OTP");
-        message.setText("Mã OTP của bạn là: " + otp + " (có hiệu lực trong 5 phút).");
-        mailSender.send(message);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(email);
+            message.setSubject("Your Rental_Car OTP Verification Code");
+            message.setText("Mã OTP của bạn là: " + otp + "\nHiệu lực trong 5 phút.");
+            mailSender.send(message);
+        } catch (Exception e) {
+            throw new RuntimeException("Gửi OTP thất bại: " + e.getMessage());
+        }
 
         return otp;
     }
 
     @Override
     public boolean validateOtp(String otp) {
-        String email = getEmailByOtp(otp);
-        if (email == null) return false;
-
-        OtpEntry entry = otpStore.get(email);
-        if (entry == null) return false;
-
-        boolean notExpired = Instant.now().isBefore(entry.expiryTime());
-        return notExpired && entry.otp().equals(otp);
+        OtpRecord record = otpStore.get(otp);
+        if (record == null) return false;
+        if (Instant.now().isAfter(record.expiredAt())) {
+            otpStore.remove(otp);
+            return false;
+        }
+        return true;
     }
 
     @Override
     public void clearOtp(String otp) {
-        String email = getEmailByOtp(otp);
-        if (email != null) {
-            otpStore.remove(email);
-        }
+        otpStore.remove(otp);
     }
-
-
 
     @Override
     public String getEmailByOtp(String otp) {
-        return otpStore.entrySet().stream()
-                .filter(e -> e.getValue().otp().equals(otp))
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElse(null);
+        OtpRecord record = otpStore.get(otp);
+        if (record == null) return null;
+        return record.email();
     }
 
-    private record OtpEntry(String otp, Instant expiryTime) {}
+    // Inner record lưu dữ liệu OTP
+    private record OtpRecord(String email, Instant expiredAt) {}
 }

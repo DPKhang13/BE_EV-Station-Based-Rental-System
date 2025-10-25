@@ -49,7 +49,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         if(req.getMessage()!=null){
             String msg = trim(req.getMessage());
-            if(msg==null) throw new BadRequestException("message is required");
+            if(msg==null || msg.isEmpty()) throw new BadRequestException("message is required");
             ensureMaxLength(msg, 255, "message");
             n.setMessage(msg);
         }
@@ -61,7 +61,7 @@ public class NotificationServiceImpl implements NotificationService {
     public void delete(Integer notificationId) {
         Notification n = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification not found: " + notificationId));
-        notificationRepository.delete(n);
+        notificationRepository.delete(n); // xóa cứng
     }
 
     @Override

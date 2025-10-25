@@ -66,10 +66,13 @@ public class ValidationUtil {
         String variant = normalizeNullableLower(rawVariant);
 
         if (seatCount == 4) {
-            if (variant != null) {
-                throw new BadRequestException("variant must be null when seatCount = 4");
+            if (variant == null) {
+                throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 4");
             }
-            return null;
+            if (!variant.equals("air") && !variant.equals("pro") && !variant.equals("plus")) {
+                throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 4");
+            }
+            return variant;
         } else { // seatCount == 7
             if (variant == null) {
                 throw new BadRequestException("variant is required when seatCount = 7");
@@ -82,7 +85,6 @@ public class ValidationUtil {
     }
 
 
-    /** Yêu cầu value >= 0 (cho BigDecimal). Ném BadRequestException nếu vi phạm. */
     public static void ensureNonNegative(BigDecimal value, String field) {
         if (value == null) {
             throw new BadRequestException(field + " is required");
@@ -92,21 +94,18 @@ public class ValidationUtil {
         }
     }
 
-    /** Overload: cho Integer (bỏ qua nếu null, hữu ích cho partial update). */
     public static void ensureNonNegative(Integer value, String field) {
         if (value != null && value < 0) {
             throw new BadRequestException(field + " must be >= 0");
         }
     }
 
-    /** Overload: cho Long (bỏ qua nếu null). */
     public static void ensureNonNegative(Long value, String field) {
         if (value != null && value < 0L) {
             throw new BadRequestException(field + " must be >= 0");
         }
     }
 
-    /** Overload: cho Double (bỏ qua nếu null). */
     public static void ensureNonNegative(Double value, String field) {
         if (value != null && value < 0d) {
             throw new BadRequestException(field + " must be >= 0");
