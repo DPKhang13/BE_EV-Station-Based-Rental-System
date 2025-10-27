@@ -12,5 +12,5 @@ public interface StaffScheduleService {
     StaffScheduleResponse create(StaffScheduleCreateRequest req);
     StaffScheduleResponse update(Integer id, StaffScheduleUpdateRequest req);
     Page<StaffScheduleResponse> getAll(Pageable pageable);
-    Page<StaffScheduleResponse> search(UUID userId, Integer stationId, LocalDate from, LocalDate to, String q,  Pageable pageable);
+
 }
