@@ -18,7 +18,7 @@ public class S3Config {
     @Value("${longvan.s3.endpoint:https://s3-hcm5-r1.longvan.net}")
     private String endpoint;
 
-    @Value("${longvan.s3.region:us-east-1}") // placeholder, SDK cần có region
+    @Value("${longvan.s3.region:auto}") // placeholder, SDK cần có region
     private String region;
 
     @Value("${longvan.s3.accessKey}")

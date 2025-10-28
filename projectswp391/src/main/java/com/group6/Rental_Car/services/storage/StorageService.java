@@ -35,15 +35,17 @@ public class StorageService {
     /** Upload public-by-default → trả URL public để lưu DB */
     public String uploadPublic(String folder, MultipartFile file) throws IOException {
         String key = buildKey(folder, file.getOriginalFilename());
+        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
 
         s3.putObject(
                 PutObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
-                        .contentType(file.getContentType())
-                        .acl(ObjectCannedACL.PUBLIC_READ) // public ngay sau khi up
+                        .contentType(contentType)
+                        .contentLength(file.getSize())
+                        // .acl(ObjectCannedACL.PUBLIC_READ) // thử bỏ nếu Long Vân không bật ACL
                         .build(),
-                RequestBody.fromBytes(file.getBytes())
+                RequestBody.fromInputStream(file.getInputStream(), file.getSize())
         );
 
         String base = endpoint.endsWith("/") ? endpoint.substring(0, endpoint.length() - 1) : endpoint;
@@ -53,14 +55,16 @@ public class StorageService {
     /** Upload private → trả presigned URL (hết hạn sau ttl) cho admin xem */
     public String uploadPrivateAndPresign(String folder, MultipartFile file, Duration ttl) throws IOException {
         String key = buildKey(folder, file.getOriginalFilename());
+        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
 
         s3.putObject(
                 PutObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
-                        .contentType(file.getContentType())
+                        .contentType(contentType)
+                        .contentLength(file.getSize())
                         .build(),
-                RequestBody.fromBytes(file.getBytes())
+                RequestBody.fromInputStream(file.getInputStream(), file.getSize())
         );
 
         GetObjectRequest getReq = GetObjectRequest.builder()
@@ -77,7 +81,6 @@ public class StorageService {
     }
 
     // =================================== helpers ===================================
-
     private String buildKey(String folder, String originalName) {
         String safeName = (originalName == null || originalName.isBlank()) ? "file"
                 : originalName.replace("\\", "/");
