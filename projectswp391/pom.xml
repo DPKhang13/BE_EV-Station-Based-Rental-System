@@ -132,32 +132,43 @@
             <version>24.1.0</version>
             <scope>compile</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.codehaus.plexus</groupId>
+            <artifactId>plexus-compiler-eclipse</artifactId>
+            <version>2.14.2</version>
+        </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.12.1</version>
-                <configuration>
-                    <release>${java.version}</release>
-                    <useIncrementalCompilation>false</useIncrementalCompilation>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
+    <profiles>
+        <profile>
+            <id>ecj-on-jdk24</id>
+            <activation>
+                <!-- Tự kích hoạt khi Maven chạy bằng JDK 24 trở lên -->
+                <jdk>[24,)</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <version>3.12.1</version>
+                        <configuration>
+                            <!-- Target 21 để giữ tương thích lib/CI; nếu thật sự muốn 24 thì đổi 24 -->
+                            <release>21</release>
+                            <compilerId>eclipse</compilerId>
+                            <useIncrementalCompilation>false</useIncrementalCompilation>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>org.projectlombok</groupId>
+                                    <artifactId>lombok</artifactId>
+                                    <version>${lombok.version}</version>
+                                </path>
+                            </annotationProcessorPaths>
+                        </configuration>
 
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-
-</project>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
