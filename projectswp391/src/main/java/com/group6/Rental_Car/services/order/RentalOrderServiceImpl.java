@@ -37,9 +37,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final ModelMapper modelMapper;
     private final VehicleModelService vehicleModelService;
 
-    // =============================
-    // 1️⃣ Tạo đơn thuê xe
-    // =============================
     @Override
     public OrderResponse createOrder(OrderCreateRequest request) {
 
@@ -53,6 +50,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
+        if (!"available".equalsIgnoreCase(vehicle.getStatus())) {
+            throw new BadRequestException("Xe hiện không sẵn sàng để thuê (" + vehicle.getStatus() + ")");
+        }
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         if (model == null) {
             throw new ResourceNotFoundException("Không tìm thấy thông tin model cho xe ID = " + vehicle.getVehicleId());
@@ -69,7 +69,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         }
         BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(
                 rule, coupon, request.getPlannedHours(), request.getActualHours());
-
+        vehicle.setStatus("RESERVED");
+        vehicleRepository.save(vehicle);
         RentalOrder order = modelMapper.map(request, RentalOrder.class);
         order.setCustomer(customer);
         order.setVehicle(vehicle);
@@ -99,9 +100,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 && !"PENDING".equalsIgnoreCase(order.getStatus())) {
             throw new BadRequestException("Đơn này không thể xác nhận pickup khi trạng thái là: " + order.getStatus());
         }
-
+        Vehicle vehicle = order.getVehicle();
+        vehicle.setStatus("RENTAL");
+        vehicleRepository.save(vehicle);
         order.setStartTime(LocalDateTime.now());
-        order.setStatus("IN_USE");
         rentalOrderRepository.save(order);
 
         OrderResponse response = modelMapper.map(order, OrderResponse.class);
@@ -116,11 +118,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     public OrderResponse confirmReturn(UUID orderId, Integer ActualHours) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
-
-        if (!"IN_USE".equalsIgnoreCase(order.getStatus())) {
-            throw new BadRequestException("Đơn này không thể xác nhận trả xe khi trạng thái là: " + order.getStatus());
-        }
-
+        Vehicle vehicle = order.getVehicle();
         order.setEndTime(LocalDateTime.now());
         long actualHours;
         if (ActualHours != null && ActualHours > 0) {
@@ -147,9 +145,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         } else {
             order.setPenaltyFee(BigDecimal.ZERO);
         }
-
-        order.setStatus("RETURNED");
         rentalOrderRepository.save(order);
+
+        vehicle.setStatus("CHECKING");
+        vehicleRepository.save(vehicle);
 
         OrderResponse response = modelMapper.map(order, OrderResponse.class);
         if (order.getVehicle() != null)

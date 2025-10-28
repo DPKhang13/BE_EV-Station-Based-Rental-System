@@ -68,7 +68,7 @@ public class UserServiceImpl implements UserService {
             throw new InvalidPasswordException("Sai mật khẩu");
         }
 
-        if (user.getStatus() != UserStatus.ACTIVE) {
+        if (user.getStatus() != UserStatus.ACTIVE && user.getStatus() != UserStatus.ACTIVE_PENDING_VERIFICATION) {
             throw new RuntimeException("Tài khoản chưa được kích hoạt hoặc bị khóa");
         }
 
@@ -103,7 +103,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user: " + email));
 
-        user.setStatus(UserStatus.ACTIVE);
+        user.setStatus(UserStatus.ACTIVE_PENDING_VERIFICATION);
         userRepository.save(user);
         otpMailService.clearOtp(inputOtp);
 

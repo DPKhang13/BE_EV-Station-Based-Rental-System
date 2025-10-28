@@ -146,6 +146,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
             case 2 -> {
                 order.setPenaltyFee(BigDecimal.ZERO);
+                order.setStatus("COMPLETED");
                 rentalOrderRepository.save(order);
 
                 TransactionHistory transactionHistory = new TransactionHistory();
