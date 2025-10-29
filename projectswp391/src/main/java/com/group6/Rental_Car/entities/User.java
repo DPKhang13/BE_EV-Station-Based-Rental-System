@@ -47,9 +47,9 @@ public class User {
     @JoinColumn(name = "station_id")
     private RentalStation rentalStation;
 
-    @OneToMany(mappedBy = "user",fetch = FetchType.LAZY)
-    private List<TransactionHistory>  transactionhistory =new ArrayList<>();
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private List<TransactionHistory> transactionhistory = new ArrayList<>();
 
-    @OneToMany(mappedBy = "user",fetch = FetchType.LAZY)
-    private List<Notification>  notifications =new ArrayList<>();
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private List<Notification> notifications = new ArrayList<>();
 }

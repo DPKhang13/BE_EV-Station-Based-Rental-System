@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/order")
-@Tag(name = "Api Order",description = "Creat,update,deleted,lay danh sach theo orderid, lay danh sach theo id khach hang")
+@Tag(name = "Api Order",description = "CRUD lay danh sach theo orderid, lay danh sach theo id khach hang")
 public class OrderController {
     @Autowired
     private RentalOrderService rentalOrderService;
