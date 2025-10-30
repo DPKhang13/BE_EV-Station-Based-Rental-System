@@ -44,6 +44,12 @@ public class RentalOrder {
 
     private BigDecimal penaltyFee;
 
+    @Column(name = "deposit_amount", precision = 12, scale = 2)
+    private BigDecimal depositAmount;
+
+    @Column(name = "remaining_amount", precision = 12, scale = 2)
+    private BigDecimal remainingAmount;
+
     private String status;
     @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;

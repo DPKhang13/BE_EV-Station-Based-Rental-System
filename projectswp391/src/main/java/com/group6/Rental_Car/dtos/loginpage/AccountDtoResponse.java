@@ -16,5 +16,6 @@ public class AccountDtoResponse {
     private String email;      // email
     private String phone;
     private Role role;         // quyền (Enum)
-    private UserStatus status; // trạng thái
+    private UserStatus status;
+    private Integer stationId;// trạng thái
 }

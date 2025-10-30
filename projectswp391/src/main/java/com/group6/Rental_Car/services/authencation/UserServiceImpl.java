@@ -2,6 +2,7 @@ package com.group6.Rental_Car.services.authencation;
 
 import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
+import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.Role;
@@ -35,12 +36,17 @@ public class UserServiceImpl implements UserService {
                 .phone(user.getPhone())
                 .role(user.getRole())
                 .status(user.getStatus())
+                .stationId(
+                        user.getRentalStation() != null
+                                ? user.getRentalStation().getStationId()
+                                : null
+                )
                 .build();
     }
 
     // ========== REGISTER ==========
     @Override
-    public AccountDtoResponse registerByEmail(AccountDto account) {
+    public AccountDtoResponse registerByEmail(RegisterAccountDto account) {
         if (userRepository.existsByEmail(account.getEmail().toLowerCase())) {
             throw new EmailAlreadyExistsException("Email đã tồn tại: " + account.getEmail());
         }
@@ -48,11 +54,12 @@ public class UserServiceImpl implements UserService {
         String otp = otpMailService.generateAndSendOtp(account.getEmail());
 
         User user = modelMapper.map(account, User.class);
-        user.setUserId(UUID.randomUUID());
         user.setEmail(account.getEmail().toLowerCase());
         user.setPassword(passwordEncoder.encode(account.getPassword()));
+        user.setPhone(account.getPhone());
         user.setRole(Role.customer);
         user.setStatus(UserStatus.NEED_OTP);
+        user.setRentalStation(null);
         userRepository.save(user);
 
         return mapToResponse(user);
@@ -91,13 +98,8 @@ public class UserServiceImpl implements UserService {
     // ========== VERIFY OTP ==========
     @Override
     public AccountDtoResponse verifyOtp(String inputOtp, String email) {
-        if (!otpMailService.validateOtp(inputOtp)) {
+        if (!otpMailService.validateOtp(email, inputOtp)) { // ✅ đổi vị trí
             throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
-        }
-
-        String emailFromOtp = otpMailService.getEmailByOtp(inputOtp);
-        if (emailFromOtp == null || !emailFromOtp.equalsIgnoreCase(email)) {
-            throw new OtpValidationException("OTP không khớp với email");
         }
 
         User user = userRepository.findByEmail(email)
@@ -105,7 +107,8 @@ public class UserServiceImpl implements UserService {
 
         user.setStatus(UserStatus.ACTIVE_PENDING_VERIFICATION);
         userRepository.save(user);
-        otpMailService.clearOtp(inputOtp);
+
+        otpMailService.clearOtp(email); // ✅ dùng email làm key
 
         return mapToResponse(user);
     }
@@ -123,7 +126,7 @@ public class UserServiceImpl implements UserService {
     // ========== VERIFY FORGOT PASSWORD OTP ==========
     @Override
     public boolean verifyForgetPassword(String inputOtp, String email) {
-        if (!otpMailService.validateOtp(inputOtp)) {
+        if (!otpMailService.validateOtp(inputOtp,email)) {
             throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 

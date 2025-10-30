@@ -17,17 +17,17 @@ public class OtpMailServiceImpl implements OtpMailService {
 
     private final JavaMailSender mailSender;
 
-    // Lưu OTP tạm: key = otp, value = record(email, expiredAt)
+
     private final Map<String, OtpRecord> otpStore = new ConcurrentHashMap<>();
 
     private static final long OTP_EXPIRATION_MS = 5 * 60 * 1000; // 5 phút
 
     @Override
     public String generateAndSendOtp(String email) {
-        String otp = String.format("%06d", new Random().nextInt(999999)); // 6 digits
+        String otp = String.format("%06d", new Random().nextInt(999999));
         Instant expiredAt = Instant.now().plusMillis(OTP_EXPIRATION_MS);
 
-        otpStore.put(otp, new OtpRecord(email, expiredAt));
+        otpStore.put(email, new OtpRecord(otp, expiredAt)); // ✅ key là email
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -43,28 +43,32 @@ public class OtpMailServiceImpl implements OtpMailService {
     }
 
     @Override
-    public boolean validateOtp(String otp) {
-        OtpRecord record = otpStore.get(otp);
+    public boolean validateOtp(String email, String otp) {
+        OtpRecord record = otpStore.get(email);
         if (record == null) return false;
+
         if (Instant.now().isAfter(record.expiredAt())) {
-            otpStore.remove(otp);
+            otpStore.remove(email);
             return false;
         }
-        return true;
+
+        return record.otp().equals(otp);
     }
 
     @Override
-    public void clearOtp(String otp) {
-        otpStore.remove(otp);
+    public void clearOtp(String email) {
+        otpStore.remove(email);
     }
 
     @Override
     public String getEmailByOtp(String otp) {
-        OtpRecord record = otpStore.get(otp);
-        if (record == null) return null;
-        return record.email();
+        // tìm ngược lại trong map (optional)
+        return otpStore.entrySet().stream()
+                .filter(e -> e.getValue().otp().equals(otp))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
     }
 
-    // Inner record lưu dữ liệu OTP
-    private record OtpRecord(String email, Instant expiredAt) {}
+    private record OtpRecord(String otp, Instant expiredAt) {}
 }

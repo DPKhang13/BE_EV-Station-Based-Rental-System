@@ -2,13 +2,14 @@ package com.group6.Rental_Car.services.authencation;
 
 import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
+import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 
 import java.util.UUID;
 
 public interface UserService  {
-    public AccountDtoResponse registerByEmail(AccountDto account);
+    public AccountDtoResponse registerByEmail(RegisterAccountDto account);
 
     public AccountDtoResponse loginByEmail(AccountDto account);
 

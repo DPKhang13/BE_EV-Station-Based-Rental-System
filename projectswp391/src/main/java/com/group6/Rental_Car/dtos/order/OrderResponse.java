@@ -18,4 +18,6 @@ public class OrderResponse {
     private Integer plannedHours;
     private Integer actualHours;
     private BigDecimal penaltyFee;
+    private BigDecimal depositAmount;
+    private BigDecimal remainingAmount;
 }

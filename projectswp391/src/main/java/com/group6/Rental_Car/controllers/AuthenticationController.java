@@ -2,6 +2,7 @@ package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
+import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import com.group6.Rental_Car.utils.JwtUtil;
@@ -42,7 +43,7 @@ public class AuthenticationController {
     // ---------- REGISTER ----------
     @PostMapping("/register")
     @Operation(summary = "Đăng ký tài khoản bằng email", description = "Tạo tài khoản mới và gửi OTP xác minh")
-    public ResponseEntity<?> registerByEmail(@Valid @RequestBody AccountDto account) {
+    public ResponseEntity<?> registerByEmail(@Valid @RequestBody RegisterAccountDto account) {
         AccountDtoResponse response = userService.registerByEmail(account);
         return ResponseEntity.ok(response);
     }

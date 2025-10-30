@@ -3,12 +3,14 @@ package com.group6.Rental_Car.services.vehicle;
 import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
+import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.entities.VehicleModel;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ConflictException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
+import com.group6.Rental_Car.repositories.VehicleModelRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -30,6 +32,7 @@ public class VehicleServiceImpl implements VehicleService {
     private final RentalStationRepository rentalStationRepository;
     private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
+    private final VehicleModelRepository vehicleModelRepository;
 
     @Override
     public VehicleResponse createVehicle(VehicleCreateRequest req) {
@@ -157,5 +160,30 @@ public class VehicleServiceImpl implements VehicleService {
         return vehicleRepository.findAll().stream()
                 .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public VehicleResponse updateStatusVehicle(Long vehicleId, VehicleUpdateStatusRequest req) {
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
+
+        if (req.getStatus() != null && !req.getStatus().isBlank()) {
+            String normalized = req.getStatus().trim().toLowerCase();
+            vehicle.setStatus(normalized);
+        }
+
+        vehicleRepository.save(vehicle);
+
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+        if (model == null) {
+            throw new ResourceNotFoundException("VehicleModel not found for vehicleId: " + vehicleId);
+        }
+
+        if (req.getBatteryStatus() != null && !req.getBatteryStatus().isBlank()) {
+            model.setBatteryStatus(req.getBatteryStatus().trim());
+            vehicleModelRepository.save(model);
+        }
+
+        return vehicleModelService.convertToDto(vehicle, model);
     }
 }

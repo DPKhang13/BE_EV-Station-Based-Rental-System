@@ -62,12 +62,9 @@ public class OrderController {
     }
 
     @PostMapping("/{orderId}/return")
-    public ResponseEntity<?> confirmReturn(
-            @PathVariable UUID orderId,
-            @RequestBody(required = false) OrderReturnRequest request
-    ) {
-        Integer actualHours = (request != null) ? request.getActualHours() : null;
-        OrderResponse response = rentalOrderService.confirmReturn(orderId, actualHours);
+    public ResponseEntity<OrderResponse> confirmReturn(@PathVariable UUID orderId) {
+
+        OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
         return ResponseEntity.ok(response);
     }
 }

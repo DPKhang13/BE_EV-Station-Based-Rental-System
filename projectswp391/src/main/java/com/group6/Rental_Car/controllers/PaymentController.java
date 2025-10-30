@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/payment")
@@ -41,5 +42,10 @@ public class PaymentController {
                 "vnp_SecureHash", vnp_SecureHash
         );
         return ResponseEntity.ok(paymentService.handleVNPayCallback(vnpParams));
+    }
+    @PostMapping("/refund/{orderId}")
+    public ResponseEntity<PaymentResponse> refund(@PathVariable UUID orderId) {
+        PaymentResponse response = paymentService.refund(orderId);
+        return ResponseEntity.ok(response);
     }
 }
