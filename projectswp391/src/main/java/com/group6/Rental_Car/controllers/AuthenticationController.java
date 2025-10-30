@@ -3,6 +3,7 @@ package com.group6.Rental_Car.controllers;
 import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
+import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import com.group6.Rental_Car.utils.JwtUtil;
@@ -184,6 +185,11 @@ public class AuthenticationController {
     public ResponseEntity<?> resetPassword(@RequestBody AccountDto accountDto,
                                            @RequestParam String inputOtp) {
         AccountDtoResponse response = userService.resetPassword(accountDto, inputOtp);
+        return ResponseEntity.ok(response);
+    }
+    @PutMapping("/verify-profile/{userId}")
+    public ResponseEntity<UserVerificationResponse> verifyUserProfile(@PathVariable UUID userId) {
+        UserVerificationResponse response = userService.verifyUserProfile(userId);
         return ResponseEntity.ok(response);
     }
 }

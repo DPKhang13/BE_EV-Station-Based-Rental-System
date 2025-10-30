@@ -3,7 +3,7 @@ package com.group6.Rental_Car.controllers;
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
-import com.group6.Rental_Car.dtos.order.OrderReturnRequest;
+import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.services.order.RentalOrderService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -66,5 +66,9 @@ public class OrderController {
 
         OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
         return ResponseEntity.ok(response);
+    }
+    @GetMapping("/pending-verification")
+    public List<OrderVerificationResponse> getPendingVerificationOrders() {
+        return rentalOrderService.getPendingVerificationOrders();
     }
 }

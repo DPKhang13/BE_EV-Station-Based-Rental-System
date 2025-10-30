@@ -4,6 +4,7 @@ import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
+import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.enums.UserStatus;
@@ -154,5 +155,31 @@ public class UserServiceImpl implements UserService {
         otpMailService.clearOtp(inputOtp);
 
         return mapToResponse(user);
+    }
+
+    @Override
+    public UserVerificationResponse verifyUserProfile(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new BadRequestException("Hồ sơ này đã được xác thực rồi.");
+        }
+
+        if (user.getStatus() != UserStatus.ACTIVE_PENDING_VERIFICATION) {
+            throw new BadRequestException("Không thể xác thực hồ sơ do trạng thái không hợp lệ: " + user.getStatus());
+        }
+
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.save(user);
+
+
+        return UserVerificationResponse.builder()
+                .userId(user.getUserId())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .status(user.getStatus().name())
+                .role(user.getRole().name())
+                .build();
     }
 }

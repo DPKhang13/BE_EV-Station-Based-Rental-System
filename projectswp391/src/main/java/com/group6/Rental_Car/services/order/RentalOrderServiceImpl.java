@@ -3,6 +3,7 @@ package com.group6.Rental_Car.services.order;
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
+import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
@@ -19,7 +20,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -190,6 +190,24 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return response;
     }
 
+    @Override
+    public List<OrderVerificationResponse> getPendingVerificationOrders() {
+        List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
+
+        return orders.stream().map(order -> OrderVerificationResponse.builder()
+                        .orderId(order.getOrderId().toString())
+                        .customerName(order.getCustomer().getFullName())
+                        .phone(order.getCustomer().getPhone())
+                        .vehicleName(order.getVehicle().getVehicleName())
+                        .plateNumber(order.getVehicle().getPlateNumber())
+                        .startTime(order.getStartTime())
+                        .endTime(order.getEndTime())
+                        .totalPrice(order.getTotalPrice())
+                        .depositAmount(order.getDepositAmount())
+                        .status(order.getStatus())
+                        .build())
+                .toList();
+    }
 
 
     // ==============================================================
