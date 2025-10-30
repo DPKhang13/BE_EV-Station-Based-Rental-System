@@ -73,7 +73,14 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         BigDecimal depositAmount = BigDecimal.ZERO;
         BigDecimal remainingAmount = totalPrice;
-
+        LocalDateTime startTime = request.getStartTime();
+        if (startTime == null) {
+            throw new BadRequestException("Vui lòng chọn thời gian bắt đầu thuê xe");
+        }
+        if (startTime.isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Thời gian bắt đầu không hợp lệ (phải là hiện tại hoặc tương lai)");
+        }
+        LocalDateTime endTime = startTime.plusHours(request.getPlannedHours());
 
         vehicle.setStatus("RESERVED");
         vehicleRepository.save(vehicle);
@@ -82,12 +89,14 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setCustomer(customer);
         order.setVehicle(vehicle);
         order.setCoupon(coupon);
+        order.setStartTime(startTime);
+        order.setEndTime(endTime);
         order.setPlannedHours(request.getPlannedHours());
         order.setPenaltyFee(BigDecimal.ZERO);
         order.setTotalPrice(totalPrice);
         order.setDepositAmount(depositAmount);
         order.setRemainingAmount(depositAmount);
-        order.setStatus("PENDING_PAYMENT");
+        order.setStatus("PENDING");
 
         rentalOrderRepository.save(order);
 

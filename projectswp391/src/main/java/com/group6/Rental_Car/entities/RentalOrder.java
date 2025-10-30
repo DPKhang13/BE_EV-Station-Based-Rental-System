@@ -50,6 +50,10 @@ public class RentalOrder {
     @Column(name = "remaining_amount", precision = 12, scale = 2)
     private BigDecimal remainingAmount;
 
+    @Column(name = "created_at", updatable = false, nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+
     private String status;
     @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
