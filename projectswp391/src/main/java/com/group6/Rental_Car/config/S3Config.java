@@ -18,7 +18,7 @@ public class S3Config {
     @Value("${longvan.s3.endpoint:https://s3-hcm5-r1.longvan.net}")
     private String endpoint;
 
-    @Value("${longvan.s3.region:auto}") // placeholder, SDK cần có region
+    @Value("${longvan.s3.region:vn-hcm}") // placeholder, SDK cần có region
     private String region;
 
     @Value("${longvan.s3.accessKey}")
@@ -37,7 +37,9 @@ public class S3Config {
                 .region(Region.of(region))
                 .serviceConfiguration(
                         S3Configuration.builder()
-                                .pathStyleAccessEnabled(true) // Long Vân hợp path-style
+                                .pathStyleAccessEnabled(true)
+                                .checksumValidationEnabled(false)
+                                .chunkedEncodingEnabled(false)
                                 .build())
                 .build();
     }

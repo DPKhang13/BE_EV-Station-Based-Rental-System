@@ -17,8 +17,9 @@
         private final StorageService storage;
 
         // Khách up CCCD → public-by-default (có URL public ngay)
-        @PostMapping("/cccd")
-        public ResponseEntity<Map<String, String>> uploadCCCD(@RequestPart("file") MultipartFile file) throws Exception {
+        @PostMapping(value = "/cccd", consumes = "multipart/form-data")
+        public ResponseEntity<Map<String, String>> uploadCCCD(
+                @RequestPart("file") MultipartFile file) throws Exception {
             String url = storage.uploadPublic("cccd", file);
             return ResponseEntity.ok(Map.of("url", url));
         }
@@ -27,7 +28,10 @@
         @PostMapping(value = "/driver-license", consumes = "multipart/form-data")
         public ResponseEntity<Map<String, String>> uploadDriverLicense(
                 @RequestParam("file") MultipartFile file) throws Exception {
-            String url = storage.uploadPrivateAndPresign("driver-license", file, Duration.ofMinutes(3));
+
+            // Upload public thẳng vô folder 'driver-license'
+            String url = storage.uploadPublic("driver-license", file);
+
             return ResponseEntity.ok(Map.of("url", url));
         }
     }
