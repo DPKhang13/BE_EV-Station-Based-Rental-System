@@ -204,17 +204,22 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
 
         return orders.stream().map(order -> {
-            String userStatusDisplay = switch (order.getCustomer().getStatus()) {
+
+            User freshUser = userRepository.findById(order.getCustomer().getUserId())
+                    .orElse(order.getCustomer());
+
+
+            String userStatusDisplay = switch (freshUser.getStatus()) {
                 case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
                 case ACTIVE_PENDING_VERIFICATION -> "CHƯA XÁC THỰC";
                 default -> "KHÔNG HỢP LỆ";
             };
 
             return OrderVerificationResponse.builder()
-                    .userId(order.getCustomer().getUserId())
+                    .userId(freshUser.getUserId())
                     .orderId(order.getOrderId().toString())
-                    .customerName(order.getCustomer().getFullName())
-                    .phone(order.getCustomer().getPhone())
+                    .customerName(freshUser.getFullName())
+                    .phone(freshUser.getPhone())
                     .vehicleName(order.getVehicle().getVehicleName())
                     .plateNumber(order.getVehicle().getPlateNumber())
                     .startTime(order.getStartTime())
