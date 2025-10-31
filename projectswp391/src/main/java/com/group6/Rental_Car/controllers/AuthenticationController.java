@@ -18,6 +18,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -191,5 +192,10 @@ public class AuthenticationController {
     public ResponseEntity<UserVerificationResponse> verifyUserProfile(@PathVariable UUID userId) {
         UserVerificationResponse response = userService.verifyUserProfile(userId);
         return ResponseEntity.ok(response);
+    }
+    @GetMapping("/verify-profile/pending")
+    public ResponseEntity<List<UserVerificationResponse>> getPendingVerificationUsers() {
+        List<UserVerificationResponse> pendingUsers = userService.getPendingVerificationUsers();
+        return ResponseEntity.ok(pendingUsers);
     }
 }
