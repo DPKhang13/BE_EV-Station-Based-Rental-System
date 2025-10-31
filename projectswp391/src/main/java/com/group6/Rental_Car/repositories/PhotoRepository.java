@@ -8,6 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface PhotoRepository extends JpaRepository<Photo, Long> {
-    List<Photo> findByUserUserId(UUID userId);
-    Optional<Photo> findFirstByUserUserIdAndType(UUID userId, String type);
+    List<Photo> findByUser_UserIdOrderByUploadedAtDesc(UUID userId);
+    Optional<Photo> findFirstByUser_UserIdAndTypeOrderByUploadedAtDesc(UUID userId, String type);
 }
