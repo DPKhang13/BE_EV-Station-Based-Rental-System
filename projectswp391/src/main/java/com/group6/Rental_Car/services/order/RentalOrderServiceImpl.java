@@ -6,6 +6,7 @@ import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.entities.*;
+import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
@@ -204,8 +205,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     @Transactional
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
 
-            List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
-
+        List<RentalOrder> orders = rentalOrderRepository.findByStatusIn(
+                List.of("DEPOSITED", "RENTAL", "COMPLETED", "PICKED_UP")
+        );
             return orders.stream().map(order -> {
                 {
                     User customer = order.getCustomer();
