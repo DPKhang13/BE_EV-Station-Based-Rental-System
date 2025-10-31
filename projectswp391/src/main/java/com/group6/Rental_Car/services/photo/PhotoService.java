@@ -1,36 +1,18 @@
 package com.group6.Rental_Car.services.photo;
 
 import com.group6.Rental_Car.entities.Photo;
-import com.group6.Rental_Car.entities.User;
-import com.group6.Rental_Car.repositories.PhotoRepository;
-import com.group6.Rental_Car.repositories.UserRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-@Service
-@RequiredArgsConstructor
-public class PhotoService {
-    private final PhotoRepository photoRepo;
-    private final UserRepository userRepo;
+public interface PhotoService {
 
-    @Transactional
-    public Photo saveUserPhoto(UUID userId, String url, String type) {
-        User user = userRepo.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    Photo saveUserPhoto(UUID userId, String url, String type);
 
-        Photo p = Photo.builder()
-                .user(user)
-                .photoUrl(url)
-                .type(type)
-                .uploadedAt(LocalDateTime.now())
-                .build();
+    List<Photo> getUserPhotos(UUID userId);
 
-        return photoRepo.save(p);
-    }
+    Optional<Photo> getLatestUserPhoto(UUID userId, String type);
+
+    void deletePhoto(Long photoId, UUID userId);
 }
