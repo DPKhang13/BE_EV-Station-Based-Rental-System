@@ -2,6 +2,7 @@ package com.group6.Rental_Car.repositories;
 
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.Role;
+import com.group6.Rental_Car.enums.UserStatus;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Pattern;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 @Repository
@@ -23,4 +25,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     //Admin Dashboard
     long countByRole(Role role);
     // 'admin' | 'staff' | 'customer'
+    List<User> findByStatus(UserStatus status);
 }

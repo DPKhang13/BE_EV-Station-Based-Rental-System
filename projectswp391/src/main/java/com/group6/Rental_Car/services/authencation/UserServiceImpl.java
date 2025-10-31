@@ -202,4 +202,36 @@ public class UserServiceImpl implements UserService {
                 .driverLicenseUrl(driverLicenseUrl)
                 .build();
     }
+
+    @Override
+    public List<UserVerificationResponse> getPendingVerificationUsers() {
+        List<User> users = userRepository.findByStatus(UserStatus.ACTIVE_PENDING_VERIFICATION);
+
+        return users.stream().map(user -> {
+            List<Photo> photos = photoRepository.findByUser_UserIdOrderByUploadedAtDesc(user.getUserId());
+
+            String idCardUrl = photos.stream()
+                    .filter(p -> "CCCD".equalsIgnoreCase(p.getType()))
+                    .map(Photo::getPhotoUrl)
+                    .findFirst()
+                    .orElse(null);
+
+            String driverLicenseUrl = photos.stream()
+                    .filter(p -> "GPLX".equalsIgnoreCase(p.getType()))
+                    .map(Photo::getPhotoUrl)
+                    .findFirst()
+                    .orElse(null);
+
+            return UserVerificationResponse.builder()
+                    .userId(user.getUserId())
+                    .fullName(user.getFullName())
+                    .phone(user.getPhone())
+                    .email(user.getEmail())
+                    .status(user.getStatus().name())
+                    .role(user.getRole().name())
+                    .idCardUrl(idCardUrl)
+                    .driverLicenseUrl(driverLicenseUrl)
+                    .build();
+        }).toList();
+    }
 }

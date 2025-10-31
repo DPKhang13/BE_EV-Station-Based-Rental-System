@@ -7,6 +7,7 @@ import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface UserService  {
@@ -25,5 +26,6 @@ public interface UserService  {
     public AccountDtoResponse resetPassword(AccountDto accountDto, String inputOtp);
 
     public UserVerificationResponse verifyUserProfile(UUID userId);
+     public List<UserVerificationResponse> getPendingVerificationUsers();
 
 }
