@@ -187,7 +187,7 @@ public class AuthenticationController {
         AccountDtoResponse response = userService.resetPassword(accountDto, inputOtp);
         return ResponseEntity.ok(response);
     }
-    @PutMapping("/verify-profile/{userId}")
+    @GetMapping("/verify-profile/{userId}")
     public ResponseEntity<UserVerificationResponse> verifyUserProfile(@PathVariable UUID userId) {
         UserVerificationResponse response = userService.verifyUserProfile(userId);
         return ResponseEntity.ok(response);
