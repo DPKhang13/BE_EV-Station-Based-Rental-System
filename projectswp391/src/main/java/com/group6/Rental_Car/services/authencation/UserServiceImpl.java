@@ -14,6 +14,7 @@ import com.group6.Rental_Car.repositories.PhotoRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import com.group6.Rental_Car.services.otpmailsender.OtpMailService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -80,7 +81,7 @@ public class UserServiceImpl implements UserService {
             throw new InvalidPasswordException("Sai mật khẩu");
         }
 
-        if (user.getStatus() != UserStatus.ACTIVE && user.getStatus() != UserStatus.ACTIVE_PENDING_VERIFICATION) {
+        if (user.getStatus() != UserStatus.ACTIVE && user.getStatus() != UserStatus.ACTIVE_PENDING) {
             throw new RuntimeException("Tài khoản chưa được kích hoạt hoặc bị khóa");
         }
 
@@ -110,7 +111,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user: " + email));
 
-        user.setStatus(UserStatus.ACTIVE_PENDING_VERIFICATION);
+        user.setStatus(UserStatus.ACTIVE_PENDING);
         userRepository.save(user);
 
         otpMailService.clearOtp(email); // ✅ dùng email làm key
@@ -169,7 +170,7 @@ public class UserServiceImpl implements UserService {
             throw new BadRequestException("Hồ sơ này đã được xác thực rồi.");
         }
 
-        if (user.getStatus() != UserStatus.ACTIVE_PENDING_VERIFICATION) {
+        if (user.getStatus() != UserStatus.ACTIVE_PENDING) {
             throw new BadRequestException("Không thể xác thực hồ sơ do trạng thái không hợp lệ: " + user.getStatus());
         }
 
@@ -204,10 +205,11 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public List<UserVerificationResponse> getPendingVerificationUsers() {
         List<User> users = userRepository.findByStatusIn(List.of(
                 UserStatus.ACTIVE,
-                UserStatus.ACTIVE_PENDING_VERIFICATION
+                UserStatus.ACTIVE_PENDING
         ));
 
         return users.stream().map(user -> {
@@ -228,7 +230,7 @@ public class UserServiceImpl implements UserService {
 
             String userStatusDisplay = switch (user.getStatus()) {
                 case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
-                case ACTIVE_PENDING_VERIFICATION -> "CHƯA XÁC THỰC";
+                case ACTIVE_PENDING -> "CHƯA XÁC THỰC";
                 default -> "KHÔNG HỢP LỆ";
             };
 

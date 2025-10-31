@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.services.order;
 
+
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
@@ -14,6 +15,7 @@ import com.group6.Rental_Car.services.coupon.CouponService;
 import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
 import com.group6.Rental_Car.services.vehicle.VehicleModelService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,7 +38,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final CouponService couponService;
     private final ModelMapper modelMapper;
     private final VehicleModelService vehicleModelService;
-
     @Override
     public OrderResponse createOrder(OrderCreateRequest request) {
 
@@ -200,38 +201,42 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
+    @Transactional
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
-        List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
 
-        return orders.stream().map(order -> {
+            List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
 
-            User freshUser = userRepository.findById(order.getCustomer().getUserId())
-                    .orElse(order.getCustomer());
+            return orders.stream().map(order -> {
+                {
+                    User customer = order.getCustomer();
+                    Vehicle vehicle = order.getVehicle();
+
+                    String userStatusDisplay = switch (customer.getStatus()) {
+                        case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
+                        case ACTIVE_PENDING -> "CHƯA XÁC THỰC";
+                        default -> "KHÔNG HỢP LỆ";
+                    };
+
+                    return OrderVerificationResponse.builder()
+                            .userId(customer.getUserId())
+                            .orderId(order.getOrderId().toString())
+                            .customerName(customer.getFullName())
+                            .phone(customer.getPhone())
+                            .vehicleName(vehicle.getVehicleName())
+                            .plateNumber(vehicle.getPlateNumber())
+                            .startTime(order.getStartTime())
+                            .endTime(order.getEndTime())
+                            .totalPrice(order.getTotalPrice())
+                            .depositAmount(order.getDepositAmount())
+                            .status(order.getStatus())
+                            .userStatus(userStatusDisplay)
+                            .build();
+
+                }
+            }).toList();
 
 
-            String userStatusDisplay = switch (freshUser.getStatus()) {
-                case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
-                case ACTIVE_PENDING_VERIFICATION -> "CHƯA XÁC THỰC";
-                default -> "KHÔNG HỢP LỆ";
-            };
-
-            return OrderVerificationResponse.builder()
-                    .userId(freshUser.getUserId())
-                    .orderId(order.getOrderId().toString())
-                    .customerName(freshUser.getFullName())
-                    .phone(freshUser.getPhone())
-                    .vehicleName(order.getVehicle().getVehicleName())
-                    .plateNumber(order.getVehicle().getPlateNumber())
-                    .startTime(order.getStartTime())
-                    .endTime(order.getEndTime())
-                    .totalPrice(order.getTotalPrice())
-                    .depositAmount(order.getDepositAmount())
-                    .status(order.getStatus())
-                    .userStatus(userStatusDisplay)
-                    .build();
-        }).toList();
     }
-
 
     // ==============================================================
     //                   CÁC HÀM CRUD CÒN LẠI

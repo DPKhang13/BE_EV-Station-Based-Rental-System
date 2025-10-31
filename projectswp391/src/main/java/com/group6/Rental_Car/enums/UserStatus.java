@@ -4,5 +4,5 @@ public enum UserStatus {
     ACTIVE,
     NEED_OTP,
     VERIFIED,
-    ACTIVE_PENDING_VERIFICATION
+    ACTIVE_PENDING
     }
