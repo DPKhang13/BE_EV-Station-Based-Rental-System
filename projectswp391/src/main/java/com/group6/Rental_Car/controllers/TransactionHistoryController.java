@@ -3,6 +3,7 @@ package com.group6.Rental_Car.controllers;
 import com.group6.Rental_Car.dtos.transactionhistory.TransactionHistoryResponse;
 import com.group6.Rental_Car.services.transactionhistory.TransactionHistoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,5 +27,9 @@ public class TransactionHistoryController {
     @GetMapping("/search/list/{userId}")
     public List<TransactionHistoryResponse> getTransactionListByUserId(@PathVariable UUID userId) {
         return transactionHistoryService.getTransactionsByUserId(userId);
+    }
+    @GetMapping("/user/{phone}")
+    public ResponseEntity<List<TransactionHistoryResponse>> getAllTransactionsByPhone(@PathVariable String phone) {
+        return ResponseEntity.ok(transactionHistoryService.getAllTransactions(phone));
     }
 }
