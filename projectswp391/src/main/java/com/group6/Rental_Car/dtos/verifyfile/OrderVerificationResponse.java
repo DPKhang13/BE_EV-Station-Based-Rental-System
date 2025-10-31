@@ -23,4 +23,5 @@ public class OrderVerificationResponse {
     private BigDecimal totalPrice;
     private BigDecimal depositAmount;
     private String status;
+    private String userStatus;
 }

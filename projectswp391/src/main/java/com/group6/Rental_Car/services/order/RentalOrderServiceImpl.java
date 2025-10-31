@@ -203,20 +203,28 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
         List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
 
-        return orders.stream().map(order -> OrderVerificationResponse.builder()
-                        .userId(order.getCustomer().getUserId())
-                        .orderId(order.getOrderId().toString())
-                        .customerName(order.getCustomer().getFullName())
-                        .phone(order.getCustomer().getPhone())
-                        .vehicleName(order.getVehicle().getVehicleName())
-                        .plateNumber(order.getVehicle().getPlateNumber())
-                        .startTime(order.getStartTime())
-                        .endTime(order.getEndTime())
-                        .totalPrice(order.getTotalPrice())
-                        .depositAmount(order.getDepositAmount())
-                        .status(order.getStatus())
-                        .build())
-                .toList();
+        return orders.stream().map(order -> {
+            String userStatusDisplay = switch (order.getCustomer().getStatus()) {
+                case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
+                case ACTIVE_PENDING_VERIFICATION -> "CHƯA XÁC THỰC";
+                default -> "KHÔNG HỢP LỆ";
+            };
+
+            return OrderVerificationResponse.builder()
+                    .userId(order.getCustomer().getUserId())
+                    .orderId(order.getOrderId().toString())
+                    .customerName(order.getCustomer().getFullName())
+                    .phone(order.getCustomer().getPhone())
+                    .vehicleName(order.getVehicle().getVehicleName())
+                    .plateNumber(order.getVehicle().getPlateNumber())
+                    .startTime(order.getStartTime())
+                    .endTime(order.getEndTime())
+                    .totalPrice(order.getTotalPrice())
+                    .depositAmount(order.getDepositAmount())
+                    .status(order.getStatus())
+                    .userStatus(userStatusDisplay)
+                    .build();
+        }).toList();
     }
 
 
