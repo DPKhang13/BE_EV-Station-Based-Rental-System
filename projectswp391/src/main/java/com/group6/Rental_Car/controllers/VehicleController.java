@@ -17,7 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/vehicles")
-@Tag(name = "Vehicle Api", description ="create,update,deleted,getAll,getById")
+@Tag(name = "Vehicle Api", description ="CRUD về xe")
 public class VehicleController {
     @Autowired
     private VehicleService vehicleService;

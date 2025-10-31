@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@Tag(name = "Maintenance Api", description ="rating, comments about service")
+@Tag(name = "Maintenance Api", description ="CRUD về bảo dưỡng tại bên thứ 3")
 @RequestMapping("/api/maintanences")
 public class MaintenanceController {
     private final MaintenanceService maintenanceService;

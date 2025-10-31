@@ -1,6 +1,7 @@
 package com.group6.Rental_Car.repositories;
 
 import com.group6.Rental_Car.entities.User;
+import com.group6.Rental_Car.enums.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -18,6 +19,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     User findFirstByEmail(String email);
 
-
     boolean existsByEmailAndPassword(@Email String email, @Min(6) @Max(200) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]") String password);
+    //Admin Dashboard
+    long countByRole(Role role);
+    // 'admin' | 'staff' | 'customer'
 }
