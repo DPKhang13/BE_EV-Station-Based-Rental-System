@@ -5,10 +5,12 @@ import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
+import com.group6.Rental_Car.entities.Photo;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.exceptions.*;
+import com.group6.Rental_Car.repositories.PhotoRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import com.group6.Rental_Car.services.otpmailsender.OtpMailService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
@@ -17,6 +19,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -27,6 +30,7 @@ public class UserServiceImpl implements UserService {
     private final OtpMailService otpMailService;
     private final PasswordEncoder passwordEncoder;
     private final ModelMapper modelMapper;
+    private final PhotoRepository photoRepository;
 
     // ------- Helper -------
     private AccountDtoResponse mapToResponse(User user) {
@@ -172,6 +176,20 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.ACTIVE);
         userRepository.save(user);
 
+        List<Photo> photos = photoRepository.findByUser_UserIdOrderByUploadedAtDesc(userId);
+
+        // Map theo type (giả sử type = "ID_CARD" và "DRIVER_LICENSE")
+        String idCardUrl = photos.stream()
+                .filter(p -> "CCCD".equalsIgnoreCase(p.getType()))
+                .map(Photo::getPhotoUrl)
+                .findFirst()
+                .orElse(null);
+
+        String driverLicenseUrl = photos.stream()
+                .filter(p -> "GPLX".equalsIgnoreCase(p.getType()))
+                .map(Photo::getPhotoUrl)
+                .findFirst()
+                .orElse(null);
 
         return UserVerificationResponse.builder()
                 .userId(user.getUserId())
@@ -180,6 +198,8 @@ public class UserServiceImpl implements UserService {
                 .email(user.getEmail())
                 .status(user.getStatus().name())
                 .role(user.getRole().name())
+                .idCardUrl(idCardUrl)
+                .driverLicenseUrl(driverLicenseUrl)
                 .build();
     }
 }

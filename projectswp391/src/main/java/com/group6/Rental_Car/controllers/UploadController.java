@@ -19,7 +19,6 @@ public class UploadController {
     private final StorageService storage;
     private final PhotoService photoService; // <-- thêm service lưu DB
 
-    // CCCD -> public + lưu DB (type = "cccd")
     @PostMapping(value = "/cccd", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> uploadCCCD(
             @RequestPart("file") MultipartFile file,
@@ -31,7 +30,7 @@ public class UploadController {
         String url = storage.uploadPublic(folder, file);
 
         // lưu DB bảng photo
-        var saved = photoService.saveUserPhoto(userId, url, "driver-license");
+        var saved = photoService.saveUserPhoto(userId, url, "CCCD");
 
         return ResponseEntity.ok(Map.of(
                 "photoId", saved.getPhotoId(),
@@ -51,7 +50,7 @@ public class UploadController {
         String folder = "users/" + userId + "/driver-license";
         String url = storage.uploadPublic(folder, file);
 
-        var saved = photoService.saveUserPhoto(userId, url, "driver-license");
+        var saved = photoService.saveUserPhoto(userId, url, "GPLX");
 
         return ResponseEntity.ok(Map.of(
                 "photoId", saved.getPhotoId(),
