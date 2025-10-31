@@ -8,5 +8,5 @@ import java.util.UUID;
 public interface TransactionHistoryService {
     List<TransactionHistoryResponse> getTransactionsByUser(UUID userId, String sortDirection);
     List<TransactionHistoryResponse> getTransactionsByUserId(UUID userId);
-
+    List<TransactionHistoryResponse> getAllTransactions(String phone);
 }

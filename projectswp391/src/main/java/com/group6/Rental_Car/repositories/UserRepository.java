@@ -26,4 +26,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     long countByRole(Role role);
     // 'admin' | 'staff' | 'customer'
     List<User> findByStatusIn(List<UserStatus> statuses);
+    Optional<User> findByPhone(String phone);
 }
