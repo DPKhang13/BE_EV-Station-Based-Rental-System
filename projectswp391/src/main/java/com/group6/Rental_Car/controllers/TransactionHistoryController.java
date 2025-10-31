@@ -32,4 +32,8 @@ public class TransactionHistoryController {
     public ResponseEntity<List<TransactionHistoryResponse>> getAllTransactionsByPhone(@PathVariable String phone) {
         return ResponseEntity.ok(transactionHistoryService.getAllTransactions(phone));
     }
+    @GetMapping("/all")
+    public ResponseEntity<List<TransactionHistoryResponse>> getAllTransactionsSorted() {
+        return ResponseEntity.ok(transactionHistoryService.getAllTransactionCreatedAtDesc());
+    }
 }

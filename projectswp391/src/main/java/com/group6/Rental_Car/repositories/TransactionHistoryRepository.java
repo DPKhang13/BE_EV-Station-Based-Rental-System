@@ -17,4 +17,5 @@ public interface TransactionHistoryRepository extends JpaRepository<TransactionH
     // Lấy tất cả transaction của user và sắp xếp theo created_at giảm dần (mới nhất trước)
     List<TransactionHistory> findByUser_UserIdOrderByCreatedAtAsc(UUID userId);
     List<TransactionHistory> findByUser_PhoneOrderByCreatedAtDesc(String phone);
+    List<TransactionHistory> findAllByOrderByCreatedAtDesc();
 }

@@ -63,4 +63,13 @@ public class TransactionHistoryServiceImpl implements TransactionHistoryService 
                         .build())
                 .toList();
     }
+
+    @Override
+    public List<TransactionHistoryResponse> getAllTransactionCreatedAtDesc() {
+        List<TransactionHistory> transactions = transactionHistoryRepository.findAllByOrderByCreatedAtDesc();
+
+        return transactions.stream()
+                .map(TransactionHistoryResponse::fromEntity)
+                .toList();
+    }
 }
