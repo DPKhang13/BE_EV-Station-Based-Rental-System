@@ -225,16 +225,25 @@ public class UserServiceImpl implements UserService {
                     .findFirst()
                     .orElse(null);
 
+
+            String userStatusDisplay = switch (user.getStatus()) {
+                case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
+                case ACTIVE_PENDING_VERIFICATION -> "CHƯA XÁC THỰC";
+                default -> "KHÔNG HỢP LỆ";
+            };
+
             return UserVerificationResponse.builder()
                     .userId(user.getUserId())
                     .fullName(user.getFullName())
                     .phone(user.getPhone())
                     .email(user.getEmail())
                     .status(user.getStatus().name())
+                    .userStatus(userStatusDisplay)
                     .role(user.getRole().name())
                     .idCardUrl(idCardUrl)
                     .driverLicenseUrl(driverLicenseUrl)
                     .build();
         }).toList();
     }
+
 }

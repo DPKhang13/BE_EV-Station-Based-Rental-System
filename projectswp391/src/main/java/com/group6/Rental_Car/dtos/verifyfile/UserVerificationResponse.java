@@ -18,4 +18,5 @@ public class UserVerificationResponse {
     private String role;
     private String idCardUrl;
     private String driverLicenseUrl;
+    private String userStatus;
 }
