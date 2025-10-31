@@ -67,7 +67,7 @@ public class OrderController {
         OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
         return ResponseEntity.ok(response);
     }
-    @PutMapping("/pending-verification")
+    @GetMapping("/pending-verification")
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
         return rentalOrderService.getPendingVerificationOrders();
     }
