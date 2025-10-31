@@ -204,6 +204,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         List<RentalOrder> orders = rentalOrderRepository.findByStatus("DEPOSITED");
 
         return orders.stream().map(order -> OrderVerificationResponse.builder()
+                        .userId(order.getCustomer().getUserId())
                         .orderId(order.getOrderId().toString())
                         .customerName(order.getCustomer().getFullName())
                         .phone(order.getCustomer().getPhone())

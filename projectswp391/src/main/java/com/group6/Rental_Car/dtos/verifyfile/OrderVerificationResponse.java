@@ -4,6 +4,7 @@ package com.group6.Rental_Car.dtos.verifyfile;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderVerificationResponse {
+    private UUID userId;
     private String orderId;
     private String customerName;
     private String phone;
