@@ -1,4 +1,4 @@
-package com.group6.Rental_Car.services;
+package com.group6.Rental_Car.services.photo;
 
 import com.group6.Rental_Car.entities.Photo;
 import com.group6.Rental_Car.entities.User;
@@ -27,11 +27,10 @@ public class PhotoService {
         Photo p = Photo.builder()
                 .user(user)
                 .photoUrl(url)
-                .type(type) // "cccd" | "driver-license"
+                .type(type)
                 .uploadedAt(LocalDateTime.now())
                 .build();
 
         return photoRepo.save(p);
-        //.
     }
 }
