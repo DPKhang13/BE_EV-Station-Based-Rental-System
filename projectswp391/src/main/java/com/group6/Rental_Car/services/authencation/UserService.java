@@ -5,6 +5,8 @@ import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
+import com.group6.Rental_Car.entities.User;
+import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 
 import java.util.List;
@@ -27,5 +29,6 @@ public interface UserService  {
 
     public UserVerificationResponse verifyUserProfile(UUID userId);
      public List<UserVerificationResponse> getPendingVerificationUsers();
+
 
 }

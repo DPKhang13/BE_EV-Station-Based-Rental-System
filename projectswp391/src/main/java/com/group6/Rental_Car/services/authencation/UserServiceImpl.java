@@ -205,7 +205,10 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<UserVerificationResponse> getPendingVerificationUsers() {
-        List<User> users = userRepository.findByStatus(UserStatus.ACTIVE_PENDING_VERIFICATION);
+        List<User> users = userRepository.findByStatusIn(List.of(
+                UserStatus.ACTIVE,
+                UserStatus.ACTIVE_PENDING_VERIFICATION
+        ));
 
         return users.stream().map(user -> {
             List<Photo> photos = photoRepository.findByUser_UserIdOrderByUploadedAtDesc(user.getUserId());
