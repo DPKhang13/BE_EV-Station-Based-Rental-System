@@ -1,6 +1,6 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.services.storage.StorageService;
+import com.group6.Rental_Car.services.storage.StorageServiceImpl;
 import com.group6.Rental_Car.services.photo.PhotoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -16,7 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UploadController {
 
-    private final StorageService storage;
+    private final StorageServiceImpl storage;
     private final PhotoService photoService; // <-- thêm service lưu DB
 
     @PostMapping(value = "/cccd", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
