@@ -1,23 +1,40 @@
-HELP.md
+# ==========================================================
+# Maven & Build
+# ==========================================================
 target/
-.mvn/wrapper/maven-wrapper.jar
+build/
+out/
+*.log
 !**/src/main/**/target/
 !**/src/test/**/target/
+!.mvn/wrapper/maven-wrapper.jar
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# ==========================================================
+# Environment / Secrets
+# ==========================================================
+.env
+*.env
+.env.*
+*.key
+*.pem
 
+# ==========================================================
+# IDE & Tooling
+# ==========================================================
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
+
+### Eclipse / Spring Tool Suite (STS) ###
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans/
+.sts4-cache/
 
 ### NetBeans ###
 /nbproject/private/
@@ -25,9 +42,19 @@ target/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
+### Visual Studio Code ###
 .vscode/
+
+# ==========================================================
+# OS / System Files
+# ==========================================================
+.DS_Store
+Thumbs.db
+
+# ==========================================================
+# Docker
+# ==========================================================
+/docker-compose.override.yml
+/.env.local
+/.env.dev

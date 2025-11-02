@@ -17,8 +17,6 @@ public class Photo {
     @Column(name = "photo_id")
     private Long photoId;
 
-    // bảng "user" là keyword, nhớ quote tên bảng trong entity User:
-    // @Table(name = "\"user\"")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

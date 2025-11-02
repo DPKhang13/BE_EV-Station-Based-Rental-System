@@ -10,9 +10,13 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public interface PricingRuleService {
-    PricingRule getPricingRuleByVehicle(Vehicle vehicle);
+    PricingRule getPricingRuleBySeatAndVariant(Integer seatCount, String variant);
 
-    BigDecimal calculateTotalPrice(PricingRule pricingRule, Coupon coupon);
+    BigDecimal calculateRentalPrice(PricingRule pricingRule, long rentedHours);
+    BigDecimal calculateTotalPrice(PricingRule pricingRule, Coupon coupon, Integer plannedHours, long actualHours);
+
+
     List<PricingRuleResponse> getAllPricingRules();
-    PricingRuleResponse updatePricingRule(Long vehicleId,PricingRuleUpdateRequest req);
+
+    PricingRuleResponse updatePricingRule(Integer seatCount, String variant, PricingRuleUpdateRequest req);
 }

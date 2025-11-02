@@ -1,129 +1,106 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.loginpage.LoginRequest;
-import com.group6.Rental_Car.dtos.loginpage.RegisterRequest;
-import com.group6.Rental_Car.dtos.loginpage.RegisterResponse;
-import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
+import com.group6.Rental_Car.dtos.loginpage.AccountDto;
+import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
+import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
+import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import com.group6.Rental_Car.utils.JwtUtil;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
 @Tag(name = "Authentication API",
-        description = "Các endpoint cho register, login, verify OTP, logout, refresh token")
+        description = "Các endpoint để quản lý tài khoản: đăng ký, đăng nhập, OTP, refresh token, quên mật khẩu")
 public class AuthenticationController {
 
-    private final UserService userService;
-    private final JwtUtil jwtUtil;
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
     private final long accessTokenAge;
     private final long refreshTokenAge;
 
-    public AuthenticationController(UserService userService,
-                                    JwtUtil jwtUtil,
-                                    @Value("${JWT_ACCESSEXPIRATION}") long accessTokenAge,
+    public AuthenticationController(@Value("${JWT_ACCESSEXPIRATION}") long accessTokenAge,
                                     @Value("${JWT_REFRESHEXPIRATION}") long refreshTokenAge) {
-        this.userService = userService;
-        this.jwtUtil = jwtUtil;
         this.accessTokenAge = accessTokenAge;
         this.refreshTokenAge = refreshTokenAge;
     }
 
     // ---------- REGISTER ----------
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
-        RegisterResponse accountDtoResponse = userService.register(request);
-
-        JwtUserDetails jwtUserDetails = JwtUserDetails.builder()
-                .userId(accountDtoResponse.getUserId())
-                .email(accountDtoResponse.getEmail())
-                .role(accountDtoResponse.getRole().name()) // convert Enum -> String
-                .build();
-
-        ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(accountDtoResponse.getUserId()))
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(refreshTokenAge / 1000).path("/").build();
-
-        ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(accessTokenAge / 1000).path("/").build();
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
-                .body(accountDtoResponse);
+    @Operation(summary = "Đăng ký tài khoản bằng email", description = "Tạo tài khoản mới và gửi OTP xác minh")
+    public ResponseEntity<?> registerByEmail(@Valid @RequestBody RegisterAccountDto account) {
+        AccountDtoResponse response = userService.registerByEmail(account);
+        return ResponseEntity.ok(response);
     }
 
     // ---------- LOGIN ----------
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        RegisterResponse accountDtoResponse = userService.login(request);
+    @Operation(summary = "Đăng nhập tài khoản", description = "Kiểm tra email, mật khẩu, trả về AccessToken và RefreshToken")
+    public ResponseEntity<?> loginByEmail(@Valid @RequestBody AccountDto account) {
+        AccountDtoResponse response = userService.loginByEmail(account);
 
         JwtUserDetails jwtUserDetails = JwtUserDetails.builder()
-                .userId(accountDtoResponse.getUserId())
-                .email(accountDtoResponse.getEmail())
-                .role(accountDtoResponse.getRole().name())
+                .userId(response.getUserId())
+                .role(response.getRole().toString())
                 .build();
 
-        ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(accountDtoResponse.getUserId()))
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(refreshTokenAge / 1000).path("/").build();
+        ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(response.getUserId()))
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .maxAge(refreshTokenAge / 1000)
+                .path("/")
+                .build();
 
         ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(accessTokenAge / 1000).path("/").build();
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .maxAge(accessTokenAge / 1000)
+                .path("/")
+                .build();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
-                .body(accountDtoResponse);
-    }
-
-    // ---------- VERIFY OTP ----------
-    @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@RequestBody OtpRequest request) {
-        RegisterResponse userResp = userService.verifyOtp(request);
-
-        JwtUserDetails jwtUserDetails = JwtUserDetails.builder()
-                .userId(userResp.getUserId())
-                .email(userResp.getEmail())
-                .role(userResp.getRole().name())
-                .build();
-
-        ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(userResp.getUserId()))
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(refreshTokenAge / 1000).path("/").build();
-
-        ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(accessTokenAge / 1000).path("/").build();
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
-                .body(userResp);
+                .body(response);
     }
 
     // ---------- LOGOUT ----------
     @PostMapping("/logout")
+    @Operation(summary = "Đăng xuất", description = "Xóa token khỏi cookie")
     public ResponseEntity<?> logout() {
         ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", "")
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(0).path("/").build();
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .maxAge(0)
+                .path("/")
+                .build();
 
         ResponseCookie accessCookie = ResponseCookie.from("AccessToken", "")
-                .httpOnly(true).secure(true).sameSite("None")
-                .maxAge(0).path("/").build();
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .maxAge(0)
+                .path("/")
+                .build();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
@@ -132,20 +109,19 @@ public class AuthenticationController {
 
     // ---------- REFRESH TOKEN ----------
     @PostMapping("/refresh")
+    @Operation(summary = "Làm mới AccessToken", description = "Dùng RefreshToken để tạo AccessToken mới")
     public ResponseEntity<?> refreshAccessToken(@CookieValue(name = "RefreshToken") String refreshToken) {
         if (jwtUtil.validateRefreshToken(refreshToken)) {
-            UUID userId = jwtUtil.extractUserIdFromRefresh(refreshToken);
+            UUID accountId = jwtUtil.extractUserIdFromRefresh(refreshToken);
+            JwtUserDetails userDetails = userService.getAccountDetails(accountId);
 
-            RegisterResponse userResp = userService.getUserDetails(userId);
-            JwtUserDetails jwtUserDetails = JwtUserDetails.builder()
-                    .userId(userResp.getUserId())
-                    .email(userResp.getEmail())
-                    .role(userResp.getRole().name())
+            ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(userDetails))
+                    .httpOnly(true)
+                    .secure(true)
+                    .sameSite("None")
+                    .maxAge(accessTokenAge / 1000)
+                    .path("/")
                     .build();
-
-            ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
-                    .httpOnly(true).secure(true).sameSite("None")
-                    .maxAge(accessTokenAge / 1000).path("/").build();
 
             return ResponseEntity.ok()
                     .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
@@ -153,19 +129,73 @@ public class AuthenticationController {
         }
         return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
-    @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        if (principal instanceof JwtUserDetails userDetails) {
+    // ---------- VERIFY OTP ----------
+    @PostMapping("/verify")
+    @Operation(summary = "Xác minh OTP khi đăng ký", description = "Xác thực OTP gửi qua email và kích hoạt tài khoản")
+    public ResponseEntity<?> verifyOtp(@RequestParam String inputOtp,
+                                       @RequestParam String email) {
+        AccountDtoResponse response = userService.verifyOtp(inputOtp, email);
 
-            Map<String, Object> userInfo = new HashMap<>();
-            userInfo.put("userId", userDetails.getUserId());
-            userInfo.put("role", userDetails.getRole());
-            return ResponseEntity.ok(userInfo);
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "User not authenticated"));
-        }
+        JwtUserDetails jwtUserDetails = JwtUserDetails.builder()
+                .userId(response.getUserId())
+                .role(response.getRole().toString())
+                .build();
+
+        ResponseCookie refreshCookie = ResponseCookie.from("RefreshToken", jwtUtil.generateRefreshToken(response.getUserId()))
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .maxAge(refreshTokenAge / 1000)
+                .path("/")
+                .build();
+
+        ResponseCookie accessCookie = ResponseCookie.from("AccessToken", jwtUtil.generateAccessToken(jwtUserDetails))
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("None")
+                .maxAge(accessTokenAge / 1000)
+                .path("/")
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString(), accessCookie.toString())
+                .body(response);
+    }
+
+    // ---------- FORGET PASSWORD ----------
+    @PostMapping("/account/forget")
+    @Operation(summary = "Gửi OTP quên mật khẩu", description = "Gửi mã OTP tới email để khôi phục mật khẩu")
+    public ResponseEntity<?> forgetPassword(@RequestParam String email) {
+        userService.forgetPassword(email);
+        return ResponseEntity.ok("OTP đã được gửi tới email của bạn");
+    }
+
+    // ---------- VERIFY FORGET PASSWORD ----------
+    @PostMapping("/account/verify")
+    @Operation(summary = "Xác thực OTP quên mật khẩu", description = "Kiểm tra mã OTP trước khi đặt lại mật khẩu")
+    public ResponseEntity<?> verifyForgetPassword(@RequestParam String email,
+                                                  @RequestParam String inputOtp) {
+        boolean result = userService.verifyForgetPassword(inputOtp, email);
+        return ResponseEntity.ok(result);
+    }
+
+    // ---------- RESET PASSWORD ----------
+    @PostMapping("/account/reset-password")
+    @Operation(summary = "Đặt lại mật khẩu", description = "Đặt lại mật khẩu sau khi xác minh OTP")
+    public ResponseEntity<?> resetPassword(@RequestBody AccountDto accountDto,
+                                           @RequestParam String inputOtp) {
+        AccountDtoResponse response = userService.resetPassword(accountDto, inputOtp);
+        return ResponseEntity.ok(response);
+    }
+    @PutMapping("/verify-profile/{userId}")
+    public ResponseEntity<UserVerificationResponse> verifyUserProfile(@PathVariable UUID userId) {
+        UserVerificationResponse response = userService.verifyUserProfile(userId);
+        return ResponseEntity.ok(response);
+    }
+    @GetMapping("/verify-profile/pending")
+    public ResponseEntity<List<UserVerificationResponse>> getPendingVerificationUsers() {
+        List<UserVerificationResponse> pendingUsers = userService.getPendingVerificationUsers();
+        return ResponseEntity.ok(pendingUsers);
     }
 }

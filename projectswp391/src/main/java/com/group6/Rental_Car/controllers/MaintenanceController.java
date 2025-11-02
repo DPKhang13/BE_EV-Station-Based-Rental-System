@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@Tag(name = "Maintenance Api", description ="rating, comments about service")
+@Tag(name = "Maintenance Api", description ="CRUD về bảo dưỡng tại bên thứ 3")
 @RequestMapping("/api/maintanences")
 public class MaintenanceController {
     private final MaintenanceService maintenanceService;
@@ -30,15 +30,16 @@ public class MaintenanceController {
     }
 
     @DeleteMapping("/delete/{maintenanceId}")
-    public ResponseEntity<MaintenanceResponse> delete(@PathVariable Integer maintenanceId) {
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<?> delete(@PathVariable Integer maintenanceId) {
+        maintenanceService.delete(maintenanceId);
+        return ResponseEntity.ok("Deleted maintenance successfully");
     }
 
     @GetMapping("/getById/{maintenanceId}")
     public ResponseEntity<MaintenanceResponse> getById(@PathVariable Integer maintenanceId) {
         return ResponseEntity.ok(maintenanceService.getById(maintenanceId));
     }
-    @GetMapping
+    @GetMapping("/getAllList")
     public ResponseEntity<List<MaintenanceResponse>> getAll() {
         return ResponseEntity.ok(maintenanceService.listAll());
     }

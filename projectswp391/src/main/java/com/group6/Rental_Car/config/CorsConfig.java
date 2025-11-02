@@ -14,12 +14,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
             return new WebMvcConfigurer() {
                 @Override
                 public void addCorsMappings(CorsRegistry registry) {
-                    registry.addMapping("/**")
-                            .allowedOriginPatterns("*") // dùng pattern thay vì fixed origins
-                            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                            .allowedHeaders("*")
-                            .exposedHeaders("Authorization")
-                            .allowCredentials(true);
+                    registry.addMapping("/**") // Cho phép tất cả endpoint
+                            .allowedOriginPatterns("*") // Cho phép tất cả domain
+                            .allowedMethods("*")        // GET, POST, PUT, DELETE, OPTIONS,...
+                            .allowedHeaders("*")        // Cho phép tất cả header
+                            .exposedHeaders("*")        // Cho phép client đọc tất cả header trả về
+                            .allowCredentials(true);    // Cho phép gửi cookie/token
                 }
             };
         }

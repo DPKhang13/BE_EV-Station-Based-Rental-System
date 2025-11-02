@@ -13,7 +13,9 @@ import java.math.BigDecimal;
 @Builder
 public class PricingRuleResponse {
     private Integer pricingRuleId;
-    private Long vehicleId;
+    private Integer seatCount;
+
+    private String variant;
     private Integer baseHours;
 
     private BigDecimal baseHoursPrice;

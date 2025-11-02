@@ -1,22 +1,26 @@
 package com.group6.Rental_Car.services.authencation;
 
-import com.group6.Rental_Car.dtos.loginpage.LoginRequest;
-import com.group6.Rental_Car.dtos.loginpage.RegisterRequest;
-import com.group6.Rental_Car.dtos.loginpage.RegisterResponse;
+import com.group6.Rental_Car.dtos.loginpage.AccountDto;
+import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
+import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
+import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
+import com.group6.Rental_Car.entities.Photo;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.enums.UserStatus;
-import com.group6.Rental_Car.exceptions.EmailAlreadyExistsException;
-import com.group6.Rental_Car.exceptions.InvalidPasswordException;
-import com.group6.Rental_Car.exceptions.OtpValidationException;
-import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.exceptions.*;
+import com.group6.Rental_Car.repositories.PhotoRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import com.group6.Rental_Car.services.otpmailsender.OtpMailService;
+import com.group6.Rental_Car.utils.JwtUserDetails;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,85 +30,222 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final OtpMailService otpMailService;
     private final PasswordEncoder passwordEncoder;
-
-    @Override
-    public RegisterResponse register(RegisterRequest request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new EmailAlreadyExistsException("Email đã tồn tại!");
-        }
-
-        User user = User.builder()
-                .fullName(request.getFullName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone())
-                .role(Role.customer)
-                .status(UserStatus.NEED_OTP)
-                .build();
-
-        userRepository.save(user);
-        otpMailService.generateAndSendOtp(user.getEmail());
-
-        return mapToResponse(user);
-    }
-
-    @Override
-    public RegisterResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại!"));
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new InvalidPasswordException("Sai mật khẩu!");
-        }
-
-        if (user.getStatus() == UserStatus.NEED_OTP) {
-            otpMailService.generateAndSendOtp(user.getEmail());
-            throw new OtpValidationException("Cần xác thực OTP trước khi đăng nhập!");
-        }
-
-        return mapToResponse(user);
-    }
-
-    @Override
-    public RegisterResponse verifyOtp(OtpRequest request) {
-        if (!otpMailService.validateOtp(request.getOtp())) {
-            throw new OtpValidationException("OTP không hợp lệ hoặc đã hết hạn!");
-        }
-
-        String email = otpMailService.getEmailByOtp(request.getOtp());
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user!"));
-
-        if (user.getStatus() == UserStatus.NEED_OTP) {
-            user.setStatus(UserStatus.ACTIVE);
-            userRepository.save(user);
-        }
-
-        otpMailService.clearOtp(request.getOtp());
-        return mapToResponse(user);
-    }
-
-    @Override
-    public void logout(UUID userId) {
-        // Controller sẽ clear cookie
-    }
-
-    @Override
-    public RegisterResponse getUserDetails(UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user!"));
-        return mapToResponse(user);
-    }
+    private final ModelMapper modelMapper;
+    private final PhotoRepository photoRepository;
 
     // ------- Helper -------
-    private RegisterResponse mapToResponse(User user) {
-        return RegisterResponse.builder()
+    private AccountDtoResponse mapToResponse(User user) {
+        return AccountDtoResponse.builder()
                 .userId(user.getUserId())
                 .fullName(user.getFullName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .role(user.getRole())
                 .status(user.getStatus())
+                .stationId(
+                        user.getRentalStation() != null
+                                ? user.getRentalStation().getStationId()
+                                : null
+                )
                 .build();
     }
+
+    // ========== REGISTER ==========
+    @Override
+    public AccountDtoResponse registerByEmail(RegisterAccountDto account) {
+        if (userRepository.existsByEmail(account.getEmail().toLowerCase())) {
+            throw new EmailAlreadyExistsException("Email đã tồn tại: " + account.getEmail());
+        }
+
+        String otp = otpMailService.generateAndSendOtp(account.getEmail());
+
+        User user = modelMapper.map(account, User.class);
+        user.setEmail(account.getEmail().toLowerCase());
+        user.setPassword(passwordEncoder.encode(account.getPassword()));
+        user.setPhone(account.getPhone());
+        user.setRole(Role.customer);
+        user.setStatus(UserStatus.NEED_OTP);
+        user.setRentalStation(null);
+        userRepository.save(user);
+
+        return mapToResponse(user);
+    }
+
+    // ========== LOGIN ==========
+    @Override
+    public AccountDtoResponse loginByEmail(AccountDto account) {
+        User user = userRepository.findByEmail(account.getEmail().toLowerCase())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + account.getEmail()));
+
+        if (!passwordEncoder.matches(account.getPassword(), user.getPassword())) {
+            throw new InvalidPasswordException("Sai mật khẩu");
+        }
+
+        if (user.getStatus() != UserStatus.ACTIVE && user.getStatus() != UserStatus.ACTIVE_PENDING) {
+            throw new RuntimeException("Tài khoản chưa được kích hoạt hoặc bị khóa");
+        }
+
+        return mapToResponse(user);
+    }
+
+    // ========== GET ACCOUNT DETAILS ==========
+    @Override
+    public JwtUserDetails getAccountDetails(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy userId: " + userId));
+
+        return JwtUserDetails.builder()
+                .userId(user.getUserId())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .build();
+    }
+
+    // ========== VERIFY OTP ==========
+    @Override
+    public AccountDtoResponse verifyOtp(String inputOtp, String email) {
+        if (!otpMailService.validateOtp(email, inputOtp)) { // ✅ đổi vị trí
+            throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user: " + email));
+
+        user.setStatus(UserStatus.ACTIVE_PENDING);
+        userRepository.save(user);
+
+        otpMailService.clearOtp(email); // ✅ dùng email làm key
+
+        return mapToResponse(user);
+    }
+
+    // ========== FORGOT PASSWORD ==========
+    @Override
+    public void forgetPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user: " + email));
+
+        // Gửi OTP mới
+        otpMailService.generateAndSendOtp(email);
+    }
+
+    // ========== VERIFY FORGOT PASSWORD OTP ==========
+    @Override
+    public boolean verifyForgetPassword(String inputOtp, String email) {
+        if (!otpMailService.validateOtp(inputOtp,email)) {
+            throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
+        }
+
+        String emailFromOtp = otpMailService.getEmailByOtp(inputOtp);
+        if (emailFromOtp == null || !emailFromOtp.equalsIgnoreCase(email)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // ========== RESET PASSWORD ==========
+    @Override
+    public AccountDtoResponse resetPassword(AccountDto accountDto, String inputOtp) {
+        String email = otpMailService.getEmailByOtp(inputOtp);
+        if (email == null) {
+            throw new OtpValidationException("OTP không hợp lệ hoặc đã hết hạn");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user: " + email));
+
+        user.setPassword(passwordEncoder.encode(accountDto.getPassword()));
+        userRepository.save(user);
+        otpMailService.clearOtp(inputOtp);
+
+        return mapToResponse(user);
+    }
+
+    @Override
+    public UserVerificationResponse verifyUserProfile(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
+        if (user.getStatus() == UserStatus.ACTIVE) {
+            throw new BadRequestException("Hồ sơ này đã được xác thực rồi.");
+        }
+
+        if (user.getStatus() != UserStatus.ACTIVE_PENDING) {
+            throw new BadRequestException("Không thể xác thực hồ sơ do trạng thái không hợp lệ: " + user.getStatus());
+        }
+
+        user.setStatus(UserStatus.ACTIVE);
+        userRepository.save(user);
+
+        List<Photo> photos = photoRepository.findByUser_UserIdOrderByUploadedAtDesc(userId);
+
+        // Map theo type (giả sử type = "ID_CARD" và "DRIVER_LICENSE")
+        String idCardUrl = photos.stream()
+                .filter(p -> "CCCD".equalsIgnoreCase(p.getType()))
+                .map(Photo::getPhotoUrl)
+                .findFirst()
+                .orElse(null);
+
+        String driverLicenseUrl = photos.stream()
+                .filter(p -> "GPLX".equalsIgnoreCase(p.getType()))
+                .map(Photo::getPhotoUrl)
+                .findFirst()
+                .orElse(null);
+
+        return UserVerificationResponse.builder()
+                .userId(user.getUserId())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .email(user.getEmail())
+                .status(user.getStatus().name())
+                .role(user.getRole().name())
+                .idCardUrl(idCardUrl)
+                .driverLicenseUrl(driverLicenseUrl)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public List<UserVerificationResponse> getPendingVerificationUsers() {
+        List<User> users = userRepository.findByStatusIn(List.of(
+                UserStatus.ACTIVE,
+                UserStatus.ACTIVE_PENDING
+        ));
+
+        return users.stream().map(user -> {
+            List<Photo> photos = photoRepository.findByUser_UserIdOrderByUploadedAtDesc(user.getUserId());
+
+            String idCardUrl = photos.stream()
+                    .filter(p -> "CCCD".equalsIgnoreCase(p.getType()))
+                    .map(Photo::getPhotoUrl)
+                    .findFirst()
+                    .orElse(null);
+
+            String driverLicenseUrl = photos.stream()
+                    .filter(p -> "GPLX".equalsIgnoreCase(p.getType()))
+                    .map(Photo::getPhotoUrl)
+                    .findFirst()
+                    .orElse(null);
+
+
+            String userStatusDisplay = switch (user.getStatus()) {
+                case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
+                case ACTIVE_PENDING -> "CHƯA XÁC THỰC";
+                default -> "KHÔNG HỢP LỆ";
+            };
+
+            return UserVerificationResponse.builder()
+                    .userId(user.getUserId())
+                    .fullName(user.getFullName())
+                    .phone(user.getPhone())
+                    .email(user.getEmail())
+                    .status(user.getStatus().name())
+                    .userStatus(userStatusDisplay)
+                    .role(user.getRole().name())
+                    .idCardUrl(idCardUrl)
+                    .driverLicenseUrl(driverLicenseUrl)
+                    .build();
+        }).toList();
+    }
+
 }

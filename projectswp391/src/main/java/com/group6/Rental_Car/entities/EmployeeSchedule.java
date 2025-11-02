@@ -16,8 +16,10 @@ import  jakarta.persistence.*;
 
     @Getter
     @Setter
+    @NoArgsConstructor
     @AllArgsConstructor
-    @NoArgsConstructor @Builder
+
+@Builder(toBuilder = true)
 public class EmployeeSchedule {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY) //SQL server: INT IDENTITY

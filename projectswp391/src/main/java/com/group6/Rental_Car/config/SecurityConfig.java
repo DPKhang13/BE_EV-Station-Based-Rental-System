@@ -32,7 +32,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll() // 🔓 Cho phép tất cả endpoint public
+                        .anyRequest().permitAll() //
                 )
                 //  Thêm filter đã được Spring inject
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)

@@ -28,16 +28,15 @@ public class Vehicle {
 
     private String description;
 
+    @Column(name = "vehicle_name", length = 100)
+    private String vehicleName;
+
     // Một xe có nhiều đơn thuê
     @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
     private List<RentalOrder> rentalOrders;
 
-    // Một xe có thể có một bảng giá
-    @OneToOne(mappedBy = "vehicle", fetch = FetchType.LAZY)
-    private PricingRule pricingRule;
-
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<VehicleAttribute> attributes;
+    private List<VehicleModel> attributes;
 
 
 }
