@@ -6,4 +6,5 @@ import java.time.LocalDate;
 
 public interface AdminDashboardService {
     AdminDashboardResponse getOverview(LocalDate from, LocalDate to);
+
 }
