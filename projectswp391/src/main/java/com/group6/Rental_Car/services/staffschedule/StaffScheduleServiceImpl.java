@@ -11,6 +11,7 @@
     import com.group6.Rental_Car.repositories.UserRepository;
     import com.group6.Rental_Car.services.authencation.UserService;
     import jakarta.persistence.EntityManagerFactory;
+    import jakarta.transaction.Transactional;
     import lombok.RequiredArgsConstructor;
     import org.modelmapper.ModelMapper;
     import org.modelmapper.TypeMap;
@@ -89,6 +90,22 @@
             return employeeScheduleRepository.findAll(pageable).map(this::toResponse);
         }
 
+        @Transactional
+        public void intPickup(UUID staffId, LocalDate date, String shiftTime) {
+            var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, date, shiftTime)
+                    .orElseThrow(() -> new IllegalStateException("Employee schedule not found"));
+            es.setPickupCount(es.getPickupCount() + 1);
+            employeeScheduleRepository.saveAndFlush(es);
+        }
+
+        @Transactional
+        public void intReturn(UUID staffId, LocalDate date, String shiftTime) {
+            var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, date, shiftTime)
+                    .orElseThrow(() -> new IllegalStateException("Employee schedule not found"));
+            es.setReturnCount(es.getReturnCount() + 1);
+            employeeScheduleRepository.saveAndFlush(es);
+        }
+
         public Page<StaffScheduleResponse> search(UUID userId, Integer stationId, LocalDate from, LocalDate to, String q, Pageable pageable) {
             String kw = (q == null || q.isBlank()) ? null : q.trim();
             return employeeScheduleRepository.search(userId, stationId, from, to, kw, pageable)
@@ -106,4 +123,6 @@
             dto.setShiftTime(e.getShiftTime());
             return dto;
         }
+
+
     }
