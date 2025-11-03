@@ -1,14 +1,11 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.maintenance.MaintenanceCreateRequest;
-import com.group6.Rental_Car.dtos.maintenance.MaintenanceResponse;
 import com.group6.Rental_Car.dtos.notification.NotificationCreateRequest;
 import com.group6.Rental_Car.dtos.notification.NotificationResponse;
 import com.group6.Rental_Car.dtos.notification.NotificationUpdateRequest;
 import com.group6.Rental_Car.services.notification.NotificationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
