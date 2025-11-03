@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedule, Integer> {
@@ -35,4 +36,6 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
                                   @Param("toDate") LocalDate toDate,
                                   @Param("q") String q,
                                   Pageable pageable);
+    Optional<EmployeeSchedule> findByStaff_UserIdAndShiftDateAndShiftTime(
+            UUID userId, LocalDate shiftDate, String shiftTime);
 }

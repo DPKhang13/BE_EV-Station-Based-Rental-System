@@ -3,6 +3,7 @@ package com.group6.Rental_Car.repositories;
 import com.group6.Rental_Car.entities.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,6 +13,9 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 
     //Admin Dashboard
     long countByStatus(String status);
+
+    @Query(value = "SELECT station_id FROM vehicle WHERE vehicle_id = :id", nativeQuery = true)
+    Integer findStationId(@Param("id") Long id);
 
     // xe theo trạm
     @Query(value = """
