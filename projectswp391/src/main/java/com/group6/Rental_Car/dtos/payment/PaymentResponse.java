@@ -19,4 +19,5 @@ public class PaymentResponse {
     private PaymentStatus status;
     private String message;
     private String paymentUrl;
+    private short paymentType;
 }

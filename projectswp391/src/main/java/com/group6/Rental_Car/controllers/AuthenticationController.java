@@ -2,6 +2,8 @@ package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
+import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
+import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import com.group6.Rental_Car.utils.JwtUtil;
@@ -16,6 +18,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -42,7 +45,7 @@ public class AuthenticationController {
     // ---------- REGISTER ----------
     @PostMapping("/register")
     @Operation(summary = "Đăng ký tài khoản bằng email", description = "Tạo tài khoản mới và gửi OTP xác minh")
-    public ResponseEntity<?> registerByEmail(@Valid @RequestBody AccountDto account) {
+    public ResponseEntity<?> registerByEmail(@Valid @RequestBody RegisterAccountDto account) {
         AccountDtoResponse response = userService.registerByEmail(account);
         return ResponseEntity.ok(response);
     }
@@ -184,5 +187,15 @@ public class AuthenticationController {
                                            @RequestParam String inputOtp) {
         AccountDtoResponse response = userService.resetPassword(accountDto, inputOtp);
         return ResponseEntity.ok(response);
+    }
+    @PutMapping("/verify-profile/{userId}")
+    public ResponseEntity<UserVerificationResponse> verifyUserProfile(@PathVariable UUID userId) {
+        UserVerificationResponse response = userService.verifyUserProfile(userId);
+        return ResponseEntity.ok(response);
+    }
+    @GetMapping("/verify-profile/pending")
+    public ResponseEntity<List<UserVerificationResponse>> getPendingVerificationUsers() {
+        List<UserVerificationResponse> pendingUsers = userService.getPendingVerificationUsers();
+        return ResponseEntity.ok(pendingUsers);
     }
 }

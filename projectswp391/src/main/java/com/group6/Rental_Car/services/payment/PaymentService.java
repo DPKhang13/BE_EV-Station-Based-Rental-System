@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface PaymentService {
     PaymentResponse createPaymentUrl(PaymentDto paymentDto, UUID userId);
     PaymentResponse handleVNPayCallback(Map<String, String> vnpParams);
+    PaymentResponse refund(UUID orderId);
 }

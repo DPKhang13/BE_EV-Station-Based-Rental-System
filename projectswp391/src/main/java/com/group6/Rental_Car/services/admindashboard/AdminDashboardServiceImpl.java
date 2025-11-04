@@ -41,13 +41,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== KPI Vehicle =====
         long totalVehicles       = vehicleRepository.count();
-        long availableVehicles   = vehicleRepository.countByStatus("available");
-        long rentedVehicles      = vehicleRepository.countByStatus("rented");
-        long maintenanceVehicles = vehicleRepository.countByStatus("maintenance");
+        long availableVehicles   = vehicleRepository.countByStatus("AVAILABLE");
+        long rentedVehicles      = vehicleRepository.countByStatus("RENTAL");
+        long maintenanceVehicles = vehicleRepository.countByStatus("MAINTENANCE");
 
         // ===== KPI Orders + Revenue =====
         long totalOrders   = rentalOrderRepository.count();
-        long activeOrders  = rentalOrderRepository.countByStatus("active");
+        long activeOrders  = rentalOrderRepository.countByStatus("COMPLETED");
         double revenueInRange = Optional
                 .ofNullable(rentalOrderRepository.revenueBetween(tsFrom, tsTo))
                 .orElse(0d);
@@ -115,9 +115,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== Vehicles by status =====
         var vehiclesByStatus = List.of(
-                AdminDashboardResponse.LabelCount.builder().label("available").count(availableVehicles).build(),
-                AdminDashboardResponse.LabelCount.builder().label("rented").count(rentedVehicles).build(),
-                AdminDashboardResponse.LabelCount.builder().label("maintenance").count(maintenanceVehicles).build()
+                AdminDashboardResponse.LabelCount.builder().label("AVAILABLE").count(availableVehicles).build(),
+                AdminDashboardResponse.LabelCount.builder().label("RENTAL").count(rentedVehicles).build(),
+                AdminDashboardResponse.LabelCount.builder().label("MAINTENANCE").count(maintenanceVehicles).build()
         );
 
         // ===== Vehicles by station =====

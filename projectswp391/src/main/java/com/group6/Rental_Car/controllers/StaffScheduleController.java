@@ -49,17 +49,5 @@ public class StaffScheduleController {
         return ResponseEntity.ok(staffScheduleService.getAll(pageable));
     }
 
-    @GetMapping("/search")
-    public ResponseEntity<Page<StaffScheduleResponse>> search(
-            @RequestParam(required = false) UUID userId,
-            @RequestParam(required = false) Integer stationId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) String q,
-            @ParameterObject
-            @PageableDefault(size = 10, sort = "shiftDate", direction = Sort.Direction.DESC)
-            Pageable pageable
-    ) {
-        return ResponseEntity.ok(staffScheduleService.search(userId, stationId, from, to, q, pageable));
-    }
+
 }

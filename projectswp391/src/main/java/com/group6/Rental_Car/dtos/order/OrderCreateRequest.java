@@ -10,10 +10,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public class OrderCreateRequest {
     private UUID customerId;        // ID khách hàng đặt xe
-    private Long vehicleId;         // ID xe được chọn
+    private Long vehicleId;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime; // Thời gian bắt đầu thuê
-    private LocalDateTime endTime;   // Thời gian kết thúc thuc
+    private LocalDateTime endTime;   // Thời gian kết thúc thuê
     private String couponCode;        // Mã giảm giá (có thể null nếu không dùng)
     private Integer plannedHours;
     private Integer actualHours;
