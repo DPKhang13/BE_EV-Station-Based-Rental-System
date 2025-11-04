@@ -50,7 +50,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
         VehicleModel attr = vehicleModelService.findByVehicle(vehicle);
         if (attr == null) {
-            throw new ResourceNotFoundException("Không tìm thấy thông tin model cho xe ID = " + vehicle.getVehicleId());
+            throw new ResourceNotFoundException("Vehicle model ID not found = " + vehicle.getVehicleId());
         }
 
         PricingRule pricingRule = pricingRuleService.getPricingRuleBySeatAndVariant(
@@ -90,7 +90,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
             VehicleModel attr = vehicleModelService.findByVehicle(vehicle);
             if (attr == null) {
-                throw new ResourceNotFoundException("Không tìm thấy thông tin model cho xe ID = " + vehicle.getVehicleId());
+                throw new ResourceNotFoundException("Vehicle model ID not found = " + vehicle.getVehicleId());
             }
 
             PricingRule pricingRule = pricingRuleService.getPricingRuleBySeatAndVariant(
