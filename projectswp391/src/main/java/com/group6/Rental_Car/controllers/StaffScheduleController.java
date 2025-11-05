@@ -23,7 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @RequestMapping("/api/staffschedule")
 @Tag(name = "Api StaffSchedule", description = "Create, update, search staff schedule")
-public class StaffScheduleController {
+public class    StaffScheduleController {
 
     private final StaffScheduleService staffScheduleService;
 
