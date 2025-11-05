@@ -324,7 +324,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             .returnCount(0)
                             .build();
                     return employeeScheduleRepository.save(es);
-                }
+                });
     }
 
     private JwtUserDetails currentUser() {
