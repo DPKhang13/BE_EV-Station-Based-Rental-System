@@ -46,15 +46,15 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
       u.full_name AS staffName,
       u.email     AS staffEmail,
       u.role      AS role,
-      COALESCE(rs.name, 'N/A') AS stationName,
-      COALESCE(SUM(es.pickup_count), 0)::bigint AS pickupCount,    -- NEW
-      COALESCE(SUM(es.return_count), 0)::bigint AS returnCount,    -- NEW
+      rsu.name    AS stationName,                               -- lấy theo user.station_id
+      COALESCE(SUM(es.pickup_count), 0)  AS pickupCount,        -- tách pickup
+      COALESCE(SUM(es.return_count), 0)  AS returnCount,        -- tách return
       u.status    AS status
     FROM "user" u
-    LEFT JOIN employeeschedule es ON es.staff_id = u.user_id
-    LEFT JOIN rentalstation   rs ON rs.station_id = es.station_id
-    WHERE UPPER(u.role) = 'STAFF'
-    GROUP BY u.user_id, u.full_name, u.email, u.role, rs.name, u.status
+    LEFT JOIN rentalstation   rsu ON rsu.station_id = u.station_id
+    LEFT JOIN employeeschedule es  ON es.staff_id    = u.user_id
+    WHERE u.role = 'staff'
+    GROUP BY u.user_id, u.full_name, u.email, u.role, rsu.name, u.status
     ORDER BY u.full_name ASC
     """, nativeQuery = true)
     List<staffList> getStaffList();
