@@ -109,11 +109,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .incidentId(((Number) r[0]).intValue())
                         .vehicleId(((Number) r[1]).longValue())
                         .vehicleName((String) r[2])
-                        .description((String) r[4])
-                        .severity(String.valueOf(r[5]))
-                        .status(String.valueOf(r[6]))
-                        .occurredOn(((java.sql.Date) r[7]).toLocalDate())
-                        .cost(r[8] == null ? 0d : ((Number) r[8]).doubleValue())
+                        .description((String) r[3])
+                        .severity(String.valueOf(r[4]))
+                        .status(String.valueOf(r[5]))
+                        .occurredOn(((java.sql.Date) r[6]).toLocalDate())
+                        .cost(r[7] == null ? 0d : ((Number) r[7]).doubleValue())
                         .build()
         ).toList();
 

@@ -53,14 +53,14 @@ public interface IncidentRepository extends JpaRepository<Incident, Integer> {
 
     // Recent incidents theo reported_at (timestamp) — phục vụ dashboard
     @Query(value = """
-        SELECT i.incident_id, i.vehicle_id, v.vehicle_name, i.title, i.description,
-               i.severity, i.status, i.reported_at, i.cost
-        FROM incident i
-        JOIN vehicle v ON v.vehicle_id = i.vehicle_id
-        WHERE i.reported_at BETWEEN :from AND :to
-        ORDER BY i.reported_at DESC
-        LIMIT :limit
-        """, nativeQuery = true)
+    SELECT i.incident_id, i.vehicle_id, v.vehicle_name,
+           i.description, i.severity, i.status, i.occurred_on, i.cost
+    FROM incident i
+    JOIN vehicle v ON v.vehicle_id = i.vehicle_id
+    WHERE i.reported_at BETWEEN :from AND :to
+    ORDER BY i.reported_at DESC
+    LIMIT :limit
+    """, nativeQuery = true)
     List<Object[]> recentIncidents(@Param("from") Timestamp from,
                                    @Param("to") Timestamp to,
                                    @Param("limit") int limit);
