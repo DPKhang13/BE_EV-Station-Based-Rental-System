@@ -9,6 +9,7 @@ import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.*;
 import com.group6.Rental_Car.utils.Utils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentServiceImpl implements PaymentService {
 
     @Value("${VNP_HASHSECRET}")
@@ -122,26 +124,50 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentResponse handleVNPayCallback(Map<String, String> vnpParams) {
+        log.info("Received VNPay callback: {}", vnpParams);
+
         String responseCode = vnpParams.get("vnp_ResponseCode");
         String txnRef = vnpParams.get("vnp_TxnRef");
-        BigDecimal amount = new BigDecimal(vnpParams.get("vnp_Amount"))
-                .divide(BigDecimal.valueOf(100));
+        String amountStr = vnpParams.get("vnp_Amount");
 
-        UUID paymentId = UUID.fromString(txnRef);
+        if (txnRef == null || responseCode == null) {
+            log.error("Missing essential VNPay params: {}", vnpParams);
+            throw new IllegalArgumentException("Invalid VNPay callback parameters");
+        }
+
+        BigDecimal amount = BigDecimal.ZERO;
+        try {
+            if (amountStr != null) {
+                amount = new BigDecimal(amountStr).divide(BigDecimal.valueOf(100));
+            }
+        } catch (NumberFormatException e) {
+            log.error("Invalid VNPay amount: {}", amountStr);
+        }
+
+        // Parse payment ID safely
+        UUID paymentId;
+        try {
+            paymentId = UUID.fromString(txnRef);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid txnRef (not a UUID): {}", txnRef);
+            throw new IllegalArgumentException("Invalid transaction reference");
+        }
+
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + txnRef));
 
         RentalOrder order = payment.getRentalOrder();
         Vehicle vehicle = order.getVehicle();
 
+        // Update based on VNPay response
         if ("00".equals(responseCode)) {
             payment.setStatus(PaymentStatus.SUCCESS);
             handlePaymentSuccess(payment);
-
+            log.info("Payment success for order {}", order.getOrderId());
         } else {
-
             payment.setStatus(PaymentStatus.FAILED);
             order.setStatus("PAYMENT_FAILED");
+            log.warn("Payment failed for order {}", order.getOrderId());
 
             if (vehicle != null) {
                 Vehicle freshVehicle = vehicleRepository.findById(vehicle.getVehicleId())
@@ -165,6 +191,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .message("00".equals(responseCode) ? "PAYMENT_SUCCESS" : "PAYMENT_FAILED")
                 .build();
     }
+
 
     @Transactional
     public void handlePaymentSuccess(Payment payment) {

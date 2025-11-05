@@ -240,6 +240,57 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     }
 
+    @Override
+    public OrderResponse previewReturn(UUID orderId, Integer actualHours) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        Vehicle vehicle = order.getVehicle();
+
+        if (actualHours == null || actualHours <= 0) {
+            int planned = order.getPlannedHours() != null ? order.getPlannedHours() : 12;
+            int min, max;
+
+            if (planned <= 24) {
+                min = Math.max(1, planned - 1);
+                max = planned + 14;
+            } else {
+                min = Math.max(1, planned - 10);
+                max = planned + 10;
+            }
+
+            actualHours = (int) (Math.random() * (max - min + 1)) + min;
+        }
+
+        long hoursUsed = actualHours;
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
+                model.getSeatCount(), model.getVariant());
+
+        BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(
+                rule, order.getCoupon(), order.getPlannedHours(), hoursUsed);
+
+        BigDecimal penalty = BigDecimal.ZERO;
+        if (hoursUsed > order.getPlannedHours()) {
+            long exceeded = hoursUsed - order.getPlannedHours();
+            penalty = rule.getExtraHourPrice().multiply(BigDecimal.valueOf(exceeded));
+        }
+
+        BigDecimal deposit = order.getDepositAmount() != null ? order.getDepositAmount() : BigDecimal.ZERO;
+        BigDecimal remaining = totalPrice.subtract(deposit);
+        if (remaining.compareTo(BigDecimal.ZERO) < 0) remaining = BigDecimal.ZERO;
+
+        OrderResponse response = modelMapper.map(order, OrderResponse.class);
+        response.setVehicleId(vehicle.getVehicleId());
+        response.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
+        response.setRemainingAmount(remaining);
+        response.setTotalPrice(totalPrice);
+        response.setPenaltyFee(penalty);
+        response.setActualHours(actualHours);
+
+        return response;
+    }
+
     // ==============================================================
     //                   CÁC HÀM CRUD CÒN LẠI
     // ==============================================================

@@ -67,6 +67,14 @@ public class OrderController {
         OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/{orderId}/preview-return")
+    public ResponseEntity<OrderResponse> previewReturn(
+            @PathVariable UUID orderId,
+            @RequestParam(required = false) Integer actualHours) {
+
+        OrderResponse response = rentalOrderService.previewReturn(orderId, actualHours);
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/pending-verification")
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
         return rentalOrderService.getPendingVerificationOrders();

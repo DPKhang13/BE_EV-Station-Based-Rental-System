@@ -17,5 +17,6 @@ public interface RentalOrderService {
     OrderResponse confirmPickup(UUID orderId);
     OrderResponse confirmReturn(UUID orderId,Integer manualActualHours);
     List<OrderVerificationResponse> getPendingVerificationOrders();
+    OrderResponse previewReturn(UUID orderId, Integer actualHours);
 
 }
