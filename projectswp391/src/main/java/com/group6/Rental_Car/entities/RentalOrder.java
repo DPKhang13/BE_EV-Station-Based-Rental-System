@@ -23,7 +23,6 @@ public class RentalOrder {
     @UuidGenerator(style = UuidGenerator.Style.TIME)
     private UUID orderId;
 
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
     private User customer;
