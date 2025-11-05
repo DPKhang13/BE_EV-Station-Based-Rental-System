@@ -25,6 +25,9 @@ public class AdminDashboardResponse {
     private Map<String, Long> incidentsBySeverity;    // Phân phối theo mức độ (LOW/MEDIUM/HIGH/CRITICAL…)
     private List<RecentIncident> recentIncidents;     // Danh sách incident gần nhất
 
+    private List<StationRevenue> revenueByStation;    // Danh sách doanh thu theo trạm xe
+
+
     // ----------------- NESTED DTOs -----------------
 
     @Data
@@ -101,5 +104,13 @@ public class AdminDashboardResponse {
         private String status;                    // OPEN/IN_PROGRESS/RESOLVED
         private LocalDate occurredOn;
         private Double cost;
+    }
+
+    @Data
+    @Getter @Setter @Builder @AllArgsConstructor @NoArgsConstructor
+    public static class StationRevenue {
+        private Integer stationId;
+        private String stationName;
+        private Double totalRevenue;
     }
 }

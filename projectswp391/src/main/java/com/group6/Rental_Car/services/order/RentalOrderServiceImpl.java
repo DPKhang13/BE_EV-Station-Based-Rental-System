@@ -141,7 +141,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     @Override
     public OrderResponse confirmReturn(UUID orderId, Integer actualHours) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+                .orElseThrow(() -> new ResourceNotFoundException("Couldn't find order!"));
 
         Vehicle vehicle = order.getVehicle();
         order.setEndTime(LocalDateTime.now());

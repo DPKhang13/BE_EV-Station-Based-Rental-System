@@ -23,7 +23,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final UserRepository userRepository;
     private final RentalOrderRepository rentalOrderRepository;
     private final FeedbackRepository feedbackRepository;
-    private final IncidentRepository incidentRepository; // ← rename
+    private final IncidentRepository incidentRepository;
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
@@ -102,7 +102,17 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     .build());
         }
 
-        // Recent incidents (giới hạn 10, bạn có thể đổi)
+        // ===== Revenue for each station=====
+        var revStationRows = rentalOrderRepository.revenuePerStation(tsFrom, tsTo);
+        var revenueByStation = revStationRows.stream()
+                .map(r -> AdminDashboardResponse.StationRevenue.builder()
+                        .stationId(((Number) r[0]).intValue())
+                        .stationName((String) r[1])
+                        .totalRevenue(r[2] == null ? 0d : ((Number) r[2]).doubleValue())
+                        .build())
+                .toList();
+
+        // =====Recent incidents (giới hạn 10, bạn có thể đổi)=====
         var recentRows = incidentRepository.recentIncidents(tsFrom, tsTo, 10);
         var recentIncidents = recentRows.stream().map(r ->
                 AdminDashboardResponse.RecentIncident.builder()
@@ -190,6 +200,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .revenueByDay(revenueByDay)
                 .avgRating(avgRating)
                 .ratingDistribution(ratingDistribution)
+                .revenueByStation(revenueByStation)
                 // New: Incident section
                 .incidentKpi(incidentKpi)
                 .incidentsByDay(incidentsByDay)
