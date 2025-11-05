@@ -12,5 +12,6 @@ public interface StaffScheduleService {
     StaffScheduleResponse create(StaffScheduleCreateRequest req);
     StaffScheduleResponse update(Integer id, StaffScheduleUpdateRequest req);
     Page<StaffScheduleResponse> getAll(Pageable pageable);
-
+    void intPickup(UUID staffId, LocalDate date, String shiftTime);
+    void intReturn(UUID staffId, LocalDate date, String shiftTime);
 }

@@ -9,6 +9,7 @@ import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -19,11 +20,14 @@ import com.group6.Rental_Car.utils.JwtUserDetails;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -39,11 +43,13 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final CouponService couponService;
     private final ModelMapper modelMapper;
     private final VehicleModelService vehicleModelService;
+    private final EmployeeScheduleRepository employeeScheduleRepository;
+
     @Override
     public OrderResponse createOrder(OrderCreateRequest request) {
 
-        JwtUserDetails userDetails =
-                (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        JwtUserDetails userDetails = currentUser();
+               // (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         UUID customerId = userDetails.getUserId();
 
         User customer = userRepository.findById(customerId)
@@ -113,6 +119,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
+    @Transactional
     public OrderResponse confirmPickup(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
@@ -130,12 +137,37 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setStartTime(LocalDateTime.now());
         rentalOrderRepository.save(order);
 
+        UUID staffId = currentUser().getUserId();
+        LocalDate now = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        String shiftTime = resolveShiftByNow();
+
+        var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, now, shiftTime)
+                .orElseThrow(() -> new BadRequestException("Cant find schedule " + shiftTime + " of this staff"));
+        es.setPickupCount(es.getPickupCount() + 1);
+        employeeScheduleRepository.saveAndFlush(es);
+
         OrderResponse response = modelMapper.map(order, OrderResponse.class);
         response.setVehicleId(vehicle.getVehicleId());
         if (order.getCoupon() != null)
             response.setCouponCode(order.getCoupon().getCode());
 
         return response;
+    }
+
+    private String resolveShiftByNow(){
+        int h = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).getHour();
+        if (h > 12 ) return "MORNING";
+        if (h < 18) return "AFTERNOON";
+        return "EVENING";
+    }
+
+    private JwtUserDetails currentUser() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication ==null || !(authentication.getPrincipal() instanceof JwtUserDetails jwt)){
+            throw new BadRequestException("You have not login yet");
+        }
+            return jwt;
     }
 
     @Override
@@ -191,6 +223,15 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         vehicle.setStatus("CHECKING");
         vehicleRepository.save(vehicle);
+
+        UUID staffId = currentUser().getUserId();
+        LocalDate now = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        String shiftTime = resolveShiftByNow();
+
+        var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, now, shiftTime)
+                .orElseThrow(() -> new BadRequestException("Cant find schedule " + shiftTime + " of this staff"));
+        es.setReturnCount(es.getReturnCount() + 1);
+        employeeScheduleRepository.saveAndFlush(es);
 
         OrderResponse response = modelMapper.map(order, OrderResponse.class);
         response.setVehicleId(vehicle.getVehicleId());

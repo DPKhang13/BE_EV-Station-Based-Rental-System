@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.repositories;
 
+import com.group6.Rental_Car.dtos.stafflist.staffList;
 import com.group6.Rental_Car.entities.EmployeeSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedule, Integer> {
@@ -35,4 +37,26 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
                                   @Param("toDate") LocalDate toDate,
                                   @Param("q") String q,
                                   Pageable pageable);
+    Optional<EmployeeSchedule> findByStaff_UserIdAndShiftDateAndShiftTime(
+            UUID userId, LocalDate shiftDate, String shiftTime);
+
+    @Query(value = """
+    SELECT 
+      u.user_id   AS staffId,
+      u.full_name AS staffName,
+      u.email     AS staffEmail,
+      u.role      AS role,
+      COALESCE(rs.name, 'N/A') AS stationName,
+      COALESCE(SUM(es.pickup_count), 0)::bigint AS pickupCount,    -- NEW
+      COALESCE(SUM(es.return_count), 0)::bigint AS returnCount,    -- NEW
+      u.status    AS status
+    FROM "user" u
+    LEFT JOIN employeeschedule es ON es.staff_id = u.user_id
+    LEFT JOIN rentalstation   rs ON rs.station_id = es.station_id
+    WHERE UPPER(u.role) = 'STAFF'
+    GROUP BY u.user_id, u.full_name, u.email, u.role, rs.name, u.status
+    ORDER BY u.full_name ASC
+    """, nativeQuery = true)
+    List<staffList> getStaffList();
+
 }
