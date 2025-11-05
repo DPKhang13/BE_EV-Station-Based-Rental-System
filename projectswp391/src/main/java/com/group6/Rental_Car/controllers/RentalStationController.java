@@ -39,7 +39,6 @@ public class RentalStationController {
         return ResponseEntity.ok().body(rentalStationResponse);
     }
 
-    // search theo :/api/rentalStation/search?q=
     @GetMapping("/search")
     public ResponseEntity<?> search(@RequestParam(required = false) String q){
         List<RentalStationResponse> rentalStationResponse = rentalStationService.search(q);

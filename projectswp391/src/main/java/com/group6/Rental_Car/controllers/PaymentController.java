@@ -37,6 +37,21 @@ public class PaymentController {
         PaymentResponse response = paymentService.refund(orderId);
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/vnpay-callback")
+    @Operation(summary = "VNPay callback")
+    public ResponseEntity<?> vnpayCallback(
+            @RequestParam String vnp_TxnRef,
+            @RequestParam String vnp_Amount,
+            @RequestParam String vnp_ResponseCode,
+            @RequestParam String vnp_SecureHash) {
+        Map<String, String> vnpParams = Map.of(
+                "vnp_TxnRef", vnp_TxnRef,
+                "vnp_Amount", vnp_Amount,
+                "vnp_ResponseCode", vnp_ResponseCode,
+                "vnp_SecureHash", vnp_SecureHash
+        );
+        return ResponseEntity.ok(paymentService.handleVNPayCallback(vnpParams));
+    }
     @PostMapping("/verify-vnpay")
     public ResponseEntity<PaymentResponse> verifyVNPayPayment(
             @RequestBody Map<String, String> vnpParams) {
