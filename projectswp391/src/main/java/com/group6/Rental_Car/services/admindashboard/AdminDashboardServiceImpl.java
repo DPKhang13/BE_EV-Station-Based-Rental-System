@@ -32,12 +32,16 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             to   = LocalDate.now();
             from = to.minusDays(29);
         }
-        if (from.isAfter(to)) { LocalDate tmp = from; from = to; to = tmp; }
+        if (from.isAfter(to)) {
+            LocalDate tmp = from;
+            from = to;
+            to = tmp;
+        }
 
         Timestamp tsFrom = Timestamp.valueOf(from.atStartOfDay());
         Timestamp tsTo   = Timestamp.valueOf(LocalDateTime.of(to, LocalTime.MAX));
-        LocalDateTime ldtFrom = tsFrom.toLocalDateTime();
-        LocalDateTime ldtTo   = tsTo.toLocalDateTime();
+//        LocalDateTime ldtFrom = tsFrom.toLocalDateTime();
+//        LocalDateTime ldtTo   = tsTo.toLocalDateTime();
 
         // ===== KPI Vehicle =====
         long totalVehicles       = vehicleRepository.count();
@@ -67,7 +71,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // Lấy toàn bộ incident trong khoảng để nhóm theo status/severity
         // (cần method này trong IncidentRepository – xem ghi chú bên dưới)
         List<Incident> incidentsInRange =
-                incidentRepository.findAllInRange(ldtFrom, ldtTo);
+                incidentRepository.findAllInRange(from, to);
 
         long totalIncidentsInRange = incidentsInRange.size();
         long openIncidents         = incidentsInRange.stream()

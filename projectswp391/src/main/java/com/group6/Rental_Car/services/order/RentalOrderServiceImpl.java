@@ -6,7 +6,6 @@ import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.entities.*;
-import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
@@ -19,6 +18,7 @@ import com.group6.Rental_Car.utils.JwtUserDetails;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -53,12 +53,12 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
         if (!"available".equalsIgnoreCase(vehicle.getStatus())) {
-            throw new BadRequestException("Xe hiện không sẵn sàng để thuê (" + vehicle.getStatus() + ")");
+            throw new BadRequestException("Vehicle is not ready to rent (" + vehicle.getStatus() + ")");
         }
 
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         if (model == null) {
-            throw new ResourceNotFoundException("Không tìm thấy model cho xe ID = " + vehicle.getVehicleId());
+            throw new ResourceNotFoundException("Couldn't find vehicle ID = " + vehicle.getVehicleId());
         }
 
         PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
@@ -97,7 +97,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setPenaltyFee(BigDecimal.ZERO);
         order.setTotalPrice(totalPrice);
         order.setDepositAmount(depositAmount);
-        order.setRemainingAmount(depositAmount);
+        order.setRemainingAmount(remainingAmount);
         order.setStatus("PENDING");
 
         rentalOrderRepository.save(order);
@@ -115,7 +115,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     @Override
     public OrderResponse confirmPickup(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order does not exist"));
 
         if (!"DEPOSITED".equalsIgnoreCase(order.getStatus())
                 && !"PAYMENT_SUCCESS".equalsIgnoreCase(order.getStatus())) {
@@ -262,7 +262,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     public List<OrderResponse> getRentalOrders() {
-        return rentalOrderRepository.findAll().stream()
+        List<RentalOrder> orders = rentalOrderRepository.findAll(
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        return orders.stream()
                 .map(order -> {
                     OrderResponse response = modelMapper.map(order, OrderResponse.class);
                     response.setVehicleId(order.getVehicle() != null ? order.getVehicle().getVehicleId() : null);
@@ -274,7 +278,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
-        return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
+        List<RentalOrder> orders = rentalOrderRepository
+                 .findByCustomer_UserIdOrderByCreatedAtDesc(customerId);
+
+        return orders.stream()
                 .map(order -> {
                     OrderResponse response = modelMapper.map(order, OrderResponse.class);
                     response.setVehicleId(order.getVehicle() != null ? order.getVehicle().getVehicleId() : null);

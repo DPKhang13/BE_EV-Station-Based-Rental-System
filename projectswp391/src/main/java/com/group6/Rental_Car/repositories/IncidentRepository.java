@@ -9,7 +9,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 public interface IncidentRepository extends JpaRepository<Incident, Integer> {
@@ -18,49 +17,54 @@ public interface IncidentRepository extends JpaRepository<Incident, Integer> {
 
     long countByStatus(IncidentStatus status);
 
+    // JPQL: lọc theo khoảng ngày xảy ra (occurred_on là DATE)
     @Query("SELECT i FROM Incident i WHERE i.occurredOn BETWEEN :from AND :to")
-    List<Incident> findAllInRange(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+    List<Incident> findAllInRange(@Param("from") LocalDate from,
+                                  @Param("to") LocalDate to);
 
-    // Tổng chi phí theo LocalDate (cast cột timestamp -> date để bind LocalDate an toàn)
+    // Tổng chi phí theo LocalDate (đúng với occurred_on: DATE)
     @Query(value = """
         SELECT COALESCE(SUM(cost),0)
         FROM incident
-        WHERE occurred_at::date BETWEEN :from AND :to
+        WHERE occurred_on BETWEEN :from AND :to
         """, nativeQuery = true)
     Double totalCostBetween(@Param("from") LocalDate from,
                             @Param("to") LocalDate to);
 
-    // Tổng chi phí theo Timestamp (dùng khi bạn đã có tsFrom/tsTo)
+    // Nếu vẫn muốn variant dùng Timestamp, ép về date cho an toàn
     @Query(value = """
         SELECT COALESCE(SUM(cost),0)
         FROM incident
-        WHERE occurred_at BETWEEN :from AND :to
+        WHERE occurred_on BETWEEN CAST(:from AS date) AND CAST(:to AS date)
         """, nativeQuery = true)
     Double totalCostBetweenTs(@Param("from") Timestamp from,
                               @Param("to") Timestamp to);
 
-    // Đếm incident theo ngày để vẽ chart
+    // Đếm incident theo ngày (group thẳng theo occurred_on là DATE)
     @Query(value = """
-        SELECT DATE_TRUNC('day', occurred_at)::date AS d, COUNT(*) AS c
+        SELECT occurred_on AS d, COUNT(*) AS c
         FROM incident
-        WHERE occurred_at BETWEEN :from AND :to
-        GROUP BY d
-        ORDER BY d
+        WHERE occurred_on BETWEEN CAST(:from AS date) AND CAST(:to AS date)
+        GROUP BY occurred_on
+        ORDER BY occurred_on
         """, nativeQuery = true)
     List<Object[]> incidentsByDay(@Param("from") Timestamp from,
                                   @Param("to") Timestamp to);
 
-    // 10 incident gần nhất trong khoảng ngày
+    // Recent incidents theo reported_at (timestamp) — phục vụ dashboard
     @Query(value = """
         SELECT i.incident_id, i.vehicle_id, v.vehicle_name, i.title, i.description,
-               i.severity, i.status, i.occurred_at, i.cost
+               i.severity, i.status, i.reported_at, i.cost
         FROM incident i
         JOIN vehicle v ON v.vehicle_id = i.vehicle_id
-        WHERE i.occurred_at BETWEEN :from AND :to
-        ORDER BY i.occurred_at DESC
+        WHERE i.reported_at BETWEEN :from AND :to
+        ORDER BY i.reported_at DESC
         LIMIT :limit
         """, nativeQuery = true)
     List<Object[]> recentIncidents(@Param("from") Timestamp from,
                                    @Param("to") Timestamp to,
                                    @Param("limit") int limit);
+
+    // Tuỳ chọn: list sort sẵn theo reported_at
+    List<Incident> findAllByOrderByReportedAtDesc();
 }

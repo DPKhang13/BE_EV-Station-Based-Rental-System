@@ -21,6 +21,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
     List<RentalOrder> findByStatus(String status);
     List<RentalOrder> findByStatusIn(List<String> statuses);
 
+    List<RentalOrder> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId);
     //Admin Dashboard
     long countByStatus(String status);
     // Tổng doanh thu (status đã ghi nhận doanh thu)
