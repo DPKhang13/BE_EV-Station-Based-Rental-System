@@ -46,9 +46,9 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
       u.full_name AS staffName,
       u.email     AS staffEmail,
       u.role      AS role,
-      rsu.name    AS stationName,                               -- lấy theo user.station_id
-      COALESCE(SUM(es.pickup_count), 0)  AS pickupCount,        -- tách pickup
-      COALESCE(SUM(es.return_count), 0)  AS returnCount,        -- tách return
+      rsu.name    AS stationName,                              
+      COALESCE(SUM(es.pickup_count), 0)  AS pickupCount,       
+      COALESCE(SUM(es.return_count), 0)  AS returnCount,        
       u.status    AS status
     FROM "user" u
     LEFT JOIN rentalstation   rsu ON rsu.station_id = u.station_id

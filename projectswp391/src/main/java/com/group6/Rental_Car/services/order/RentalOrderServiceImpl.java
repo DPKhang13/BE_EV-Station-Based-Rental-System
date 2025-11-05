@@ -140,7 +140,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         rentalOrderRepository.save(order);
 
         UUID staffId = currentUser().getUserId();
-        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle());
+        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle(), currentShift());
         es.setPickupCount(es.getPickupCount() + 1);
         employeeScheduleRepository.saveAndFlush(es);
 
@@ -207,7 +207,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         vehicleRepository.save(vehicle);
 
         UUID staffId = currentUser().getUserId();
-        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle());
+        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle(), currentShift());
         es.setReturnCount(es.getReturnCount() + 1);
         employeeScheduleRepository.saveAndFlush(es);
 
@@ -304,10 +304,17 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 // hàm hỗ trợ
 
-    private EmployeeSchedule ensureTodayAllShift(UUID staffId, Vehicle vehicle) {
+    private String currentShift(){
+        int h = LocalDateTime.now(VN_TZ).getHour();
+        if (h >= 0 && h<=12) return "Morning";
+        if (h >=12 && h<=18) return "Afternoon";
+        return "Evening";
+    }
+
+    private EmployeeSchedule ensureTodayAllShift(UUID staffId, Vehicle vehicle, String shiftTime) {
         var today = LocalDate.now(VN_TZ);
         return employeeScheduleRepository
-                .findByStaff_UserIdAndShiftDateAndShiftTime(staffId, today, SHIFT_ALL)
+                .findByStaff_UserIdAndShiftDateAndShiftTime(staffId, today, shiftTime)
                 .orElseGet(() ->{
                     var staff = userRepository.findById(staffId).orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + staffId));
                     var station = staff.getRentalStation() != null ? staff.getRentalStation()
@@ -319,7 +326,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             .staff(staff)
                             .station(station)
                             .shiftDate(today)
-                            .shiftTime(SHIFT_ALL)
+                            .shiftTime(shiftTime)
                             .pickupCount(0)
                             .returnCount(0)
                             .build();
