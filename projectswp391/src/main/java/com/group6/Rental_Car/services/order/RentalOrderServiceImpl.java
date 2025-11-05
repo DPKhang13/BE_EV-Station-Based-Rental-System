@@ -48,8 +48,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     @Override
     public OrderResponse createOrder(OrderCreateRequest request) {
 
-        JwtUserDetails userDetails =
-                (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        JwtUserDetails userDetails = currentUser();
+               // (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         UUID customerId = userDetails.getUserId();
 
         User customer = userRepository.findById(customerId)
@@ -163,10 +163,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     private JwtUserDetails currentUser() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication ==null || (authentication.getPrincipal() instanceof JwtUserDetails jwt)){
+
+        if (authentication ==null || !(authentication.getPrincipal() instanceof JwtUserDetails jwt)){
             throw new BadRequestException("You have not login yet");
         }
-            return (JwtUserDetails) authentication.getPrincipal();
+            return jwt;
     }
 
     @Override
