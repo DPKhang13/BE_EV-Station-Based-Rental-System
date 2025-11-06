@@ -11,15 +11,21 @@
     import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
     import com.group6.Rental_Car.repositories.RentalStationRepository;
     import com.group6.Rental_Car.repositories.UserRepository;
+    import com.group6.Rental_Car.services.authencation.UserService;
+    import jakarta.persistence.EntityManagerFactory;
     import jakarta.transaction.Transactional;
     import lombok.RequiredArgsConstructor;
-
+    import org.modelmapper.ModelMapper;
+    import org.modelmapper.TypeMap;
     import org.springframework.data.domain.Page;
     import org.springframework.data.domain.Pageable;
     import org.springframework.stereotype.Service;
     import java.time.LocalDate;
+    import java.util.Collections;
     import java.util.List;
+    import java.util.Map;
     import java.util.UUID;
+    import java.util.stream.Collectors;
 
     @Service
     @RequiredArgsConstructor
@@ -89,21 +95,7 @@
             return employeeScheduleRepository.findAll(pageable).map(this::toResponse);
         }
 
-        @Transactional
-        public void intPickup(UUID staffId, LocalDate date, String shiftTime) {
-            var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, date, shiftTime)
-                    .orElseThrow(() -> new IllegalStateException("Employee schedule not found"));
-            es.setPickupCount(es.getPickupCount() + 1);
-            employeeScheduleRepository.saveAndFlush(es);
-        }
 
-        @Transactional
-        public void intReturn(UUID staffId, LocalDate date, String shiftTime) {
-            var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, date, shiftTime)
-                    .orElseThrow(() -> new IllegalStateException("Employee schedule not found"));
-            es.setReturnCount(es.getReturnCount() + 1);
-            employeeScheduleRepository.saveAndFlush(es);
-        }
 
 
         private StaffScheduleResponse toResponse(EmployeeSchedule e) {
@@ -117,25 +109,25 @@
             dto.setShiftTime(e.getShiftTime());
             return dto;
         }
-
         @Override
         public List<StaffResponse> getStaffList() {
+
             List<User> staffList = userRepository.findByRole(Role.staff);
 
+            Map<UUID, List<EmployeeSchedule>> map = employeeScheduleRepository.findAll()
+                    .stream()
+                    .collect(Collectors.groupingBy(s -> s.getStaff().getUserId()));
+
             return staffList.stream().map(u -> {
-                long pickupCount = 0L;
-                long returnCount = 0L;
+                List<EmployeeSchedule> schedules = map.getOrDefault(u.getUserId(), Collections.emptyList());
 
-                List<EmployeeSchedule> schedules = u.getEmployeeSchedules();
-                if (schedules != null) {
-                    pickupCount = schedules.stream()
-                            .mapToLong(EmployeeSchedule::getPickupCount)
-                            .sum();
+                long pickupCount = schedules.stream()
+                        .mapToLong(EmployeeSchedule::getPickupCount)
+                        .sum();
 
-                    returnCount = schedules.stream()
-                            .mapToLong(EmployeeSchedule::getReturnCount)
-                            .sum();
-                }
+                long returnCount = schedules.stream()
+                        .mapToLong(EmployeeSchedule::getReturnCount)
+                        .sum();
 
                 return new StaffResponse(
                         u.getUserId().toString(),
@@ -147,6 +139,8 @@
                         returnCount,
                         u.getStatus().toString()
                 );
-            }).toList();
+            }).collect(Collectors.toList());
         }
+
+
     }
