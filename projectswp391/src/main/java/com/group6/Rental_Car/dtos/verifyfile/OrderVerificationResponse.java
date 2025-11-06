@@ -24,4 +24,5 @@ public class OrderVerificationResponse {
     private BigDecimal depositAmount;
     private String status;
     private String userStatus;
+    private Integer stationId;
 }

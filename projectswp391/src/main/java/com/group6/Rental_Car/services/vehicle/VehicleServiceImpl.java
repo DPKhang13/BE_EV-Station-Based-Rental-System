@@ -168,7 +168,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
         if (req.getStatus() != null && !req.getStatus().isBlank()) {
-            String normalized = req.getStatus().trim().toLowerCase();
+            String normalized = req.getStatus().trim().toUpperCase();
             vehicle.setStatus(normalized);
         }
 

@@ -133,11 +133,11 @@
             // =============================
             //  Nếu actualHours > plannedHours → cộng thêm phí vượt giờ
             // =============================
-            if (actualHours > plannedHours) {
-                long exceeded = actualHours - plannedHours;
-                BigDecimal penalty = extraPrice.multiply(BigDecimal.valueOf(exceeded));
-                total = total.add(penalty);
-            }
+//            if (actualHours > plannedHours) {
+//                long exceeded = actualHours - plannedHours;
+//                BigDecimal penalty = extraPrice.multiply(BigDecimal.valueOf(exceeded));
+//                total = total.add(penalty);
+//            }
 
             if (coupon != null && coupon.getDiscount() != null) {
                 validateCoupon(coupon);

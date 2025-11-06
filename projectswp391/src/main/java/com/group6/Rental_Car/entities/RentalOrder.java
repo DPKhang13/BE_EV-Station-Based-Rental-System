@@ -59,6 +59,6 @@ public class RentalOrder {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "coupon_id")
-    private Coupon coupon; // thêm liên kết coupon (optional)
+    private Coupon coupon;
 }
 

@@ -14,7 +14,7 @@ import java.util.List;
 
 public interface IncidentRepository extends JpaRepository<Incident, Integer> {
 
-    List<Incident> findByVehicle(Vehicle vehicle);
+    List<Incident> findByVehicle_VehicleId(Long vehicleId);
 
     long countByStatus(IncidentStatus status);
 
