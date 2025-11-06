@@ -276,7 +276,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
         Vehicle vehicle = order.getVehicle();
-
+        if ((actualHours == null || actualHours <= 0) && order.getActualHours() != null && order.getActualHours() > 0) {
+            actualHours = order.getActualHours();
+        }
         if (actualHours == null || actualHours <= 0) {
             int planned = order.getPlannedHours() != null ? order.getPlannedHours() : 12;
             int min, max;
