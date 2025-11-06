@@ -44,9 +44,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final ModelMapper modelMapper;
     private final VehicleModelService vehicleModelService;
     private final EmployeeScheduleRepository employeeScheduleRepository;
-
+    private static final ZoneId VN_TZ = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final String SHIFT_ALL = "ALL";
     @Override
     public OrderResponse createOrder(OrderCreateRequest request) {
+
 
         JwtUserDetails userDetails = currentUser();
                // (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -138,11 +140,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         rentalOrderRepository.save(order);
 
         UUID staffId = currentUser().getUserId();
-        LocalDate now = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
-        String shiftTime = resolveShiftByNow();
-
-        var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, now, shiftTime)
-                .orElseThrow(() -> new BadRequestException("Cant find schedule " + shiftTime + " of this staff"));
+        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle(), currentShift());
         es.setPickupCount(es.getPickupCount() + 1);
         employeeScheduleRepository.saveAndFlush(es);
 
@@ -152,22 +150,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             response.setCouponCode(order.getCoupon().getCode());
 
         return response;
-    }
-
-    private String resolveShiftByNow(){
-        int h = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh")).getHour();
-        if (h > 12 ) return "MORNING";
-        if (h < 18) return "AFTERNOON";
-        return "EVENING";
-    }
-
-    private JwtUserDetails currentUser() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication ==null || !(authentication.getPrincipal() instanceof JwtUserDetails jwt)){
-            throw new BadRequestException("You have not login yet");
-        }
-            return jwt;
     }
 
     @Override
@@ -225,11 +207,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         vehicleRepository.save(vehicle);
 
         UUID staffId = currentUser().getUserId();
-        LocalDate now = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
-        String shiftTime = resolveShiftByNow();
-
-        var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, now, shiftTime)
-                .orElseThrow(() -> new BadRequestException("Cant find schedule " + shiftTime + " of this staff"));
+        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle(), currentShift());
         es.setReturnCount(es.getReturnCount() + 1);
         employeeScheduleRepository.saveAndFlush(es);
 
@@ -374,5 +352,44 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     return response;
                 })
                 .collect(Collectors.toList());
+    }
+// hàm hỗ trợ
+
+    private String currentShift(){
+        int h = LocalDateTime.now(VN_TZ).getHour();
+        if (h >= 0 && h<=12) return "Morning";
+        if (h >=12 && h<=18) return "Afternoon";
+        return "Evening";
+    }
+
+    private EmployeeSchedule ensureTodayAllShift(UUID staffId, Vehicle vehicle, String shiftTime) {
+        var today = LocalDate.now(VN_TZ);
+        return employeeScheduleRepository
+                .findByStaff_UserIdAndShiftDateAndShiftTime(staffId, today, shiftTime)
+                .orElseGet(() ->{
+                    var staff = userRepository.findById(staffId).orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + staffId));
+                    var station = staff.getRentalStation() != null ? staff.getRentalStation()
+                            :  (vehicle != null ? vehicle.getRentalStation() : null);
+                    if (station == null) {
+                        throw new ResourceNotFoundException("Staff with id " + staffId + "is not in any station");
+                    }
+                    var es = EmployeeSchedule.builder()
+                            .staff(staff)
+                            .station(station)
+                            .shiftDate(today)
+                            .shiftTime(shiftTime)
+                            .pickupCount(0)
+                            .returnCount(0)
+                            .build();
+                    return employeeScheduleRepository.save(es);
+                });
+    }
+
+    private JwtUserDetails currentUser() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) throw new BadRequestException("Bạn chưa đăng nhập");
+        Object p = auth.getPrincipal();
+        if (p instanceof JwtUserDetails jwt) return jwt;
+        throw new BadRequestException("Phiên đăng nhập không hợp lệ");
     }
 }

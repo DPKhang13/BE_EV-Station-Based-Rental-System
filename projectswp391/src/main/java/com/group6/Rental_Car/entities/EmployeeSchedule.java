@@ -47,12 +47,4 @@ public class EmployeeSchedule {
     @Column(name = "return_count", nullable = false)
     private int returnCount;
 
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
-
-    @Transient
-    public int getToltalCount() {
-        return pickupCount + returnCount;
-    }
 }
