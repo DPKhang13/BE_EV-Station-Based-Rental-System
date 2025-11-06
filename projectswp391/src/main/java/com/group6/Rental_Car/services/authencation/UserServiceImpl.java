@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -246,6 +247,14 @@ public class UserServiceImpl implements UserService {
                     .driverLicenseUrl(driverLicenseUrl)
                     .build();
         }).toList();
+    }
+
+    @Override
+    public List<AccountDtoResponse> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
 }

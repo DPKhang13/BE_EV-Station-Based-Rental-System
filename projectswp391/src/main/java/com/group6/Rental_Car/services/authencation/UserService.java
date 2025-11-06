@@ -29,6 +29,7 @@ public interface UserService  {
 
     public UserVerificationResponse verifyUserProfile(UUID userId);
      public List<UserVerificationResponse> getPendingVerificationUsers();
+     public List<AccountDtoResponse> getAllUsers();
 
 
 }
