@@ -32,7 +32,7 @@ public class IncidentController {
     @DeleteMapping("/delete/{incidentId}")
     public ResponseEntity<?> delete(@PathVariable Integer incidentId) {
         incidentService.delete(incidentId);
-        return ResponseEntity.ok("Deleted maintenance successfully");
+        return ResponseEntity.ok("Deleted incident successfully");
     }
 
     @GetMapping("/getById/{incidentId}")

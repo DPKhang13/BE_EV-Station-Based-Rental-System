@@ -62,7 +62,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long staffs     = userRepository.countByRole(Role.staff);
         long customers  = userRepository.countByRole(Role.customer);
 
-        // ===== Incident (thay cho maintenance) =====
+
+        // ===== Incident=====
         // Tổng chi phí sự cố trong khoảng
         double incidentCostInRange = Optional
                 .ofNullable(incidentRepository.totalCostBetweenTs(tsFrom, tsTo))
@@ -112,7 +113,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .build())
                 .toList();
 
-        // =====Recent incidents (giới hạn 10, bạn có thể đổi)=====
+        // =====Recent incidents (giới hạn 10,có thể đổi)=====
         var recentRows = incidentRepository.recentIncidents(tsFrom, tsTo, 10);
         var recentIncidents = recentRows.stream().map(r ->
                 AdminDashboardResponse.RecentIncident.builder()
@@ -167,6 +168,35 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         TreeMap::new
                 ));
 
+        //===== Order by Hour & Peak =====
+        var hourRows = rentalOrderRepository.ordersByHour(tsFrom, tsTo);
+        //Chuẩn hóa thành đủ 24h (nếu giờ không có đơn => 0)
+        long[] hours = new long[24];
+        for(Object[] r: hourRows) {
+            int h = ((Number) r[0]).intValue(); //0...23
+            long c = ((Number) r[1]).longValue();
+            if(h >=  0 && h <=23 ) hours[h] = c;
+        }
+        List<AdminDashboardResponse.HourCount> orderByHour = new ArrayList<>();
+        for( int  h =0; h <24; h++){
+            orderByHour.add(AdminDashboardResponse.HourCount.builder()
+                    .hour(h)
+                    .build());
+        }
+        //Tính khung giờ cao điểm với cửa sổ 3 giờ liên tiếp (0-1-2, 1-2-3...)
+        int windowSize =3;
+        long bestSum = -1;
+        int bestStart = 0;
+        for( int start =0; start <= 24 - windowSize; start++) {
+            long sum =0;
+            for( int k =0; k <windowSize; k++) {
+                if( sum > bestSum){
+                    bestSum = sum;
+                    bestStart = start;
+                }
+            }
+        }
+
         // ===== Build KPI =====
         var kpi = AdminDashboardResponse.Kpi.builder()
                 .totalVehicles(totalVehicles)
@@ -193,6 +223,15 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .incidentCostInRange(incidentCostInRange)
                 .build();
 
+        //===== Build PeakHourWindow=====
+        AdminDashboardResponse.PeakHourWindow peakWindow =
+                AdminDashboardResponse.PeakHourWindow.builder()
+                        .startHour(bestStart)
+                        .endHour(bestStart + windowSize - 1)
+                        .windowSize(windowSize)
+                        .total(bestSum < 0 ? 0 : bestSum)
+                        .build();
+
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
                 .vehiclesByStatus(vehiclesByStatus)
@@ -207,6 +246,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .incidentsByStatus(incidentsByStatus)
                 .incidentsBySeverity(incidentsBySeverity)
                 .recentIncidents(recentIncidents)
+                // NEW: Giờ thuê cao điểm
+                .orderByHour(orderByHour)
+                .peakHourWindow(peakWindow)
                 .build();
     }
 }

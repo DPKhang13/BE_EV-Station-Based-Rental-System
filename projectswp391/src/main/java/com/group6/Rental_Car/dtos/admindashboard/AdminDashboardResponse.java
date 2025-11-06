@@ -27,6 +27,9 @@ public class AdminDashboardResponse {
 
     private List<StationRevenue> revenueByStation;    // Danh sách doanh thu theo trạm xe
 
+    //Giờ thuê cao điểm
+    private List<HourCount> orderByHour;
+    private PeakHourWindow peakHourWindow;
 
     // ----------------- NESTED DTOs -----------------
 
@@ -112,5 +115,21 @@ public class AdminDashboardResponse {
         private Integer stationId;
         private String stationName;
         private Double totalRevenue;
+    }
+
+    @Data
+    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    public static class HourCount {
+        private Integer hour;
+        private Long count;
+    }
+
+    @Data
+    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    public static class PeakHourWindow {
+        private Integer startHour;
+        private Integer endHour;
+        private Integer windowSize;
+        private Long total;
     }
 }

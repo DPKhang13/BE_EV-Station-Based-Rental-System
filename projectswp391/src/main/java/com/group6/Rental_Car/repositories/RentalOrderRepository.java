@@ -24,6 +24,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
     List<RentalOrder> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId);
     //Admin Dashboard
     long countByStatus(String status);
+
     // Tổng doanh thu trong khoảng ngày
     @Query(value = """
     SELECT COALESCE(SUM(total_price),0)
@@ -61,4 +62,15 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
     List<Object[]> revenuePerStation(@Param("from") Timestamp from,
                                      @Param("to")   Timestamp to);
 
+    @Query(value = """
+    SELECT EXTRACT(HOUR FROM start_time)::int AS h,
+           COUNT(*) AS c
+    FROM rentalorder
+    WHERE start_time BETWEEN :from AND :to
+      AND status IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY h
+    ORDER BY h
+    """, nativeQuery = true)
+    List<Object[]> ordersByHour(@Param("from") Timestamp from,
+                                @Param("to") Timestamp to);
 }
