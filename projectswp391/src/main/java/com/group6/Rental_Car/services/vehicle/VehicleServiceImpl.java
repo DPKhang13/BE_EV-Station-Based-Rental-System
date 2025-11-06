@@ -86,7 +86,7 @@ public class VehicleServiceImpl implements VehicleService {
         // status (nếu client gửi lên)
         if (req.getStatus() != null) {
             String status = req.getStatus().trim().toLowerCase();
-            if (!status.equals("available") && !status.equals("rented") && !status.equals("maintenance")) {
+            if (!status.equalsIgnoreCase("available") && !status.equalsIgnoreCase("rented") && !status.equalsIgnoreCase("maintenance")) {
                 throw new BadRequestException("status must be one of: available|rented|maintenance");
             }
             vehicle.setStatus(status);
