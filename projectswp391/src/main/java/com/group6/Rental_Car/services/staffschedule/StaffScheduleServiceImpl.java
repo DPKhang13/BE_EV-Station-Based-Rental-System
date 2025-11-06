@@ -1,20 +1,19 @@
     package com.group6.Rental_Car.services.staffschedule;
 
+    import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
     import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleCreateRequest;
     import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleResponse;
     import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleUpdateRequest;
     import com.group6.Rental_Car.entities.EmployeeSchedule;
     import com.group6.Rental_Car.entities.RentalStation;
     import com.group6.Rental_Car.entities.User;
+    import com.group6.Rental_Car.enums.Role;
     import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
     import com.group6.Rental_Car.repositories.RentalStationRepository;
     import com.group6.Rental_Car.repositories.UserRepository;
-    import com.group6.Rental_Car.services.authencation.UserService;
-    import jakarta.persistence.EntityManagerFactory;
     import jakarta.transaction.Transactional;
     import lombok.RequiredArgsConstructor;
-    import org.modelmapper.ModelMapper;
-    import org.modelmapper.TypeMap;
+
     import org.springframework.data.domain.Page;
     import org.springframework.data.domain.Pageable;
     import org.springframework.stereotype.Service;
@@ -106,11 +105,6 @@
             employeeScheduleRepository.saveAndFlush(es);
         }
 
-        public Page<StaffScheduleResponse> search(UUID userId, Integer stationId, LocalDate from, LocalDate to, String q, Pageable pageable) {
-            String kw = (q == null || q.isBlank()) ? null : q.trim();
-            return employeeScheduleRepository.search(userId, stationId, from, to, kw, pageable)
-                    .map(this::toResponse);
-        }
 
         private StaffScheduleResponse toResponse(EmployeeSchedule e) {
             StaffScheduleResponse dto = new StaffScheduleResponse();
@@ -124,5 +118,35 @@
             return dto;
         }
 
+        @Override
+        public List<StaffResponse> getStaffList() {
+            List<User> staffList = userRepository.findByRole(Role.staff);
 
+            return staffList.stream().map(u -> {
+                long pickupCount = 0L;
+                long returnCount = 0L;
+
+                List<EmployeeSchedule> schedules = u.getEmployeeSchedules();
+                if (schedules != null) {
+                    pickupCount = schedules.stream()
+                            .mapToLong(EmployeeSchedule::getPickupCount)
+                            .sum();
+
+                    returnCount = schedules.stream()
+                            .mapToLong(EmployeeSchedule::getReturnCount)
+                            .sum();
+                }
+
+                return new StaffResponse(
+                        u.getUserId().toString(),
+                        u.getFullName(),
+                        u.getEmail(),
+                        u.getRole().name(),
+                        u.getRentalStation() != null ? u.getRentalStation().getName() : null,
+                        pickupCount,
+                        returnCount,
+                        u.getStatus().toString()
+                );
+            }).toList();
+        }
     }

@@ -1,6 +1,5 @@
 package com.group6.Rental_Car.repositories;
 
-import com.group6.Rental_Car.dtos.stafflist.staffList;
 import com.group6.Rental_Car.entities.EmployeeSchedule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,41 +21,11 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
             UUID userId, LocalDate shiftDate, String shiftTime, Integer scheduleId);
 
 
-    @Query("""
-      select s
-      from EmployeeSchedule s
-      where (:userId   is null or s.staff.userId = :userId)
-        and (:stationId is null or s.station.stationId = :stationId)
-        and (:fromDate is null or s.shiftDate >= :fromDate)
-        and (:toDate   is null or s.shiftDate <= :toDate)
-        and (:q is null or lower(s.shiftTime) like lower(concat('%', :q, '%')))
-      """)
-    Page<EmployeeSchedule> search(@Param("userId") UUID userId,
-                                  @Param("stationId") Integer stationId,
-                                  @Param("fromDate") LocalDate fromDate,
-                                  @Param("toDate") LocalDate toDate,
-                                  @Param("q") String q,
-                                  Pageable pageable);
+    // Lấy theo staff + ngày + ca
     Optional<EmployeeSchedule> findByStaff_UserIdAndShiftDateAndShiftTime(
             UUID userId, LocalDate shiftDate, String shiftTime);
 
-    @Query(value = """
-    SELECT 
-      u.user_id   AS staffId,
-      u.full_name AS staffName,
-      u.email     AS staffEmail,
-      u.role      AS role,
-      rsu.name    AS stationName,                              
-      COALESCE(SUM(es.pickup_count), 0)  AS pickupCount,       
-      COALESCE(SUM(es.return_count), 0)  AS returnCount,        
-      u.status    AS status
-    FROM "user" u
-    LEFT JOIN rentalstation   rsu ON rsu.station_id = u.station_id
-    LEFT JOIN employeeschedule es  ON es.staff_id    = u.user_id
-    WHERE u.role = 'staff'
-    GROUP BY u.user_id, u.full_name, u.email, u.role, rsu.name, u.status
-    ORDER BY u.full_name ASC
-    """, nativeQuery = true)
-    List<staffList> getStaffList();
+    // Có phân trang (tùy service kết hợp điều kiện lọc)
+    Page<EmployeeSchedule> findAll(Pageable pageable);
 
 }
