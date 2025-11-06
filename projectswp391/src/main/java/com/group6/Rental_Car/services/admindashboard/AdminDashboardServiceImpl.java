@@ -172,15 +172,26 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 AdminDashboardResponse.LabelCount.builder().label("MAINTENANCE").count(maintenanceVehicles).build()
         );
 
-        // ===== Vehicles by station =====
-        var vehiclesByStation = vehicleRepository.vehiclesPerStation().stream()
-                .map(r -> AdminDashboardResponse.StationCount.builder()
-                        .stationId(((Number) r[0]).intValue())
-                        .stationName((String) r[1])
-                        .total(((Number) r[2]).longValue())
-                        .build())
-                .toList();
 
+        // ===== Vehicles by station + usage rate =====
+        var usageRows = vehicleRepository.vehicleUsagePerStation();
+        var vehiclesByStation = usageRows.stream()
+                .map(r -> {
+                    int stationId = ((Number) r[0]).intValue();
+                    String stationName = (String) r[1];
+                    long total = ((Number) r[2]).longValue();
+                    long rented = ((Number) r[3]).longValue();
+                    double utilization = total == 0 ? 0 : (rented * 100.0 / total);
+
+                    return AdminDashboardResponse.StationCount.builder()
+                            .stationId(stationId)
+                            .stationName(stationName)
+                            .total(total)
+                            .rented(rented)
+                            .utilization(utilization)
+                            .build();
+                })
+                .toList();
         // ===== Revenue by day =====
         var revRows = rentalOrderRepository.revenueByDay(tsFrom, tsTo);
         Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(

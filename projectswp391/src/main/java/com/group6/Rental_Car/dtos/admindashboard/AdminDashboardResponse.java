@@ -68,6 +68,8 @@ public class AdminDashboardResponse {
         private Integer stationId;
         private String stationName;
         private Long total;
+        private Long rented;        // số xe đang được thuê
+        private Double utilization; // % xe đang hoạt động
     }
 
     @Data
@@ -147,4 +149,5 @@ public class AdminDashboardResponse {
         private Double growthWeek;      // % tăng trưởng tuần
         private Double growthMonth;     // % tăng trưởng tháng
     }
+
 }

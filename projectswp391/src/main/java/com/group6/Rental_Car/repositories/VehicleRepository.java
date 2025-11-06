@@ -28,4 +28,14 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
         ORDER BY total DESC
         """, nativeQuery = true)
     List<Object[]> vehiclesPerStation();
+    @Query(value = """
+    SELECT s.station_id, s.name AS station_name,
+           COUNT(v.vehicle_id) AS total,
+           SUM(CASE WHEN v.status = 'RENTAL' THEN 1 ELSE 0 END) AS rented
+    FROM rentalstation s
+    LEFT JOIN vehicle v ON v.station_id = s.station_id
+    GROUP BY s.station_id, s.name
+    ORDER BY s.station_id
+    """, nativeQuery = true)
+    List<Object[]> vehicleUsagePerStation();
 }
