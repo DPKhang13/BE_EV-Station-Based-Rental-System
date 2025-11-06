@@ -52,7 +52,15 @@ public class ValidationUtil {
 
     public static String normalizeNullableLower(String s) {
         String t = trim(s);
-        return (t == null) ? null : t.toLowerCase(); //??
+        return (t == null) ? null : t.toLowerCase();
+    }
+
+    public static String normalizeVariant(String s) {
+        String t = trim(s);
+        if (t == null || t.isEmpty()) return null;
+
+        // First letter uppercase + rest lowercase
+        return t.substring(0, 1).toUpperCase() + t.substring(1).toLowerCase();
     }
 
     public static String validateVariantBySeatCount(Integer seatCount, String rawVariant) {
@@ -63,13 +71,13 @@ public class ValidationUtil {
             throw new BadRequestException("seatCount must be 4 or 7");
         }
 
-        String variant = normalizeNullableLower(rawVariant);
+        String variant = normalizeVariant(rawVariant);
 
         if (seatCount == 4) {
             if (variant == null) {
                 throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 4");
             }
-            if (!variant.equals("Air") && !variant.equals("pro") && !variant.equals("plus")) {
+            if (!variant.equals("Air") && !variant.equals("Pro") && !variant.equals("Plus")) {
                 throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 4");
             }
             return variant;
