@@ -396,12 +396,26 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return rentalOrderRepository.findAll().stream()
                 .map(order -> {
                     OrderResponse response = modelMapper.map(order, OrderResponse.class);
-                    response.setVehicleId(order.getVehicle() != null ? order.getVehicle().getVehicleId() : null);
-                    response.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
+
+                    // --- Vehicle ---
+                    if (order.getVehicle() != null) {
+                        response.setVehicleId(order.getVehicle().getVehicleId());
+
+                        if (order.getVehicle().getRentalStation() != null) {
+                            response.setStationId(order.getVehicle().getRentalStation().getStationId());
+                        }
+                    }
+
+                    // --- Coupon ---
+                    if (order.getCoupon() != null) {
+                        response.setCouponCode(order.getCoupon().getCode());
+                    }
+
                     return response;
                 })
                 .collect(Collectors.toList());
     }
+
 
     @Override
     public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
