@@ -40,8 +40,6 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         Timestamp tsFrom = Timestamp.valueOf(from.atStartOfDay());
         Timestamp tsTo   = Timestamp.valueOf(LocalDateTime.of(to, LocalTime.MAX));
-//        LocalDateTime ldtFrom = tsFrom.toLocalDateTime();
-//        LocalDateTime ldtTo   = tsTo.toLocalDateTime();
 
         // ===== KPI Vehicle =====
         long totalVehicles       = vehicleRepository.count();
@@ -62,18 +60,12 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long staffs     = userRepository.countByRole(Role.staff);
         long customers  = userRepository.countByRole(Role.customer);
 
-
-        // ===== Incident=====
-        // Tổng chi phí sự cố trong khoảng
+        // ===== Incident =====
         double incidentCostInRange = Optional
                 .ofNullable(incidentRepository.totalCostBetweenTs(tsFrom, tsTo))
                 .orElse(0d);
 
-        // Lấy toàn bộ incident trong khoảng để nhóm theo status/severity
-        // (cần method này trong IncidentRepository – xem ghi chú bên dưới)
-        List<Incident> incidentsInRange =
-                incidentRepository.findAllInRange(from, to);
-
+        List<Incident> incidentsInRange = incidentRepository.findAllInRange(from, to);
         long totalIncidentsInRange = incidentsInRange.size();
         long openIncidents         = incidentsInRange.stream()
                 .filter(i -> i.getStatus() == IncidentStatus.OPEN).count();
@@ -83,13 +75,17 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .filter(i -> i.getStatus() == IncidentStatus.RESOLVED).count();
 
         Map<String, Long> incidentsByStatus = incidentsInRange.stream()
-                .collect(Collectors.groupingBy(i -> i.getStatus().name(), Collectors.counting()));
-
-        // Nếu có enum IncidentSeverity thì thay i.getSeverity().name()
+                .collect(Collectors.groupingBy(
+                        i -> i.getStatus() != null ? i.getStatus().name() : "UNKNOWN",
+                        Collectors.counting()
+                ));
         Map<String, Long> incidentsBySeverity = incidentsInRange.stream()
-                .collect(Collectors.groupingBy(i -> i.getSeverity().name(), Collectors.counting()));
+                .collect(Collectors.groupingBy(
+                        i -> i.getSeverity() != null ? i.getSeverity().name() : "UNKNOWN",
+                        Collectors.counting()
+                ));
 
-        // Incidents theo ngày (điền đủ các ngày trống)
+        // ===== Incidents theo ngày =====
         var incDayRows = incidentRepository.incidentsByDay(tsFrom, tsTo);
         Map<LocalDate, Long> incDayMap = incDayRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
@@ -103,7 +99,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     .build());
         }
 
-        // ===== Revenue for each station=====
+        // ===== Revenue for each station =====
         var revStationRows = rentalOrderRepository.revenuePerStation(tsFrom, tsTo);
         var revenueByStation = revStationRows.stream()
                 .map(r -> AdminDashboardResponse.StationRevenue.builder()
@@ -113,7 +109,48 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .build())
                 .toList();
 
-        // =====Recent incidents (giới hạn 10,có thể đổi)=====
+
+        var todayRows  = rentalOrderRepository.revenueTodayPerStation();
+        var weekRows   = rentalOrderRepository.revenueThisWeekPerStation();
+        var monthRows  = rentalOrderRepository.revenueThisMonthPerStation();
+
+        Map<Integer, Double> todayMap = todayRows.stream().collect(Collectors.toMap(
+                r -> ((Number) r[0]).intValue(),
+                r -> ((Number) r[2]).doubleValue()));
+        Map<Integer, Double> weekMap = weekRows.stream().collect(Collectors.toMap(
+                r -> ((Number) r[0]).intValue(),
+                r -> ((Number) r[2]).doubleValue()));
+        Map<Integer, Double> monthMap = monthRows.stream().collect(Collectors.toMap(
+                r -> ((Number) r[0]).intValue(),
+                r -> ((Number) r[2]).doubleValue()));
+
+        List<AdminDashboardResponse.StationRevenueAnalysis> revenueByStationAnalysis =
+                revStationRows.stream()
+                        .map(r -> {
+                            Integer stationId = ((Number) r[0]).intValue();
+                            String name = (String) r[1];
+                            Double total = r[2] == null ? 0d : ((Number) r[2]).doubleValue();
+
+                            double avgPerDay = total / 30.0;
+                            double today = todayMap.getOrDefault(stationId, 0d);
+                            double week = weekMap.getOrDefault(stationId, 0d);
+                            double month = monthMap.getOrDefault(stationId, 0d);
+
+                            return AdminDashboardResponse.StationRevenueAnalysis.builder()
+                                    .stationId(stationId)
+                                    .stationName(name)
+                                    .avgPerDay(avgPerDay)
+                                    .todayRevenue(today)
+                                    .weekRevenue(week)
+                                    .monthRevenue(month)
+                                    .growthDay(0d)
+                                    .growthWeek(0d)
+                                    .growthMonth(0d)
+                                    .build();
+                        })
+                        .toList();
+
+        // ===== Recent incidents =====
         var recentRows = incidentRepository.recentIncidents(tsFrom, tsTo, 10);
         var recentIncidents = recentRows.stream().map(r ->
                 AdminDashboardResponse.RecentIncident.builder()
@@ -144,7 +181,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .build())
                 .toList();
 
-        // ===== Revenue by day=====
+        // ===== Revenue by day =====
         var revRows = rentalOrderRepository.revenueByDay(tsFrom, tsTo);
         Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
@@ -168,35 +205,6 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         TreeMap::new
                 ));
 
-        //===== Order by Hour & Peak =====
-        var hourRows = rentalOrderRepository.ordersByHour(tsFrom, tsTo);
-        //Chuẩn hóa thành đủ 24h (nếu giờ không có đơn => 0)
-        long[] hours = new long[24];
-        for(Object[] r: hourRows) {
-            int h = ((Number) r[0]).intValue(); //0...23
-            long c = ((Number) r[1]).longValue();
-            if(h >=  0 && h <=23 ) hours[h] = c;
-        }
-        List<AdminDashboardResponse.HourCount> orderByHour = new ArrayList<>();
-        for( int  h =0; h <24; h++){
-            orderByHour.add(AdminDashboardResponse.HourCount.builder()
-                    .hour(h)
-                    .build());
-        }
-        //Tính khung giờ cao điểm với cửa sổ 3 giờ liên tiếp (0-1-2, 1-2-3...)
-        int windowSize =3;
-        long bestSum = -1;
-        int bestStart = 0;
-        for( int start =0; start <= 24 - windowSize; start++) {
-            long sum =0;
-            for( int k =0; k <windowSize; k++) {
-                if( sum > bestSum){
-                    bestSum = sum;
-                    bestStart = start;
-                }
-            }
-        }
-
         // ===== Build KPI =====
         var kpi = AdminDashboardResponse.Kpi.builder()
                 .totalVehicles(totalVehicles)
@@ -210,11 +218,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .admins(admins)
                 .staffs(staffs)
                 .customers(customers)
-                //tổng chi phí incident
                 .maintenanceCostInRange(incidentCostInRange)
                 .build();
 
-        // ===== Build IncidentKpi =====
         var incidentKpi = AdminDashboardResponse.IncidentKpi.builder()
                 .totalIncidentsInRange(totalIncidentsInRange)
                 .openIncidents(openIncidents)
@@ -222,15 +228,6 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .resolvedIncidents(resolvedIncidents)
                 .incidentCostInRange(incidentCostInRange)
                 .build();
-
-        //===== Build PeakHourWindow=====
-        AdminDashboardResponse.PeakHourWindow peakWindow =
-                AdminDashboardResponse.PeakHourWindow.builder()
-                        .startHour(bestStart)
-                        .endHour(bestStart + windowSize - 1)
-                        .windowSize(windowSize)
-                        .total(bestSum < 0 ? 0 : bestSum)
-                        .build();
 
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
@@ -240,15 +237,12 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .avgRating(avgRating)
                 .ratingDistribution(ratingDistribution)
                 .revenueByStation(revenueByStation)
-                // New: Incident section
+                .revenueByStationAnalysis(revenueByStationAnalysis)
                 .incidentKpi(incidentKpi)
                 .incidentsByDay(incidentsByDay)
                 .incidentsByStatus(incidentsByStatus)
                 .incidentsBySeverity(incidentsBySeverity)
                 .recentIncidents(recentIncidents)
-                // NEW: Giờ thuê cao điểm
-                .orderByHour(orderByHour)
-                .peakHourWindow(peakWindow)
                 .build();
     }
 }

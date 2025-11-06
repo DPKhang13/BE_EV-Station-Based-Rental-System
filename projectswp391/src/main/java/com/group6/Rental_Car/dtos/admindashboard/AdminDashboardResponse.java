@@ -132,4 +132,19 @@ public class AdminDashboardResponse {
         private Integer windowSize;
         private Long total;
     }
+    private List<StationRevenueAnalysis> revenueByStationAnalysis;
+
+    @Data
+    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    public static class StationRevenueAnalysis {
+        private Integer stationId;
+        private String stationName;
+        private Double avgPerDay;
+        private Double todayRevenue;
+        private Double weekRevenue;
+        private Double monthRevenue;
+        private Double growthDay;       // % tăng trưởng ngày
+        private Double growthWeek;      // % tăng trưởng tuần
+        private Double growthMonth;     // % tăng trưởng tháng
+    }
 }

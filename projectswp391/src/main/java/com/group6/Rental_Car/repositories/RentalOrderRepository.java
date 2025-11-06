@@ -74,4 +74,47 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
     """, nativeQuery = true)
     List<Object[]> ordersByHour(@Param("from") Timestamp from,
                                 @Param("to") Timestamp to);
+
+    @Query(value = """
+    SELECT s.station_id,
+           s.name AS station_name,
+           COALESCE(SUM(ro.total_price), 0) AS total
+    FROM rentalstation s
+    LEFT JOIN vehicle v ON v.station_id = s.station_id
+    LEFT JOIN rentalorder ro ON ro.vehicle_id = v.vehicle_id
+         AND DATE(ro.start_time) = CURRENT_DATE
+         AND UPPER(ro.status) IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY s.station_id, s.name
+    """, nativeQuery = true)
+    List<Object[]> revenueTodayPerStation();
+
+
+    // Doanh thu tuần này theo trạm
+    @Query(value = """
+    SELECT s.station_id,
+           s.name AS station_name,
+           COALESCE(SUM(ro.total_price), 0) AS total
+    FROM rentalstation s
+    LEFT JOIN vehicle v ON v.station_id = s.station_id
+    LEFT JOIN rentalorder ro ON ro.vehicle_id = v.vehicle_id
+         AND ro.start_time >= DATE_TRUNC('week', CURRENT_DATE)
+         AND UPPER(ro.status) IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY s.station_id, s.name
+    """, nativeQuery = true)
+    List<Object[]> revenueThisWeekPerStation();
+
+
+    // Doanh thu tháng này theo trạm
+    @Query(value = """
+    SELECT s.station_id,
+           s.name AS station_name,
+           COALESCE(SUM(ro.total_price), 0) AS total
+    FROM rentalstation s
+    LEFT JOIN vehicle v ON v.station_id = s.station_id
+    LEFT JOIN rentalorder ro ON ro.vehicle_id = v.vehicle_id
+         AND ro.start_time >= DATE_TRUNC('month', CURRENT_DATE)
+         AND UPPER(ro.status) IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY s.station_id, s.name
+    """, nativeQuery = true)
+    List<Object[]> revenueThisMonthPerStation();
 }
