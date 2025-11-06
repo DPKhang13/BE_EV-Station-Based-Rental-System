@@ -3,6 +3,7 @@ package com.group6.Rental_Car.services.order;
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
+import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 
 import java.util.List;
@@ -18,5 +19,6 @@ public interface RentalOrderService {
     OrderResponse confirmReturn(UUID orderId,Integer manualActualHours);
     List<OrderVerificationResponse> getPendingVerificationOrders();
     OrderResponse previewReturn(UUID orderId, Integer actualHours);
+    List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId);
 
 }

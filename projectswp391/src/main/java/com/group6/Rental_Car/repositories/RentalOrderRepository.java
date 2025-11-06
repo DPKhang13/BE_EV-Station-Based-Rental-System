@@ -20,6 +20,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
     @EntityGraph(attributePaths = {"customer", "vehicle"})
     List<RentalOrder> findByStatus(String status);
     List<RentalOrder> findByStatusIn(List<String> statuses);
+    List<RentalOrder> findByVehicle_VehicleId(Long vehicleId);
 
     //Admin Dashboard
     long countByStatus(String status);

@@ -4,6 +4,7 @@ package com.group6.Rental_Car.services.order;
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
+import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.enums.UserStatus;
@@ -337,6 +338,41 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         response.setStationId(station != null ? station.getStationId() : null);
 
         return response;
+    }
+
+    @Override
+    public List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId) {
+        List<RentalOrder> orders = rentalOrderRepository.findByVehicle_VehicleId(vehicleId);
+
+        return orders.stream().map(order -> {
+            Vehicle v = order.getVehicle();
+            VehicleModel model = vehicleModelService.findByVehicle(v);
+            RentalStation st = v.getRentalStation();
+
+            return VehicleOrderHistoryResponse.builder()
+                    .orderId(order.getOrderId())
+                    .vehicleId(v.getVehicleId())
+                    .plateNumber(v.getPlateNumber())
+
+                    .stationId(st != null ? st.getStationId() : null)
+                    .stationName(st != null ? st.getName() : null)
+
+                    .brand(model != null ? model.getBrand() : null)
+                    .color(model != null ? model.getColor() : null)
+                    .transmission(model != null ? model.getTransmission() : null)
+                    .seatCount(model != null ? model.getSeatCount() : null)
+                    .year(model != null ? model.getYear() : null)
+                    .variant(model != null ? model.getVariant() : null)
+
+                    .startTime(order.getStartTime())
+                    .endTime(order.getEndTime())
+                    .status(order.getStatus())
+
+                    .totalPrice(order.getTotalPrice())
+                    .depositAmount(order.getDepositAmount())
+                    .remainingAmount(order.getRemainingAmount())
+                    .build();
+        }).toList();
     }
     @Override
     public OrderResponse updateOrder(UUID orderId, OrderUpdateRequest request) {
