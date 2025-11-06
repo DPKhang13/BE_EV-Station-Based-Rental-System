@@ -250,8 +250,8 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<AccountDtoResponse> getAllUsers() {
-        return userRepository.findAll()
+    public List<AccountDtoResponse> getAllCustomer() {
+        return userRepository.findByRole(Role.customer)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
