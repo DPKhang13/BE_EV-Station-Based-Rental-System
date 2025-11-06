@@ -228,7 +228,46 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .resolvedIncidents(resolvedIncidents)
                 .incidentCostInRange(incidentCostInRange)
                 .build();
+        var hourRows = rentalOrderRepository.ordersByHour(tsFrom, tsTo);
 
+// Chuẩn hóa thành đủ 24h (nếu giờ không có đơn => 0)
+        long[] hours = new long[24];
+        for (Object[] r : hourRows) {
+            int h = ((Number) r[0]).intValue(); // 0..23
+            long c = ((Number) r[1]).longValue();
+            if (h >= 0 && h <= 23) hours[h] = c;
+        }
+
+// Đưa dữ liệu ra response
+        List<AdminDashboardResponse.HourCount> orderByHour = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            orderByHour.add(AdminDashboardResponse.HourCount.builder()
+                    .hour(h)
+                    .count(hours[h])
+                    .build());
+        }
+
+// Tính khung giờ cao điểm (3 tiếng liên tiếp)
+        int windowSize = 3;
+        long bestSum = -1;
+        int bestStart = 0;
+        for (int start = 0; start <= 24 - windowSize; start++) {
+            long sum = 0;
+            for (int k = 0; k < windowSize; k++) {
+                sum += hours[start + k];
+            }
+            if (sum > bestSum) {
+                bestSum = sum;
+                bestStart = start;
+            }
+        }
+        AdminDashboardResponse.PeakHourWindow peakWindow =
+                AdminDashboardResponse.PeakHourWindow.builder()
+                        .startHour(bestStart)
+                        .endHour(bestStart + windowSize - 1)
+                        .windowSize(windowSize)
+                        .total(bestSum < 0 ? 0 : bestSum)
+                        .build();
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
                 .vehiclesByStatus(vehiclesByStatus)
@@ -243,6 +282,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .incidentsByStatus(incidentsByStatus)
                 .incidentsBySeverity(incidentsBySeverity)
                 .recentIncidents(recentIncidents)
+                .orderByHour(orderByHour)
+                .peakHourWindow(peakWindow)
                 .build();
     }
 }
