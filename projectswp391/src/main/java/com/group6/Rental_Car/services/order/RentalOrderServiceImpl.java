@@ -292,8 +292,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
-    public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
-        return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
+    public List<OrderResponse> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId) {
+        return rentalOrderRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customerId).stream()
                 .map(order -> {
                     OrderResponse response = modelMapper.map(order, OrderResponse.class);
                     response.setVehicleId(order.getVehicle() != null ? order.getVehicle().getVehicleId() : null);

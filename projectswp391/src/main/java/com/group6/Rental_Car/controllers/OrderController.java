@@ -36,7 +36,7 @@ public class OrderController {
     @GetMapping("/get/my-orders")
     public ResponseEntity<List<OrderResponse>> getMyOrders(@AuthenticationPrincipal JwtUserDetails userDetails) {
         UUID customerId = userDetails.getUserId();
-        List<OrderResponse> orders = rentalOrderService.findByCustomer_UserId(customerId);
+        List<OrderResponse> orders = rentalOrderService.findByCustomer_UserIdOrderByCreatedAtDesc(customerId);
         return ResponseEntity.ok(orders);
     }
 

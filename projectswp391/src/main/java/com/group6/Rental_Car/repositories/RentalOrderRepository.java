@@ -16,10 +16,11 @@ import java.util.UUID;
 
 @Repository
 public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> {
-    List<RentalOrder> findByCustomer_UserId(UUID customerId);
+    List<RentalOrder> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId);
     @EntityGraph(attributePaths = {"customer", "vehicle"})
     List<RentalOrder> findByStatus(String status);
     List<RentalOrder> findByStatusIn(List<String> statuses);
+
 
     //Admin Dashboard
     long countByStatus(String status);

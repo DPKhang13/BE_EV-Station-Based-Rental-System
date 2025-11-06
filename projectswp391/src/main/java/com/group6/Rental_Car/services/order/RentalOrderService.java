@@ -13,7 +13,7 @@ public interface RentalOrderService {
     OrderResponse updateOrder(UUID orderId, OrderUpdateRequest orderUpdateRequest);
     void deleteOrder(UUID orderId);
     List<OrderResponse> getRentalOrders();
-    List<OrderResponse> findByCustomer_UserId(UUID customerId);
+    List<OrderResponse> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId);
     OrderResponse confirmPickup(UUID orderId);
     OrderResponse confirmReturn(UUID orderId,Integer manualActualHours);
     List<OrderVerificationResponse> getPendingVerificationOrders();
