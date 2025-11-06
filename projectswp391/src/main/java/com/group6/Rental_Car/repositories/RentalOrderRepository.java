@@ -22,26 +22,56 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
     List<RentalOrder> findByStatusIn(List<String> statuses);
     List<RentalOrder> findByVehicle_VehicleId(Long vehicleId);
 
+    List<RentalOrder> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId);
     //Admin Dashboard
     long countByStatus(String status);
-    // Tổng doanh thu (status đã ghi nhận doanh thu)
+
+    // Tổng doanh thu trong khoảng ngày
     @Query(value = """
-        SELECT COALESCE(SUM(total_price),0)
-        FROM rentalorder
-        WHERE start_time BETWEEN :from AND :to
-          AND status IN ('active','completed','done','paid')
-        """, nativeQuery = true)
+    SELECT COALESCE(SUM(total_price),0)
+    FROM rentalorder
+    WHERE start_time BETWEEN :from AND :to
+      AND UPPER(status) IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    """, nativeQuery = true)
     Double revenueBetween(@Param("from") Timestamp from, @Param("to") Timestamp to);
 
     // Doanh thu theo ngày
     @Query(value = """
-        SELECT DATE_TRUNC('day', start_time)::date AS d,
-               COALESCE(SUM(total_price),0)       AS s
-        FROM rentalorder
-        WHERE start_time BETWEEN :from AND :to
-          AND status IN ('active','completed','done','paid')
-        GROUP BY d
-        ORDER BY d
-        """, nativeQuery = true)
+    SELECT DATE_TRUNC('day', start_time)::date AS d,
+           COALESCE(SUM(total_price),0)       AS s
+    FROM rentalorder
+    WHERE start_time BETWEEN :from AND :to
+      AND UPPER(status) IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY d
+    ORDER BY d
+    """, nativeQuery = true)
     List<Object[]> revenueByDay(@Param("from") Timestamp from, @Param("to") Timestamp to);
+
+    // Doanh thu theo trạm (bổ sung cho báo cáo theo điểm thuê)
+    @Query(value = """
+    SELECT s.station_id,
+           s.name AS station_name,
+           COALESCE(SUM(ro.total_price), 0) AS total
+    FROM rentalstation s
+    LEFT JOIN vehicle v ON v.station_id = s.station_id
+    LEFT JOIN rentalorder ro ON ro.vehicle_id = v.vehicle_id
+         AND ro.start_time BETWEEN :from AND :to
+         AND UPPER(ro.status) IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY s.station_id, s.name
+    ORDER BY total DESC
+    """, nativeQuery = true)
+    List<Object[]> revenuePerStation(@Param("from") Timestamp from,
+                                     @Param("to")   Timestamp to);
+
+    @Query(value = """
+    SELECT EXTRACT(HOUR FROM start_time)::int AS h,
+           COUNT(*) AS c
+    FROM rentalorder
+    WHERE start_time BETWEEN :from AND :to
+      AND status IN ('DEPOSITED','RENTAL','COMPLETED','PICKED_UP')
+    GROUP BY h
+    ORDER BY h
+    """, nativeQuery = true)
+    List<Object[]> ordersByHour(@Param("from") Timestamp from,
+                                @Param("to") Timestamp to);
 }
