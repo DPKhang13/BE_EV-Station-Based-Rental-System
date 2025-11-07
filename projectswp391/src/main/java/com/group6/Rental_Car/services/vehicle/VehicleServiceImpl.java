@@ -61,6 +61,10 @@ public class VehicleServiceImpl implements VehicleService {
             vehicle.setRentalStation(station);
         }
 
+        if (req.getImageUrl() != null) {
+            vehicle.setImageUrl(req.getImageUrl());
+        }
+
         vehicleRepository.save(vehicle);
 
         VehicleCreateRequest attrReq = new VehicleCreateRequest();
@@ -97,6 +101,11 @@ public class VehicleServiceImpl implements VehicleService {
             var station = rentalStationRepository.findById(req.getStationId())
                     .orElseThrow(() -> new ResourceNotFoundException("Rental Station not found "));
             vehicle.setRentalStation(station);
+        }
+
+        // imageUrl (nếu client gửi lên)
+        if (req.getImageUrl() != null) {
+            vehicle.setImageUrl(req.getImageUrl());
         }
 
 
