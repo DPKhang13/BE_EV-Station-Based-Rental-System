@@ -78,75 +78,149 @@ public class VehicleController {
         String normalizedColor = color.trim().toLowerCase();
         int seat = (seatCount != null) ? seatCount : 4; // Default 4 chỗ
 
-        // Build URL based on brand and color
-        if ("Vinfast".equalsIgnoreCase(normalizedBrand)) {
-            switch (normalizedColor) {
-                case "xanh":
-                case "blue":
-                    imageUrl = baseUrl + "/4_Cho/Vinfast/a80cae76-5c8a-4226-ac85-116ba2da7a3a.png";
-                    break;
-                case "bạc":
-                case "silver":
-                    imageUrl = baseUrl + "/4_Cho/Vinfast/b76c51c2-6e69-491c-ae83-0d36ff93cdff.png";
-                    break;
-                case "đen":
-                case "black":
-                    imageUrl = baseUrl + "/4_Cho/Vinfast/e88bd242-3df4-48a7-8fe2-a9a3466f939f.png";
-                    break;
-                case "đỏ":
-                case "red":
-                    imageUrl = baseUrl + "/4_Cho/Vinfast/e420cb1b-1710-4dbe-a5e3-e1285c690b6e.png";
-                    break;
-                case "trắng":
-                case "white":
-                    imageUrl = baseUrl + "/4_Cho/Vinfast/unnamed.jpg";
-                    break;
+        if (seat == 7) {
+            // Xử lý cho xe 7 chỗ
+            if ("Vinfast".equalsIgnoreCase(normalizedBrand)) {
+                switch (normalizedColor) {
+                    case "trắng":
+                    case "white":
+                        imageUrl = baseUrl + "/7_Cho/Vinfast/unnamed.jpg";
+                        break;
+                    case "bạc":
+                    case "silver":
+                        imageUrl = baseUrl + "/7_Cho/Vinfast/unnamed%20%284%29.jpg";
+                        break;
+                    case "đen":
+                    case "black":
+                        imageUrl = baseUrl + "/7_Cho/Vinfast/unnamed%20%283%29.jpg";
+                        break;
+                    case "đỏ":
+                    case "red":
+                        imageUrl = baseUrl + "/7_Cho/Vinfast/unnamed%20%282%29.jpg";
+                        break;
+                    case "xanh":
+                    case "blue":
+                        imageUrl = baseUrl + "/7_Cho/Vinfast/unnamed%20%281%29.jpg";
+                        break;
+                }
+            } else if ("BMW".equalsIgnoreCase(normalizedBrand)) {
+                switch (normalizedColor) {
+                    case "đỏ":
+                    case "red":
+                        imageUrl = baseUrl + "/7_Cho/BMW/unnamed%20%281%29.jpg";
+                        break;
+                    case "đen":
+                    case "black":
+                        imageUrl = baseUrl + "/7_Cho/BMW/unnamed%20%284%29.jpg";
+                        break;
+                    case "trắng":
+                    case "white":
+                        imageUrl = baseUrl + "/7_Cho/BMW/unnamed.jpg";
+                        break;
+                    case "bạc":
+                    case "silver":
+                        imageUrl = baseUrl + "/7_Cho/BMW/unnamed%20%283%29.jpg";
+                        break;
+                    case "xanh":
+                    case "blue":
+                        imageUrl = baseUrl + "/7_Cho/BMW/unnamed%20%282%29.jpg";
+                        break;
+                }
+            } else if ("Tesla".equalsIgnoreCase(normalizedBrand)) {
+                switch (normalizedColor) {
+                    case "trắng":
+                    case "white":
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed.jpg";
+                        break;
+                    case "bạc":
+                    case "silver":
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%284%29.jpg";
+                        break;
+                    case "đỏ":
+                    case "red":
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%282%29.jpg";
+                        break;
+                    case "đen":
+                    case "black":
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%283%29.jpg";
+                        break;
+                    case "xanh":
+                    case "blue":
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%281%29.jpg";
+                        break;
+                }
             }
-        } else if ("BMW".equalsIgnoreCase(normalizedBrand)) {
-            switch (normalizedColor) {
-                case "trắng":
-                case "white":
-                    imageUrl = baseUrl + "/4_Cho/BMW/white.jpg";
-                    break;
-                case "bạc":
-                case "silver":
-                    imageUrl = baseUrl + "/4_Cho/BMW/unnamed%20%281%29.jpg";
-                    break;
-                case "xanh":
-                case "blue":
-                    imageUrl = baseUrl + "/4_Cho/BMW/blue.jpg";
-                    break;
-                case "đen":
-                case "black":
-                    imageUrl = baseUrl + "/4_Cho/BMW/8f9f3e31-0c04-4441-bb40-97778c9824e0.png";
-                    break;
-                case "đỏ":
-                case "red":
-                    imageUrl = baseUrl + "/4_Cho/BMW/7f3edc23-30ba-4e84-83a9-c8c418f2362d.png";
-                    break;
-            }
-        } else if ("Tesla".equalsIgnoreCase(normalizedBrand)) {
-            switch (normalizedColor) {
-                case "bạc":
-                case "silver":
-                    imageUrl = baseUrl + "/4_Cho/Tesla/unnamed4.jpg";
-                    break;
-                case "xanh":
-                case "blue":
-                    imageUrl = baseUrl + "/4_Cho/Tesla/unnamed.jpg";
-                    break;
-                case "đen":
-                case "black":
-                    imageUrl = baseUrl + "/4_Cho/Tesla/unnamed%20%283%29.jpg";
-                    break;
-                case "trắng":
-                case "white":
-                    imageUrl = baseUrl + "/4_Cho/Tesla/unnamed%20%282%29.jpg";
-                    break;
-                case "đỏ":
-                case "red":
-                    imageUrl = baseUrl + "/4_Cho/Tesla/unnamed%20%281%29.jpg";
-                    break;
+        } else {
+            // Xử lý cho xe 4 chỗ (mặc định)
+            if ("Vinfast".equalsIgnoreCase(normalizedBrand)) {
+                switch (normalizedColor) {
+                    case "xanh":
+                    case "blue":
+                        imageUrl = baseUrl + "/4_Cho/Vinfast/a80cae76-5c8a-4226-ac85-116ba2da7a3a.png";
+                        break;
+                    case "bạc":
+                    case "silver":
+                        imageUrl = baseUrl + "/4_Cho/Vinfast/b76c51c2-6e69-491c-ae83-0d36ff93cdff.png";
+                        break;
+                    case "đen":
+                    case "black":
+                        imageUrl = baseUrl + "/4_Cho/Vinfast/e88bd242-3df4-48a7-8fe2-a9a3466f939f.png";
+                        break;
+                    case "đỏ":
+                    case "red":
+                        imageUrl = baseUrl + "/4_Cho/Vinfast/e420cb1b-1710-4dbe-a5e3-e1285c690b6e.png";
+                        break;
+                    case "trắng":
+                    case "white":
+                        imageUrl = baseUrl + "/4_Cho/Vinfast/unnamed.jpg";
+                        break;
+                }
+            } else if ("BMW".equalsIgnoreCase(normalizedBrand)) {
+                switch (normalizedColor) {
+                    case "trắng":
+                    case "white":
+                        imageUrl = baseUrl + "/4_Cho/BMW/white.jpg";
+                        break;
+                    case "bạc":
+                    case "silver":
+                        imageUrl = baseUrl + "/4_Cho/BMW/unnamed%20%281%29.jpg";
+                        break;
+                    case "xanh":
+                    case "blue":
+                        imageUrl = baseUrl + "/4_Cho/BMW/blue.jpg";
+                        break;
+                    case "đen":
+                    case "black":
+                        imageUrl = baseUrl + "/4_Cho/BMW/8f9f3e31-0c04-4441-bb40-97778c9824e0.png";
+                        break;
+                    case "đỏ":
+                    case "red":
+                        imageUrl = baseUrl + "/4_Cho/BMW/7f3edc23-30ba-4e84-83a9-c8c418f2362d.png";
+                        break;
+                }
+            } else if ("Tesla".equalsIgnoreCase(normalizedBrand)) {
+                switch (normalizedColor) {
+                    case "bạc":
+                    case "silver":
+                        imageUrl = baseUrl + "/4_Cho/Tesla/unnamed4.jpg";
+                        break;
+                    case "xanh":
+                    case "blue":
+                        imageUrl = baseUrl + "/4_Cho/Tesla/unnamed.jpg";
+                        break;
+                    case "đen":
+                    case "black":
+                        imageUrl = baseUrl + "/4_Cho/Tesla/unnamed%20%283%29.jpg";
+                        break;
+                    case "trắng":
+                    case "white":
+                        imageUrl = baseUrl + "/4_Cho/Tesla/unnamed%20%282%29.jpg";
+                        break;
+                    case "đỏ":
+                    case "red":
+                        imageUrl = baseUrl + "/4_Cho/Tesla/unnamed%20%281%29.jpg";
+                        break;
+                }
             }
         }
 
