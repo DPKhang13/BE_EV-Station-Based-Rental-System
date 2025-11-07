@@ -384,6 +384,41 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
+    public List<VehicleOrderHistoryResponse> getOrderHistoryByCustomer(UUID customerId) {
+        List<RentalOrder> orders = rentalOrderRepository.findByCustomer_UserId(customerId);
+
+        return orders.stream().map(order -> {
+            Vehicle v = order.getVehicle();
+            VehicleModel model = vehicleModelService.findByVehicle(v);
+            RentalStation st = v.getRentalStation();
+
+            return VehicleOrderHistoryResponse.builder()
+                    .orderId(order.getOrderId())
+                    .vehicleId(v.getVehicleId())
+                    .plateNumber(v.getPlateNumber())
+
+                    .stationId(st != null ? st.getStationId() : null)
+                    .stationName(st != null ? st.getName() : null)
+
+                    .brand(model != null ? model.getBrand() : null)
+                    .color(model != null ? model.getColor() : null)
+                    .transmission(model != null ? model.getTransmission() : null)
+                    .seatCount(model != null ? model.getSeatCount() : null)
+                    .year(model != null ? model.getYear() : null)
+                    .variant(model != null ? model.getVariant() : null)
+
+                    .startTime(order.getStartTime())
+                    .endTime(order.getEndTime())
+                    .status(order.getStatus())
+
+                    .totalPrice(order.getTotalPrice())
+                    .depositAmount(order.getDepositAmount())
+                    .remainingAmount(order.getRemainingAmount())
+                    .build();
+        }).toList();
+    }
+
+    @Override
     public void deleteOrder(UUID orderId) {
         if (!rentalOrderRepository.existsById(orderId)) {
             throw new ResourceNotFoundException("Order not found with id: " + orderId);
@@ -428,7 +463,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 })
                 .collect(Collectors.toList());
     }
-// hàm hỗ trợ
 
     private String currentShift(){
         int h = LocalDateTime.now(VN_TZ).getHour();

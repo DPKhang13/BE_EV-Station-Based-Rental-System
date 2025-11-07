@@ -84,4 +84,8 @@ public class OrderController {
     public ResponseEntity<List<VehicleOrderHistoryResponse>> getVehicleOrderHistory(@PathVariable Long vehicleId) {
         return ResponseEntity.ok(rentalOrderService.getOrderHistoryByVehicle(vehicleId));
     }
+    @GetMapping("/customer/{customerId}/history")
+    public ResponseEntity<List<VehicleOrderHistoryResponse>> getCustomerOrderHistory(@PathVariable UUID customerId) {
+        return ResponseEntity.ok(rentalOrderService.getOrderHistoryByCustomer(customerId));
+    }
 }
