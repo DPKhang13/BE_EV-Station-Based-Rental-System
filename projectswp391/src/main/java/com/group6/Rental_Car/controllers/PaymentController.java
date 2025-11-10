@@ -62,7 +62,6 @@ public class PaymentController {
             String responseCode = vnpParams.get("vnp_ResponseCode");
             log.info("[VNPay Verify] Response Code: {}", responseCode);
 
-            // Xử lý payment
             PaymentResponse result = paymentService.handleVNPayCallback(vnpParams);
 
             log.info("[VNPay Verify] Success: {}", result);

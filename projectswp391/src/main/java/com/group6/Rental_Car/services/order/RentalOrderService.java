@@ -17,9 +17,8 @@ public interface RentalOrderService {
     List<OrderResponse> getRentalOrders();
     List<OrderResponse> findByCustomer_UserId(UUID customerId);
     OrderResponse confirmPickup(UUID orderId);
-    OrderResponse confirmReturn(UUID orderId,Integer manualActualHours);
+    OrderResponse confirmReturn(UUID orderId, Integer manualActualDays);
     List<OrderVerificationResponse> getPendingVerificationOrders();
-    OrderResponse previewReturn(UUID orderId, Integer actualHours);
+    OrderResponse previewReturn(UUID orderId, Integer actualDays);
     List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId);
-
 }

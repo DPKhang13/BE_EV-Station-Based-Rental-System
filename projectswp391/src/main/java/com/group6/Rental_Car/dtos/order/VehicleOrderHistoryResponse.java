@@ -26,13 +26,13 @@ public class VehicleOrderHistoryResponse {
     private Integer seatCount;
     private Integer year;
     private String variant;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime endTime;
-    private String status;
 
+    private String status;
     private BigDecimal totalPrice;
-    private BigDecimal depositAmount;
-    private BigDecimal remainingAmount;
 }

@@ -31,12 +31,12 @@ public class Vehicle {
     @Column(name = "vehicle_name", length = 100)
     private String vehicleName;
 
-    // Một xe có nhiều đơn thuê
-    @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
-    private List<RentalOrder> rentalOrders;
+    // Một xe có nhiều đơn thu
 
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<VehicleModel> attributes;
+    @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<RentalOrderDetail> orderDetails;
 
 
 }

@@ -23,13 +23,16 @@ public class PricingRule {
 
     private String variant;
 
-    private Integer baseHours;
 
-    private BigDecimal baseHoursPrice;
-
-    private BigDecimal extraHourPrice;
-
+    @Column(nullable = false)
     private BigDecimal dailyPrice;
+
+    @Column(name = "holiday_price", precision = 18, scale = 2)
+    private BigDecimal holidayPrice;
+
+    @Column(name = "late_fee_per_day", precision = 18, scale = 2)
+    private BigDecimal lateFeePerDay = BigDecimal.ZERO;
+
     @OneToMany(mappedBy = "pricingRule", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<VehicleModel> vehicleModels;
 }
