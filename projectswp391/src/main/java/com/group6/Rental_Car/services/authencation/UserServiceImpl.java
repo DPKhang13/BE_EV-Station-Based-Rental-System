@@ -132,7 +132,7 @@ public class UserServiceImpl implements UserService {
     // ========== VERIFY FORGOT PASSWORD OTP ==========
     @Override
     public boolean verifyForgetPassword(String inputOtp, String email) {
-        if (!otpMailService.validateOtp(inputOtp,email)) {
+        if (!otpMailService.validateOtp(email,inputOtp)) {
             throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 
