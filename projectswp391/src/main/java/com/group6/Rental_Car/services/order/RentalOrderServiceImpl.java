@@ -1,18 +1,12 @@
 package com.group6.Rental_Car.services.order;
 
-
-import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
-import com.group6.Rental_Car.dtos.order.OrderResponse;
-import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
+import com.group6.Rental_Car.dtos.order.*;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.entities.*;
-import com.group6.Rental_Car.enums.UserStatus;
+import com.group6.Rental_Car.enums.PaymentStatus;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
-import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
-import com.group6.Rental_Car.repositories.RentalOrderRepository;
-import com.group6.Rental_Car.repositories.UserRepository;
-import com.group6.Rental_Car.repositories.VehicleRepository;
+import com.group6.Rental_Car.repositories.*;
 import com.group6.Rental_Car.services.coupon.CouponService;
 import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
 import com.group6.Rental_Car.services.vehicle.VehicleModelService;
@@ -20,104 +14,207 @@ import com.group6.Rental_Car.utils.JwtUserDetails;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.List;
-import java.util.UUID;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class RentalOrderServiceImpl implements RentalOrderService {
 
-    private final UserRepository userRepository;
-    private final VehicleRepository vehicleRepository;
     private final RentalOrderRepository rentalOrderRepository;
+    private final RentalOrderDetailRepository rentalOrderDetailRepository;
+    private final VehicleRepository vehicleRepository;
+    private final VehicleModelService vehicleModelService;
     private final PricingRuleService pricingRuleService;
     private final CouponService couponService;
+    private final UserRepository userRepository;
     private final ModelMapper modelMapper;
-    private final VehicleModelService vehicleModelService;
-    private final EmployeeScheduleRepository employeeScheduleRepository;
-    private static final ZoneId VN_TZ = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final String SHIFT_ALL = "ALL";
+    private final VehicleTimelineRepository vehicleTimelineRepository;
+
     @Override
+    @Transactional
     public OrderResponse createOrder(OrderCreateRequest request) {
 
-
-        JwtUserDetails userDetails = currentUser();
-               // (JwtUserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        UUID customerId = userDetails.getUserId();
-
-        User customer = userRepository.findById(customerId)
+        JwtUserDetails jwt = currentUser();
+        User customer = userRepository.findById(jwt.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
 
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
-        if (!"available".equalsIgnoreCase(vehicle.getStatus())) {
+        if (!"AVAILABLE".equalsIgnoreCase(vehicle.getStatus())) {
             throw new BadRequestException("Xe hiện không sẵn sàng để thuê (" + vehicle.getStatus() + ")");
         }
 
-        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
-        if (model == null) {
-            throw new ResourceNotFoundException("Không tìm thấy model cho xe ID = " + vehicle.getVehicleId());
+        LocalDateTime start = request.getStartTime();
+        LocalDateTime end = request.getEndTime();
+        if (start == null || end == null || !end.isAfter(start)) {
+            throw new BadRequestException("Thời gian thuê không hợp lệ");
         }
 
-        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
-                model.getSeatCount(), model.getVariant());
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
 
         Coupon coupon = null;
-        if (request.getCouponCode() != null && !request.getCouponCode().trim().isEmpty()) {
+        if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
             coupon = couponService.getCouponByCode(request.getCouponCode().trim());
         }
 
-        BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(
-                rule, coupon, request.getPlannedHours(), request.getPlannedHours());
+        long rentalDays = Math.max(1, ChronoUnit.DAYS.between(start.toLocalDate(), end.toLocalDate()));
+        BigDecimal basePrice = rule.getDailyPrice().multiply(BigDecimal.valueOf(rentalDays));
 
-
-        BigDecimal depositAmount = BigDecimal.ZERO;
-        BigDecimal remainingAmount = totalPrice;
-        LocalDateTime startTime = request.getStartTime();
-        if (startTime == null) {
-            throw new BadRequestException("Vui lòng chọn thời gian bắt đầu thuê xe");
+        if (request.isHoliday()) {
+            basePrice = rule.getHolidayPrice() != null
+                    ? rule.getHolidayPrice().multiply(BigDecimal.valueOf(rentalDays))
+                    : basePrice;
         }
-        if (startTime.isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("Thời gian bắt đầu không hợp lệ (phải là hiện tại hoặc tương lai)");
-        }
-        LocalDateTime endTime = startTime.plusHours(request.getPlannedHours());
 
-        vehicle.setStatus("RESERVED");
-        vehicleRepository.save(vehicle);
+        BigDecimal totalPrice = couponService.applyCouponIfValid(coupon, basePrice);
 
-        RentalOrder order = modelMapper.map(request, RentalOrder.class);
+        // ====== TẠO ORDER ======
+        RentalOrder order = new RentalOrder();
         order.setCustomer(customer);
-        order.setVehicle(vehicle);
         order.setCoupon(coupon);
-        order.setStartTime(startTime);
-        order.setEndTime(endTime);
-        order.setPlannedHours(request.getPlannedHours());
-        order.setPenaltyFee(BigDecimal.ZERO);
         order.setTotalPrice(totalPrice);
-        order.setDepositAmount(depositAmount);
-        order.setRemainingAmount(depositAmount);
         order.setStatus("PENDING");
-
         rentalOrderRepository.save(order);
 
-        OrderResponse response = modelMapper.map(order, OrderResponse.class);
-        response.setVehicleId(vehicle.getVehicleId());
-        response.setCouponCode(coupon != null ? coupon.getCode() : null);
-        response.setTotalPrice(totalPrice);
-        response.setDepositAmount(depositAmount);
-        response.setRemainingAmount(remainingAmount);
+        // ====== TẠO CHI TIẾT ======
+        RentalOrderDetail detail = RentalOrderDetail.builder()
+                .order(order)
+                .vehicle(vehicle)
+                .type("RENTAL")
+                .startTime(start)
+                .endTime(end)
+                .price(totalPrice)
+                .status("confirmed")
+                .build();
+        rentalOrderDetailRepository.save(detail);
 
-        return response;
+        // ====== CẬP NHẬT XE ======
+        vehicle.setStatus("BOOKED");
+        vehicleRepository.save(vehicle);
+
+        // ====== GHI VEHICLE TIMELINE ======
+        VehicleTimeline timeline = VehicleTimeline.builder()
+                .vehicle(vehicle)
+                .order(order)
+                .detail(detail)
+                .day(start.toLocalDate())
+                .startTime(start)
+                .endTime(end)
+                .status("BOOKED")
+                .sourceType("ORDER_RENTAL")
+                .note("Xe được đặt cho đơn thuê #" + order.getOrderId())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        vehicleTimelineRepository.save(timeline);
+
+        // ====== TRẢ RESPONSE ======
+        return mapToResponse(order, detail);
+    }
+
+    @Override
+    public OrderResponse updateOrder(UUID orderId, OrderUpdateRequest req) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        if (req.getStatus() != null) order.setStatus(req.getStatus());
+
+        if (req.getCouponCode() != null && !req.getCouponCode().isBlank()) {
+            Coupon coupon = couponService.getCouponByCode(req.getCouponCode().trim());
+            order.setCoupon(coupon);
+        }
+
+        if (req.getNewVehicleId() != null) {
+            Vehicle newVehicle = vehicleRepository.findById(req.getNewVehicleId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe mới"));
+
+            if (!"AVAILABLE".equalsIgnoreCase(newVehicle.getStatus())) {
+                throw new BadRequestException("Xe mới không khả dụng để thay thế");
+            }
+
+            RentalOrderDetail mainDetail = order.getDetails().stream()
+                    .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                    .findFirst()
+                    .orElseThrow(() -> new BadRequestException("Không tìm thấy chi tiết thuê"));
+
+            Vehicle oldVehicle = mainDetail.getVehicle();
+            oldVehicle.setStatus("AVAILABLE");
+            vehicleRepository.save(oldVehicle);
+
+            mainDetail.setVehicle(newVehicle);
+            mainDetail.setStatus("switched");
+            rentalOrderDetailRepository.save(mainDetail);
+
+            newVehicle.setStatus("BOOKED");
+            vehicleRepository.save(newVehicle);
+
+            if (req.getNote() != null) mainDetail.setDescription(req.getNote());
+        }
+
+        rentalOrderRepository.save(order);
+        return mapToResponse(order, getMainDetail(order));
+    }
+
+    @Override
+    public void deleteOrder(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        rentalOrderRepository.delete(order);
+    }
+
+    @Override
+    public List<OrderResponse> getRentalOrders() {
+        return rentalOrderRepository.findAll().stream()
+                .map(order -> mapToResponse(order, getMainDetail(order)))
+                .toList();
+    }
+
+    @Override
+    public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
+        return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
+                .map(order -> mapToResponse(order, getMainDetail(order)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<VehicleOrderHistoryResponse> getOrderHistoryByCustomer(UUID customerId) {
+        return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
+                .flatMap(order -> order.getDetails().stream().map(detail -> {
+                    Vehicle v = detail.getVehicle();
+                    VehicleModel m = vehicleModelService.findByVehicle(v);
+                    RentalStation s = v.getRentalStation();
+
+                    return VehicleOrderHistoryResponse.builder()
+                            .orderId(order.getOrderId())
+                            .vehicleId(v.getVehicleId())
+                            .plateNumber(v.getPlateNumber())
+
+                            .stationId(s != null ? s.getStationId() : null)
+                            .stationName(s != null ? s.getName() : null)
+
+                            .brand(m != null ? m.getBrand() : null)
+                            .color(m != null ? m.getColor() : null)
+                            .transmission(m != null ? m.getTransmission() : null)
+                            .seatCount(m != null ? m.getSeatCount() : null)
+                            .year(m != null ? m.getYear() : null)
+                            .variant(m != null ? m.getVariant() : null)
+
+                            .startTime(detail.getStartTime())
+                            .endTime(detail.getEndTime())
+                            .status(detail.getStatus())
+                            .totalPrice(detail.getPrice())
+
+                            .build();
+                }))
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -126,219 +223,176 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        if (!"DEPOSITED".equalsIgnoreCase(order.getStatus())
-                && !"PAYMENT_SUCCESS".equalsIgnoreCase(order.getStatus())) {
-            throw new BadRequestException("Đơn này không thể xác nhận nhận xe khi trạng thái là: " + order.getStatus());
-        }
-
-        Vehicle vehicle = order.getVehicle();
-        vehicle.setStatus("RENTAL");
-        vehicleRepository.save(vehicle);
-
         order.setStatus("RENTAL");
-        order.setStartTime(LocalDateTime.now());
         rentalOrderRepository.save(order);
-
-        UUID staffId = currentUser().getUserId();
-        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle(), currentShift());
-        es.setPickupCount(es.getPickupCount() + 1);
-        employeeScheduleRepository.saveAndFlush(es);
-
-        OrderResponse response = modelMapper.map(order, OrderResponse.class);
-        response.setVehicleId(vehicle.getVehicleId());
-        if (order.getCoupon() != null)
-            response.setCouponCode(order.getCoupon().getCode());
-
-        return response;
-    }
-
-    @Override
-    public OrderResponse confirmReturn(UUID orderId, Integer actualHours) {
-        RentalOrder order = rentalOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
-
-        Vehicle vehicle = order.getVehicle();
-        order.setEndTime(LocalDateTime.now());
-
-        if (actualHours == null || actualHours <= 0) {
-            int planned = order.getPlannedHours() != null ? order.getPlannedHours() : 12;
-            int min, max;
-
-            if (planned <= 24) {
-                min = Math.max(1, planned - 1);
-                max = planned + 14;
-            } else {
-                min = Math.max(1, planned - 10);
-                max = planned + 10;
-            }
-
-            actualHours = (int) (Math.random() * (max - min + 1)) + min;
-        }
-
-        long hoursUsed = actualHours;
-        order.setActualHours((int) hoursUsed);
-
-        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
-        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
-                model.getSeatCount(), model.getVariant());
-
-        BigDecimal totalPrice = pricingRuleService.calculateTotalPrice(
-                rule, order.getCoupon(), order.getPlannedHours(), hoursUsed);
-
-        order.setTotalPrice(totalPrice);
-
-        if (hoursUsed > order.getPlannedHours()) {
-            long exceeded = hoursUsed - order.getPlannedHours();
-            BigDecimal penalty = rule.getExtraHourPrice().multiply(BigDecimal.valueOf(exceeded));
-            order.setPenaltyFee(penalty);
-        } else {
-            order.setPenaltyFee(BigDecimal.ZERO);
-        }
-
-        BigDecimal deposit = order.getDepositAmount() != null ? order.getDepositAmount() : BigDecimal.ZERO;
-        BigDecimal remaining = totalPrice.subtract(deposit);
-        if (remaining.compareTo(BigDecimal.ZERO) < 0) remaining = BigDecimal.ZERO;
-
-        order.setRemainingAmount(remaining);
-        order.setStatus("AWAIT_FINAL"); // gọn và đúng flow
-        rentalOrderRepository.save(order);
-
-        vehicle.setStatus("CHECKING");
-        vehicleRepository.save(vehicle);
-
-        UUID staffId = currentUser().getUserId();
-        EmployeeSchedule es = ensureTodayAllShift(staffId, order.getVehicle(), currentShift());
-        es.setReturnCount(es.getReturnCount() + 1);
-        employeeScheduleRepository.saveAndFlush(es);
-
-        OrderResponse response = modelMapper.map(order, OrderResponse.class);
-        response.setVehicleId(vehicle.getVehicleId());
-        response.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
-        response.setRemainingAmount(remaining);
-        response.setTotalPrice(totalPrice);
-
-        return response;
+        return mapToResponse(order, getMainDetail(order));
     }
 
     @Override
     @Transactional
-    public List<OrderVerificationResponse> getPendingVerificationOrders() {
-
-        List<RentalOrder> orders = rentalOrderRepository.findByStatusIn(
-                List.of("DEPOSITED", "RENTAL", "COMPLETED", "PICKED_UP")
-        );
-            return orders.stream().map(order -> {
-                {
-                    User customer = order.getCustomer();
-                    Vehicle vehicle = order.getVehicle();
-
-                    String userStatusDisplay = switch (customer.getStatus()) {
-                        case ACTIVE -> "ĐÃ XÁC THỰC (HỒ SƠ)";
-                        case ACTIVE_PENDING -> "CHƯA XÁC THỰC";
-                        default -> "KHÔNG HỢP LỆ";
-                    };
-
-                    return OrderVerificationResponse.builder()
-                            .userId(customer.getUserId())
-                            .orderId(order.getOrderId().toString())
-                            .customerName(customer.getFullName())
-                            .phone(customer.getPhone())
-                            .vehicleName(vehicle.getVehicleName())
-                            .plateNumber(vehicle.getPlateNumber())
-                            .startTime(order.getStartTime())
-                            .endTime(order.getEndTime())
-                            .totalPrice(order.getTotalPrice())
-                            .depositAmount(order.getDepositAmount())
-                            .status(order.getStatus())
-                            .userStatus(userStatusDisplay)
-                            .build();
-
-                }
-            }).toList();
-
-
-    }
-
-    // ==============================================================
-    //                   CÁC HÀM CRUD CÒN LẠI
-    // ==============================================================
-    @Override
-    public OrderResponse updateOrder(UUID orderId, OrderUpdateRequest request) {
+    public OrderResponse confirmReturn(UUID orderId, Integer manualActualDays) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
-        modelMapper.map(request, order);
-        rentalOrderRepository.save(order);
-        return modelMapper.map(order, OrderResponse.class);
-    }
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-    @Override
-    public void deleteOrder(UUID orderId) {
-        if (!rentalOrderRepository.existsById(orderId)) {
-            throw new ResourceNotFoundException("Order not found with id: " + orderId);
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        Vehicle vehicle = mainDetail.getVehicle();
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
+
+        long actualDays = manualActualDays != null ? manualActualDays
+                : ChronoUnit.DAYS.between(mainDetail.getStartTime(), LocalDateTime.now());
+        BigDecimal total = rule.getDailyPrice().multiply(BigDecimal.valueOf(actualDays));
+
+        if (actualDays > ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime())) {
+            long extra = actualDays - ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime());
+            total = total.add(rule.getLateFeePerDay().multiply(BigDecimal.valueOf(extra)));
         }
-        rentalOrderRepository.deleteById(orderId);
+
+        mainDetail.setStatus("done");
+        mainDetail.setPrice(total);
+        rentalOrderDetailRepository.save(mainDetail);
+
+        vehicle.setStatus("AVAILABLE");
+        vehicleRepository.save(vehicle);
+
+        order.setTotalPrice(total);
+        order.setStatus("COMPLETED");
+        rentalOrderRepository.save(order);
+
+        return mapToResponse(order, mainDetail);
     }
 
     @Override
-    public List<OrderResponse> getRentalOrders() {
-        return rentalOrderRepository.findAll().stream()
-                .map(order -> {
-                    OrderResponse response = modelMapper.map(order, OrderResponse.class);
-                    response.setVehicleId(order.getVehicle() != null ? order.getVehicle().getVehicleId() : null);
-                    response.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
-                    return response;
-                })
-                .collect(Collectors.toList());
+    public OrderResponse previewReturn(UUID orderId, Integer actualDays) {
+        return confirmReturn(orderId, actualDays);
     }
 
     @Override
-    public List<OrderResponse> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId) {
-        return rentalOrderRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customerId).stream()
-                .map(order -> {
-                    OrderResponse response = modelMapper.map(order, OrderResponse.class);
-                    response.setVehicleId(order.getVehicle() != null ? order.getVehicle().getVehicleId() : null);
-                    response.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
-                    return response;
-                })
-                .collect(Collectors.toList());
-    }
-// hàm hỗ trợ
+    public List<OrderVerificationResponse> getPendingVerificationOrders() {
+        List<RentalOrder> pendingOrders = rentalOrderRepository.findAll().stream()
+                .filter(o -> "DEPOSITED".equalsIgnoreCase(o.getStatus()))
+                .toList();
 
-    private String currentShift(){
-        int h = LocalDateTime.now(VN_TZ).getHour();
-        if (h >= 0 && h<=12) return "Morning";
-        if (h >=12 && h<=18) return "Afternoon";
-        return "Evening";
+        return pendingOrders.stream().map(order -> {
+            User customer = order.getCustomer();
+
+            // Lấy chi tiết thuê chính
+            RentalOrderDetail rentalDetail = order.getDetails().stream()
+                    .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                    .findFirst()
+                    .orElse(null);
+
+            Vehicle vehicle = rentalDetail != null ? rentalDetail.getVehicle() : null;
+            RentalStation station = vehicle != null ? vehicle.getRentalStation() : null;
+
+            // Tổng dịch vụ (nếu có)
+            BigDecimal totalServiceCost = order.getServices() != null
+                    ? order.getServices().stream()
+                    .map(s -> s.getCost() != null ? s.getCost() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    : BigDecimal.ZERO;
+
+// Tổng tiền đã thanh toán (DEPOSITED hoặc PAYMENT_SUCCESS)
+            BigDecimal totalPaid = order.getPayments() != null
+                    ? order.getPayments().stream()
+                    .filter(p -> p.getStatus() == PaymentStatus.DEPOSIT ||
+                            p.getStatus() == PaymentStatus.SUCCESS)
+                    .map(p -> p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    : BigDecimal.ZERO;
+
+//  Tổng tiền còn lại = (thuê + dịch vụ) - đã thanh toán
+            BigDecimal remainingAmount = order.getTotalPrice()
+                    .add(totalServiceCost)
+                    .subtract(totalPaid);
+
+            return OrderVerificationResponse.builder()
+                    .userId(customer.getUserId())
+                    .orderId(order.getOrderId())
+                    .customerName(customer.getFullName())
+                    .phone(customer.getPhone())
+
+                    .vehicleId(vehicle != null ? vehicle.getVehicleId() : null)
+                    .vehicleName(vehicle != null ? vehicle.getVehicleName() : null)
+                    .plateNumber(vehicle != null ? vehicle.getPlateNumber() : null)
+
+                    .startTime(rentalDetail != null ? rentalDetail.getStartTime() : null)
+                    .endTime(rentalDetail != null ? rentalDetail.getEndTime() : null)
+
+                    .totalPrice(order.getTotalPrice())
+                    .totalServices(totalServiceCost)
+                    .remainingAmount(remainingAmount)
+
+                    .status(order.getStatus())
+                    .userStatus(customer.getStatus().name())
+                    .stationId(station != null ? station.getStationId() : null)
+                    .build();
+        }).toList();
     }
 
-    private EmployeeSchedule ensureTodayAllShift(UUID staffId, Vehicle vehicle, String shiftTime) {
-        var today = LocalDate.now(VN_TZ);
-        return employeeScheduleRepository
-                .findByStaff_UserIdAndShiftDateAndShiftTime(staffId, today, shiftTime)
-                .orElseGet(() ->{
-                    var staff = userRepository.findById(staffId).orElseThrow(() -> new ResourceNotFoundException("Staff not found with id: " + staffId));
-                    var station = staff.getRentalStation() != null ? staff.getRentalStation()
-                            :  (vehicle != null ? vehicle.getRentalStation() : null);
-                    if (station == null) {
-                        throw new ResourceNotFoundException("Staff with id " + staffId + "is not in any station");
-                    }
-                    var es = EmployeeSchedule.builder()
-                            .staff(staff)
-                            .station(station)
-                            .shiftDate(today)
-                            .shiftTime(shiftTime)
-                            .pickupCount(0)
-                            .returnCount(0)
+
+    @Override
+    public List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId) {
+        return rentalOrderDetailRepository.findByVehicle_VehicleId(vehicleId).stream()
+                .map(detail -> {
+                    RentalOrder order = detail.getOrder();
+                    Vehicle vehicle = detail.getVehicle();
+                    VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+                    RentalStation station = vehicle.getRentalStation();
+
+                    return VehicleOrderHistoryResponse.builder()
+                            .orderId(order.getOrderId())
+                            .vehicleId(vehicle.getVehicleId())
+                            .plateNumber(vehicle.getPlateNumber())
+                            .stationId(station != null ? station.getStationId() : null)
+                            .stationName(station != null ? station.getName() : null)
+                            .brand(model != null ? model.getBrand() : null)
+                            .color(model != null ? model.getColor() : null)
+                            .transmission(model != null ? model.getTransmission() : null)
+                            .seatCount(model != null ? model.getSeatCount() : null)
+                            .year(model != null ? model.getYear() : null)
+                            .variant(model != null ? model.getVariant() : null)
+                            .startTime(detail.getStartTime())
+                            .endTime(detail.getEndTime())
+                            .status(detail.getStatus())
+                            .totalPrice(detail.getPrice())
                             .build();
-                    return employeeScheduleRepository.save(es);
-                });
+                })
+                .collect(Collectors.toList());
+    }
+    // ========================
+    //  PRIVATE HELPERS
+    // ========================
+    private RentalOrderDetail getMainDetail(RentalOrder order) {
+        return order.getDetails().stream()
+                .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private OrderResponse mapToResponse(RentalOrder order, RentalOrderDetail detail) {
+        if (detail == null) return modelMapper.map(order, OrderResponse.class);
+
+        OrderResponse res = modelMapper.map(order, OrderResponse.class);
+        Vehicle v = detail.getVehicle();
+        res.setVehicleId(v != null ? v.getVehicleId() : null);
+        res.setStartTime(detail.getStartTime());
+        res.setEndTime(detail.getEndTime());
+        res.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
+        res.setTotalPrice(order.getTotalPrice());
+
+        if (v != null && v.getRentalStation() != null) {
+            res.setStationId(v.getRentalStation().getStationId());
+            res.setStationName(v.getRentalStation().getName());
+        }
+
+        return res;
     }
 
     private JwtUserDetails currentUser() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) throw new BadRequestException("Bạn chưa đăng nhập");
-        Object p = auth.getPrincipal();
-        if (p instanceof JwtUserDetails jwt) return jwt;
-        throw new BadRequestException("Phiên đăng nhập không hợp lệ");
+        if (auth == null || !(auth.getPrincipal() instanceof JwtUserDetails jwt))
+            throw new BadRequestException("Phiên đăng nhập không hợp lệ");
+        return jwt;
     }
 }

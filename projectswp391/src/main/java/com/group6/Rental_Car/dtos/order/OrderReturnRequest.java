@@ -1,10 +1,8 @@
 package com.group6.Rental_Car.dtos.order;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
+@Data
 public class OrderReturnRequest {
-    private Integer actualHours;
+    private Integer actualDays; // số ngày thuê thực tế (nếu người dùng muốn override)
 }

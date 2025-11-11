@@ -21,45 +21,34 @@ public class RentalOrder {
     @Id
     @GeneratedValue
     @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @Column(name = "order_id")
     private UUID orderId;
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
     private User customer;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "vehicle_id", nullable = false)
-    private Vehicle vehicle;
+    @Column(name = "total_price", precision = 12, scale = 2)
+    private BigDecimal totalPrice = BigDecimal.ZERO;
 
-    private LocalDateTime startTime;
-
-    private LocalDateTime endTime;
-
-    private BigDecimal totalPrice;
-
-    private Integer plannedHours;
-
-    private Integer actualHours;
-
-    private BigDecimal penaltyFee;
-
-    @Column(name = "deposit_amount", precision = 12, scale = 2)
-    private BigDecimal depositAmount;
-
-    @Column(name = "remaining_amount", precision = 12, scale = 2)
-    private BigDecimal remainingAmount;
+    @Column(length = 50)
+    private String status;
 
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "coupon_id")
+    private Coupon coupon;
 
-    private String status;
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RentalOrderDetail> details;
+
     @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "coupon_id")
-    private Coupon coupon; // thêm liên kết coupon (optional)
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderService> services;
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    private List<VehicleTimeline> timelines;
 }
-

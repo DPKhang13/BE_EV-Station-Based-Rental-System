@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.services.staffschedule;
 
+import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.staffschedule.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +13,5 @@ public interface StaffScheduleService {
     StaffScheduleResponse create(StaffScheduleCreateRequest req);
     StaffScheduleResponse update(Integer id, StaffScheduleUpdateRequest req);
     Page<StaffScheduleResponse> getAll(Pageable pageable);
-    void intPickup(UUID staffId, LocalDate date, String shiftTime);
-    void intReturn(UUID staffId, LocalDate date, String shiftTime);
+    List<StaffResponse> getStaffList();
 }

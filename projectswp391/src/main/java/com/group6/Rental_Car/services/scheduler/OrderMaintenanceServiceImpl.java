@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.services.scheduler;
 import com.group6.Rental_Car.entities.RentalOrder;
+import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -33,7 +34,11 @@ public class OrderMaintenanceServiceImpl implements OrderMaintenanceService {
             if (duration.toMinutes() >= 10) {
                 order.setStatus("PAYMENT_FAILED");
 
-                Vehicle vehicle = order.getVehicle();
+                Vehicle vehicle = order.getDetails().stream()
+                        .filter(d -> "RENTAL".equalsIgnoreCase(d.getType())) // chi tiết chính
+                        .map(RentalOrderDetail::getVehicle)
+                        .findFirst()
+                        .orElse(null);
                 if (vehicle != null) {
                     vehicle.setStatus("AVAILABLE");
                     vehicleRepository.save(vehicle);

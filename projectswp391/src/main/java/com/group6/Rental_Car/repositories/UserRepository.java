@@ -22,6 +22,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
 
     User findFirstByEmail(String email);
+    List<User> findByRole(Role role);
 
     boolean existsByEmailAndPassword(@Email String email, @Min(6) @Max(200) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]") String password);
     //Admin Dashboard

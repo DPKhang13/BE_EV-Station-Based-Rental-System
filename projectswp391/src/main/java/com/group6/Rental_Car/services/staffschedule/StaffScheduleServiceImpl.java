@@ -1,11 +1,13 @@
     package com.group6.Rental_Car.services.staffschedule;
 
+    import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
     import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleCreateRequest;
     import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleResponse;
     import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleUpdateRequest;
     import com.group6.Rental_Car.entities.EmployeeSchedule;
     import com.group6.Rental_Car.entities.RentalStation;
     import com.group6.Rental_Car.entities.User;
+    import com.group6.Rental_Car.enums.Role;
     import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
     import com.group6.Rental_Car.repositories.RentalStationRepository;
     import com.group6.Rental_Car.repositories.UserRepository;
@@ -19,8 +21,11 @@
     import org.springframework.data.domain.Pageable;
     import org.springframework.stereotype.Service;
     import java.time.LocalDate;
+    import java.util.Collections;
     import java.util.List;
+    import java.util.Map;
     import java.util.UUID;
+    import java.util.stream.Collectors;
 
     @Service
     @RequiredArgsConstructor
@@ -90,27 +95,8 @@
             return employeeScheduleRepository.findAll(pageable).map(this::toResponse);
         }
 
-        @Transactional
-        public void intPickup(UUID staffId, LocalDate date, String shiftTime) {
-            var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, date, shiftTime)
-                    .orElseThrow(() -> new IllegalStateException("Employee schedule not found"));
-            es.setPickupCount(es.getPickupCount() + 1);
-            employeeScheduleRepository.saveAndFlush(es);
-        }
 
-        @Transactional
-        public void intReturn(UUID staffId, LocalDate date, String shiftTime) {
-            var es = employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(staffId, date, shiftTime)
-                    .orElseThrow(() -> new IllegalStateException("Employee schedule not found"));
-            es.setReturnCount(es.getReturnCount() + 1);
-            employeeScheduleRepository.saveAndFlush(es);
-        }
 
-        public Page<StaffScheduleResponse> search(UUID userId, Integer stationId, LocalDate from, LocalDate to, String q, Pageable pageable) {
-            String kw = (q == null || q.isBlank()) ? null : q.trim();
-            return employeeScheduleRepository.search(userId, stationId, from, to, kw, pageable)
-                    .map(this::toResponse);
-        }
 
         private StaffScheduleResponse toResponse(EmployeeSchedule e) {
             StaffScheduleResponse dto = new StaffScheduleResponse();
@@ -122,6 +108,38 @@
             dto.setShiftDate(e.getShiftDate());
             dto.setShiftTime(e.getShiftTime());
             return dto;
+        }
+        @Override
+        public List<StaffResponse> getStaffList() {
+
+            List<User> staffList = userRepository.findByRole(Role.staff);
+
+            Map<UUID, List<EmployeeSchedule>> map = employeeScheduleRepository.findAll()
+                    .stream()
+                    .collect(Collectors.groupingBy(s -> s.getStaff().getUserId()));
+
+            return staffList.stream().map(u -> {
+                List<EmployeeSchedule> schedules = map.getOrDefault(u.getUserId(), Collections.emptyList());
+
+                long pickupCount = schedules.stream()
+                        .mapToLong(EmployeeSchedule::getPickupCount)
+                        .sum();
+
+                long returnCount = schedules.stream()
+                        .mapToLong(EmployeeSchedule::getReturnCount)
+                        .sum();
+
+                return new StaffResponse(
+                        u.getUserId().toString(),
+                        u.getFullName(),
+                        u.getEmail(),
+                        u.getRole().name(),
+                        u.getRentalStation() != null ? u.getRentalStation().getName() : null,
+                        pickupCount,
+                        returnCount,
+                        u.getStatus().toString()
+                );
+            }).collect(Collectors.toList());
         }
 
 

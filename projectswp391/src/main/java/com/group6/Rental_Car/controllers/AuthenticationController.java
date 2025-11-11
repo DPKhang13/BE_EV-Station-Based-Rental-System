@@ -198,4 +198,9 @@ public class AuthenticationController {
         List<UserVerificationResponse> pendingUsers = userService.getPendingVerificationUsers();
         return ResponseEntity.ok(pendingUsers);
     }
+    @GetMapping("/getAll/customer")
+    public ResponseEntity<List<AccountDtoResponse>> getAllCustomers() {
+        userService.getAllCustomer();
+        return ResponseEntity.ok(userService.getAllCustomer());
+    }
 }

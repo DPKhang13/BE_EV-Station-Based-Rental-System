@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.controllers;
 
+import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleCreateRequest;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleResponse;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleUpdateRequest;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -48,6 +50,8 @@ public class    StaffScheduleController {
     ) {
         return ResponseEntity.ok(staffScheduleService.getAll(pageable));
     }
-
-
+    @GetMapping("getlist/staff")
+    public ResponseEntity<List<StaffResponse>> getStaffList(){
+        return ResponseEntity.ok(staffScheduleService.getStaffList());
+    }
 }
