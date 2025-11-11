@@ -134,19 +134,19 @@ public class VehicleController {
                         break;
                     case "bạc":
                     case "silver":
-                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%284%29.jpg";
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%281%29.jpg";
                         break;
                     case "đỏ":
                     case "red":
-                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%282%29.jpg";
+                        imageUrl = baseUrl + "/7_Cho/Tesla/Gemini_Generated_Image_xq0cn2xq0cn2xq0c.png";
                         break;
                     case "đen":
                     case "black":
-                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%283%29.jpg";
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%282%29.jpg";
                         break;
                     case "xanh":
                     case "blue":
-                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%281%29.jpg";
+                        imageUrl = baseUrl + "/7_Cho/Tesla/unnamed%20%285%29.jpg";
                         break;
                 }
             }

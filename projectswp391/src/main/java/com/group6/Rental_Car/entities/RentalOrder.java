@@ -6,6 +6,7 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,35 +28,18 @@ public class RentalOrder {
     @JoinColumn(name = "customer_id", nullable = false)
     private User customer;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "vehicle_id", nullable = false)
-    private Vehicle vehicle;
-
-    private LocalDateTime startTime;
-
-    private LocalDateTime endTime;
-
+    @Column(name = "total_price")
     private BigDecimal totalPrice;
 
-    private Integer plannedHours;
-
-    private Integer actualHours;
-
-    private BigDecimal penaltyFee;
-
-    @Column(name = "deposit_amount", precision = 12, scale = 2)
-    private BigDecimal depositAmount;
-
-    @Column(name = "remaining_amount", precision = 12, scale = 2)
-    private BigDecimal remainingAmount;
-
-    @Column(name = "created_at", updatable = false, nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
-
-
+    // pending | active | completed | cancelled
+    @Column(name = "status")
     private String status;
-    @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Payment> payments;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RentalOrderDetail> details = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "coupon_id")

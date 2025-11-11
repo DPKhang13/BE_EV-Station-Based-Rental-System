@@ -1,8 +1,7 @@
 package com.group6.Rental_Car.services.admindashboard;
 
 import com.group6.Rental_Car.dtos.admindashboard.AdminDashboardResponse;
-import com.group6.Rental_Car.entities.Incident;
-import com.group6.Rental_Car.enums.IncidentStatus;
+import com.group6.Rental_Car.entities.OrderService;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +21,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
     private final RentalOrderRepository rentalOrderRepository;
+    private final RentalOrderDetailRepository rentalOrderDetailRepository; // ⬅️ dùng detail cho doanh thu/ngày/giờ
     private final FeedbackRepository feedbackRepository;
-    private final IncidentRepository incidentRepository;
+    private final OrderServiceRepository orderServiceRepository;           // ⬅️ thay Incident
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
@@ -40,8 +40,6 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         Timestamp tsFrom = Timestamp.valueOf(from.atStartOfDay());
         Timestamp tsTo   = Timestamp.valueOf(LocalDateTime.of(to, LocalTime.MAX));
-//        LocalDateTime ldtFrom = tsFrom.toLocalDateTime();
-//        LocalDateTime ldtTo   = tsTo.toLocalDateTime();
 
         // ===== KPI Vehicle =====
         long totalVehicles       = vehicleRepository.count();
@@ -51,9 +49,10 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== KPI Orders + Revenue =====
         long totalOrders   = rentalOrderRepository.count();
-        long activeOrders  = rentalOrderRepository.countByStatus("COMPLETED");
+        // lưu ý: status của rentalorder theo schema mới: pending | active | completed | cancelled
+        long completedOrders = rentalOrderRepository.countByStatus("completed");
         double revenueInRange = Optional
-                .ofNullable(rentalOrderRepository.revenueBetween(tsFrom, tsTo))
+                .ofNullable(rentalOrderDetailRepository.revenueBetween(tsFrom, tsTo)) // ⬅️ sum price ở detail
                 .orElse(0d);
 
         // ===== KPI Users =====
@@ -62,35 +61,30 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long staffs     = userRepository.countByRole(Role.staff);
         long customers  = userRepository.countByRole(Role.customer);
 
-
-        // ===== Incident=====
-        // Tổng chi phí sự cố trong khoảng
+        // ===== OrderService (thay Incident) =====
+        // Tổng chi phí dịch vụ/sự cố trong khoảng (sum cost)
         double incidentCostInRange = Optional
-                .ofNullable(incidentRepository.totalCostBetweenTs(tsFrom, tsTo))
+                .ofNullable(orderServiceRepository.totalCostBetweenTs(tsFrom, tsTo)) // occurred_at
                 .orElse(0d);
 
-        // Lấy toàn bộ incident trong khoảng để nhóm theo status/severity
-        // (cần method này trong IncidentRepository – xem ghi chú bên dưới)
-        List<Incident> incidentsInRange =
-                incidentRepository.findAllInRange(from, to);
+        // Lấy toàn bộ orderservice trong khoảng để nhóm theo status/type
+        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(from, to);
 
-        long totalIncidentsInRange = incidentsInRange.size();
-        long openIncidents         = incidentsInRange.stream()
-                .filter(i -> i.getStatus() == IncidentStatus.OPEN).count();
-        long inProgressIncidents   = incidentsInRange.stream()
-                .filter(i -> i.getStatus() == IncidentStatus.IN_PROGRESS).count();
-        long resolvedIncidents     = incidentsInRange.stream()
-                .filter(i -> i.getStatus() == IncidentStatus.RESOLVED).count();
+        long totalIncidentsInRange = servicesInRange.size();
+        long pendingIncidents      = servicesInRange.stream().filter(i -> eq(i.getStatus(),"pending")).count();
+        long processingIncidents   = servicesInRange.stream().filter(i -> eq(i.getStatus(),"processing")).count();
+        long doneIncidents         = servicesInRange.stream().filter(i -> eq(i.getStatus(),"done")).count();
+        long cancelledIncidents    = servicesInRange.stream().filter(i -> eq(i.getStatus(),"cancelled")).count();
 
-        Map<String, Long> incidentsByStatus = incidentsInRange.stream()
-                .collect(Collectors.groupingBy(i -> i.getStatus().name(), Collectors.counting()));
+        Map<String, Long> incidentsByStatus = servicesInRange.stream()
+                .collect(Collectors.groupingBy(i -> nz(i.getStatus()).toUpperCase(), Collectors.counting()));
 
-        // Nếu có enum IncidentSeverity thì thay i.getSeverity().name()
-        Map<String, Long> incidentsBySeverity = incidentsInRange.stream()
-                .collect(Collectors.groupingBy(i -> i.getSeverity().name(), Collectors.counting()));
+        // Không còn severity trong schema mới => nhóm theo service_type
+        Map<String, Long> incidentsByType = servicesInRange.stream()
+                .collect(Collectors.groupingBy(i -> nz(i.getServiceType()).toUpperCase(), Collectors.counting()));
 
-        // Incidents theo ngày (điền đủ các ngày trống)
-        var incDayRows = incidentRepository.incidentsByDay(tsFrom, tsTo);
+        // Incidents theo ngày (điền đủ các ngày trống) -> DATE(occurred_at)
+        var incDayRows = orderServiceRepository.incidentsByDay(tsFrom, tsTo);
         Map<LocalDate, Long> incDayMap = incDayRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
                 r -> ((Number) r[1]).longValue()
@@ -103,8 +97,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     .build());
         }
 
-        // ===== Revenue for each station=====
-        var revStationRows = rentalOrderRepository.revenuePerStation(tsFrom, tsTo);
+        // ===== Revenue for each station (theo rentalorder_detail.price) =====
+        var revStationRows = rentalOrderDetailRepository.revenuePerStation(tsFrom, tsTo);
         var revenueByStation = revStationRows.stream()
                 .map(r -> AdminDashboardResponse.StationRevenue.builder()
                         .stationId(((Number) r[0]).intValue())
@@ -113,27 +107,20 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .build())
                 .toList();
 
-        // =====Recent incidents (giới hạn 10,có thể đổi)=====
-        var recentRows = incidentRepository.recentIncidents(tsFrom, tsTo, 10);
+        // ===== Recent order services (giới hạn 10) =====
+        // SELECT: service_id, vehicle_id, vehicle_name, description, status, occurred_at, cost
+        var recentRows = orderServiceRepository.recentIncidents(tsFrom, tsTo, 10);
         var recentIncidents = recentRows.stream().map(r ->
                 AdminDashboardResponse.RecentIncident.builder()
                         .incidentId(((Number) r[0]).intValue())
                         .vehicleId(((Number) r[1]).longValue())
                         .vehicleName((String) r[2])
                         .description((String) r[3])
-                        .severity(String.valueOf(r[4]))
-                        .status(String.valueOf(r[5]))
-                        .occurredOn(((java.sql.Date) r[6]).toLocalDate())
-                        .cost(r[7] == null ? 0d : ((Number) r[7]).doubleValue())
+                        .status(String.valueOf(r[4]))
+                        .occurredOn(((java.sql.Timestamp) r[5]).toLocalDateTime().toLocalDate())
+                        .cost(r[6] == null ? 0d : ((Number) r[6]).doubleValue())
                         .build()
         ).toList();
-
-        // ===== Vehicles by status =====
-        var vehiclesByStatus = List.of(
-                AdminDashboardResponse.LabelCount.builder().label("AVAILABLE").count(availableVehicles).build(),
-                AdminDashboardResponse.LabelCount.builder().label("RENTAL").count(rentedVehicles).build(),
-                AdminDashboardResponse.LabelCount.builder().label("MAINTENANCE").count(maintenanceVehicles).build()
-        );
 
         // ===== Vehicles by station =====
         var vehiclesByStation = vehicleRepository.vehiclesPerStation().stream()
@@ -144,8 +131,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .build())
                 .toList();
 
-        // ===== Revenue by day=====
-        var revRows = rentalOrderRepository.revenueByDay(tsFrom, tsTo);
+        // ===== Revenue by day (từ rentalorder_detail.start_time) =====
+        var revRows = rentalOrderDetailRepository.revenueByDay(tsFrom, tsTo);
         Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
                 r -> ((Number) r[1]).doubleValue()
@@ -168,87 +155,89 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         TreeMap::new
                 ));
 
-        //===== Order by Hour & Peak =====
-        var hourRows = rentalOrderRepository.ordersByHour(tsFrom, tsTo);
-        //Chuẩn hóa thành đủ 24h (nếu giờ không có đơn => 0)
-        long[] hours = new long[24];
-        for(Object[] r: hourRows) {
-            int h = ((Number) r[0]).intValue(); //0...23
+        // ===== Orders by hour & Peak Window (3 giờ) =====
+        var hourRows = rentalOrderDetailRepository.ordersByHour(tsFrom, tsTo);
+        long[] hours = new long[24]; // 0..23
+        for (Object[] r : hourRows) {
+            int h = ((Number) r[0]).intValue();
             long c = ((Number) r[1]).longValue();
-            if(h >=  0 && h <=23 ) hours[h] = c;
+            if (h >= 0 && h <= 23) hours[h] = c;
         }
-        List<AdminDashboardResponse.HourCount> orderByHour = new ArrayList<>();
-        for( int  h =0; h <24; h++){
-            orderByHour.add(AdminDashboardResponse.HourCount.builder()
+        List<AdminDashboardResponse.HourCount> ordersByHour = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            ordersByHour.add(AdminDashboardResponse.HourCount.builder()
                     .hour(h)
+                    .count(hours[h])
                     .build());
         }
-        //Tính khung giờ cao điểm với cửa sổ 3 giờ liên tiếp (0-1-2, 1-2-3...)
-        int windowSize =3;
+        int windowSize = 3;
         long bestSum = -1;
         int bestStart = 0;
-        for( int start =0; start <= 24 - windowSize; start++) {
-            long sum =0;
-            for( int k =0; k <windowSize; k++) {
-                if( sum > bestSum){
-                    bestSum = sum;
-                    bestStart = start;
-                }
+        for (int start = 0; start <= 24 - windowSize; start++) {
+            long sum = 0;
+            for (int k = 0; k < windowSize; k++) sum += hours[start + k];
+            if (sum > bestSum) {
+                bestSum = sum;
+                bestStart = start;
             }
         }
+        AdminDashboardResponse.PeakHourWindow peakWindow = AdminDashboardResponse.PeakHourWindow.builder()
+                .startHour(bestStart)
+                .endHour(bestStart + windowSize - 1)
+                .windowSize(windowSize)
+                .total(Math.max(bestSum, 0))
+                .build();
 
-        // ===== Build KPI =====
+        // ===== KPI =====
         var kpi = AdminDashboardResponse.Kpi.builder()
                 .totalVehicles(totalVehicles)
                 .availableVehicles(availableVehicles)
                 .rentedVehicles(rentedVehicles)
                 .maintenanceVehicles(maintenanceVehicles)
                 .totalOrders(totalOrders)
-                .activeOrders(activeOrders)
+                .activeOrders(completedOrders)      // nếu muốn hiển thị "đơn hoàn tất" => dùng completedOrders
                 .revenueInRange(revenueInRange)
                 .totalUsers(totalUsers)
                 .admins(admins)
                 .staffs(staffs)
                 .customers(customers)
-                //tổng chi phí incident
                 .maintenanceCostInRange(incidentCostInRange)
                 .build();
 
-        // ===== Build IncidentKpi =====
+        // ===== IncidentKpi (OrderService) =====
         var incidentKpi = AdminDashboardResponse.IncidentKpi.builder()
                 .totalIncidentsInRange(totalIncidentsInRange)
-                .openIncidents(openIncidents)
-                .inProgressIncidents(inProgressIncidents)
-                .resolvedIncidents(resolvedIncidents)
+                .openIncidents(pendingIncidents)        // map: pending ~ open
+                .inProgressIncidents(processingIncidents)
+                .resolvedIncidents(doneIncidents)
                 .incidentCostInRange(incidentCostInRange)
                 .build();
 
-        //===== Build PeakHourWindow=====
-        AdminDashboardResponse.PeakHourWindow peakWindow =
-                AdminDashboardResponse.PeakHourWindow.builder()
-                        .startHour(bestStart)
-                        .endHour(bestStart + windowSize - 1)
-                        .windowSize(windowSize)
-                        .total(bestSum < 0 ? 0 : bestSum)
-                        .build();
-
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
-                .vehiclesByStatus(vehiclesByStatus)
+                .vehiclesByStatus(List.of(
+                        AdminDashboardResponse.LabelCount.builder().label("AVAILABLE").count(availableVehicles).build(),
+                        AdminDashboardResponse.LabelCount.builder().label("RENTAL").count(rentedVehicles).build(),
+                        AdminDashboardResponse.LabelCount.builder().label("MAINTENANCE").count(maintenanceVehicles).build()
+                ))
                 .vehiclesByStation(vehiclesByStation)
                 .revenueByDay(revenueByDay)
                 .avgRating(avgRating)
                 .ratingDistribution(ratingDistribution)
                 .revenueByStation(revenueByStation)
-                // New: Incident section
                 .incidentKpi(incidentKpi)
                 .incidentsByDay(incidentsByDay)
                 .incidentsByStatus(incidentsByStatus)
-                .incidentsBySeverity(incidentsBySeverity)
+                // ⬇️ nếu DTO của bạn vẫn là "incidentsBySeverity", tạm thời map theo service_type:
+                .incidentsBySeverity(incidentsByType)
                 .recentIncidents(recentIncidents)
-                // NEW: Giờ thuê cao điểm
-                .orderByHour(orderByHour)
+                .orderByHour(ordersByHour)
                 .peakHourWindow(peakWindow)
                 .build();
     }
+
+    private static boolean eq(String a, String b) {
+        return a != null && a.equalsIgnoreCase(b);
+    }
+    private static String nz(String s) { return s == null ? "UNKNOWN" : s; }
 }

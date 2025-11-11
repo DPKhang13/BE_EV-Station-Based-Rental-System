@@ -3,11 +3,13 @@ package com.group6.Rental_Car.dtos.order;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 @Data
 @AllArgsConstructor
+@RequiredArgsConstructor
 public class OrderCreateRequest {
     private UUID customerId;        // ID khách hàng đặt xe
     private Long vehicleId;
