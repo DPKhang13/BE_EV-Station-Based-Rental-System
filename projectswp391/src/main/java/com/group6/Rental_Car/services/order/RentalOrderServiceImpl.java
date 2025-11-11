@@ -93,7 +93,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .startTime(start)
                 .endTime(end)
                 .price(totalPrice)
-                .status("confirmed")
+                .status("CONFIRM")
                 .build();
         rentalOrderDetailRepository.save(detail);
 
@@ -150,7 +150,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             vehicleRepository.save(oldVehicle);
 
             mainDetail.setVehicle(newVehicle);
-            mainDetail.setStatus("switched");
+            mainDetail.setStatus("SWITCHED");
             rentalOrderDetailRepository.save(mainDetail);
 
             newVehicle.setStatus("BOOKED");
@@ -248,7 +248,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             total = total.add(rule.getLateFeePerDay().multiply(BigDecimal.valueOf(extra)));
         }
 
-        mainDetail.setStatus("done");
+        mainDetail.setStatus("DONE");
         mainDetail.setPrice(total);
         rentalOrderDetailRepository.save(mainDetail);
 
@@ -292,16 +292,14 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     : BigDecimal.ZERO;
 
-// Tổng tiền đã thanh toán (DEPOSITED hoặc PAYMENT_SUCCESS)
+            //  Tổng tiền đã thanh toán (bao gồm hoàn tiền, vì REFUND là âm)
             BigDecimal totalPaid = order.getPayments() != null
                     ? order.getPayments().stream()
-                    .filter(p -> p.getStatus() == PaymentStatus.DEPOSIT ||
-                            p.getStatus() == PaymentStatus.SUCCESS)
                     .map(p -> p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     : BigDecimal.ZERO;
 
-//  Tổng tiền còn lại = (thuê + dịch vụ) - đã thanh toán
+            //  Tổng còn lại = (thuê + dịch vụ) - tổng đã thanh toán
             BigDecimal remainingAmount = order.getTotalPrice()
                     .add(totalServiceCost)
                     .subtract(totalPaid);
@@ -329,6 +327,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .build();
         }).toList();
     }
+
 
 
     @Override

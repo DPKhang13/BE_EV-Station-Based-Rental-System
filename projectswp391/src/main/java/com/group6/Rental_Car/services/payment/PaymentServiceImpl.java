@@ -87,7 +87,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .startTime(LocalDateTime.now())
                 .endTime(LocalDateTime.now())
                 .price(amount)
-                .status("pending")
+                .status("PENDING")
                 .description("Thanh toán " + (type == 1 ? "đặt cọc" : "phần còn lại"))
                 .build();
         rentalOrderDetailRepository.save(detail);
@@ -149,7 +149,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (success) {
             payment.setStatus(PaymentStatus.SUCCESS);
             order.setStatus(payment.getPaymentType() == 1 ? "DEPOSITED" : "PAID");
-            recordTransaction(order, payment, payment.getPaymentType() == 1 ? "Deposit" : "Final");
+            recordTransaction(order, payment, payment.getPaymentType() == 1 ? "DEPOSIT" : "FINAL");
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             order.setStatus("PAYMENT_FAILED");
