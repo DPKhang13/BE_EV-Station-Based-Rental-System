@@ -105,7 +105,7 @@ public class UserServiceImpl implements UserService {
     // ========== VERIFY OTP ==========
     @Override
     public AccountDtoResponse verifyOtp(String inputOtp, String email) {
-        if (!otpMailService.validateOtp(email, inputOtp)) { // ✅ đổi vị trí
+        if (!otpMailService.validateOtp(email, inputOtp)) { //  đổi vị trí
             throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 
@@ -115,7 +115,7 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.ACTIVE_PENDING);
         userRepository.save(user);
 
-        otpMailService.clearOtp(email); // ✅ dùng email làm key
+        otpMailService.clearOtp(email); //  dùng email làm key
 
         return mapToResponse(user);
     }
@@ -133,7 +133,7 @@ public class UserServiceImpl implements UserService {
     // ========== VERIFY FORGOT PASSWORD OTP ==========
     @Override
     public boolean verifyForgetPassword(String inputOtp, String email) {
-        if (!otpMailService.validateOtp(inputOtp,email)) {
+        if (!otpMailService.validateOtp(email, inputOtp)) {
             throw new OtpValidationException("Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 
