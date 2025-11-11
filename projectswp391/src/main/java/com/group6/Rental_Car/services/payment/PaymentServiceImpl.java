@@ -39,7 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final UserRepository userRepository;
 
     // ===============================
-    // 1️⃣ TẠO LINK THANH TOÁN
+    //  TẠO LINK THANH TOÁN
     // ===============================
     @Override
     @Transactional
@@ -59,7 +59,7 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal amount;
         String method = dto.getMethod() != null ? dto.getMethod() : "VNPAY";
 
-        // ✅ Xác định số tiền cần thanh toán
+        //  Xác định số tiền cần thanh toán
         if (type == 1) {
             // 50% cọc
             amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5));
@@ -123,7 +123,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ===============================
-    // 2️⃣ XỬ LÝ CALLBACK TỪ VNPAY
+    //  XỬ LÝ CALLBACK TỪ VNPAY
     // ===============================
     @Override
     @Transactional
@@ -170,7 +170,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ===============================
-    // 3️⃣ HOÀN TIỀN (REFUND)
+    //  HOÀN TIỀN (REFUND)
     // ===============================
     @Override
     @Transactional
