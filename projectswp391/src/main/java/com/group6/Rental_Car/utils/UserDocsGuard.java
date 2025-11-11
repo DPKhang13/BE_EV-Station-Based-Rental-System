@@ -15,7 +15,7 @@ public final class UserDocsGuard {
         boolean hasCCCD = Boolean.TRUE.equals(existsByType.apply(userId, "CCCD"));
         boolean hasGPLX = Boolean.TRUE.equals(existsByType.apply(userId, "GPLX"));
 
-        if (!hasCCCD && !hasGPLX) {
+        if (!hasCCCD || !hasGPLX) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,"You have to update verify docs in edit profile before booking!"
             );
