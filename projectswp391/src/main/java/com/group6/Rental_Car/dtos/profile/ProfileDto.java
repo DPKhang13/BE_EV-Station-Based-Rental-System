@@ -17,4 +17,5 @@ public class ProfileDto {
 
     @Pattern(regexp = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$", message = "Invalid email")
     private String email;
+
 }

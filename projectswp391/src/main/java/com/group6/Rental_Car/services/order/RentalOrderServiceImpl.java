@@ -11,6 +11,7 @@ import com.group6.Rental_Car.services.coupon.CouponService;
 import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
 import com.group6.Rental_Car.services.vehicle.VehicleModelService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
+import com.group6.Rental_Car.utils.UserDocsGuard;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -26,7 +27,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class RentalOrderServiceImpl implements RentalOrderService {
-
+    private final PhotoRepository photoRepository;
     private final RentalOrderRepository rentalOrderRepository;
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final VehicleRepository vehicleRepository;
@@ -44,6 +45,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         JwtUserDetails jwt = currentUser();
         User customer = userRepository.findById(jwt.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+        UserDocsGuard.assertHasDocs(
+                customer.getUserId(),
+                (uid, type) -> photoRepository.existsByUser_UserIdAndTypeIgnoreCase(uid, type)
+        );
 
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
@@ -178,8 +184,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
-    public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
-        return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
+    public List<OrderResponse> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId) {
+        return rentalOrderRepository.findByCustomer_UserIdOrderByCreatedAtDesc(customerId).stream()
                 .map(order -> mapToResponse(order, getMainDetail(order)))
                 .collect(Collectors.toList());
     }

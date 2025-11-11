@@ -55,4 +55,5 @@ public class User {
 
     @OneToMany(mappedBy = "staff", fetch = FetchType.LAZY)
     private List<EmployeeSchedule> employeeSchedules;
+
 }
