@@ -89,11 +89,9 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
     @Override
     public List<OrderDetailResponse> getDetailsByOrder(UUID orderId) {
-        // Lấy order
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        // Ẩn RENTAL nếu đơn không còn ở trạng thái khởi tạo
         boolean hideRental = List.of("DEPOSITED", "PAID", "BOOKED", "RENTAL", "RETURNED", "COMPLETED")
                 .contains(order.getStatus().toUpperCase());
 
@@ -101,16 +99,15 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
                 .stream()
                 .filter(d -> {
                     if (hideRental) {
-                        return !"RENTAL".equalsIgnoreCase(
-                                Optional.ofNullable(d.getType()).orElse("")
-                        );
+                        String type = Optional.ofNullable(d.getType()).orElse("").trim().toUpperCase();
+                        return !"RENTAL".equals(type);
                     }
                     return true;
                 })
                 .map(this::toResponse)
                 .collect(Collectors.toList());
 
-        // Gộp thêm các service (nếu có)
+        // Gộp service (nếu có)
         List<OrderService> services = orderServiceRepository.findByOrder_OrderId(orderId);
         for (OrderService s : services) {
             OrderDetailResponse dto = new OrderDetailResponse();
@@ -129,12 +126,10 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
             details.add(dto);
         }
 
-        // Sắp xếp theo thời gian cho dễ nhìn
         return details.stream()
                 .sorted(Comparator.comparing(OrderDetailResponse::getStartTime))
                 .collect(Collectors.toList());
     }
-
     @Override
     public List<OrderDetailResponse> getDetailsByVehicle(Long vehicleId) {
         return rentalOrderDetailRepository.findByVehicle_VehicleId(vehicleId)
