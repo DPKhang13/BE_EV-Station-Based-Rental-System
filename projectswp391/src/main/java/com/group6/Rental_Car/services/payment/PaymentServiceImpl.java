@@ -104,18 +104,22 @@ public class PaymentServiceImpl implements PaymentService {
         rentalOrderRepository.save(order);
 
         // Ghi chi tiết transaction
-        if (type != 2) { // Đừng tạo mới khi thanh toán phần còn lại
-            RentalOrderDetail detail = RentalOrderDetail.builder()
-                    .order(order)
-                    .vehicle(order.getDetails().get(0).getVehicle())
-                    .type(getTypeNameByPayment(type))
-                    .startTime(LocalDateTime.now())
-                    .endTime(LocalDateTime.now())
-                    .price(amount.abs())
-                    .status("PENDING")
-                    .description(getDescriptionByType(type))
-                    .build();
-            rentalOrderDetailRepository.save(detail);
+        if (type == 2) {
+            boolean hasPickup = order.getDetails().stream()
+                    .anyMatch(d -> "PICKUP".equalsIgnoreCase(d.getType()));
+            if (!hasPickup) {
+                RentalOrderDetail pickup = RentalOrderDetail.builder()
+                        .order(order)
+                        .vehicle(order.getDetails().get(0).getVehicle())
+                        .type("PICKUP")
+                        .startTime(LocalDateTime.now())
+                        .endTime(LocalDateTime.now())
+                        .price(amount.abs())
+                        .status("PENDING")
+                        .description("Thanh toán phần còn lại khi nhận xe")
+                        .build();
+                rentalOrderDetailRepository.save(pickup);
+            }
         }
 
         // Tạo link VNPay
@@ -185,7 +189,10 @@ public class PaymentServiceImpl implements PaymentService {
                             });
 
                     //  Tạo PICKUP nếu còn tiền
-                    if (remaining.compareTo(BigDecimal.ZERO) > 0) {
+                    boolean hasPickup = order.getDetails().stream()
+                            .anyMatch(d -> "PICKUP".equalsIgnoreCase(d.getType()));
+
+                    if (!hasPickup && remaining.compareTo(BigDecimal.ZERO) > 0) {
                         RentalOrderDetail pickup = RentalOrderDetail.builder()
                                 .order(order)
                                 .vehicle(order.getDetails().get(0).getVehicle())
@@ -204,7 +211,7 @@ public class PaymentServiceImpl implements PaymentService {
                     order.setStatus("PAID");
                     payment.setRemainingAmount(BigDecimal.ZERO);
 
-                    //  Cập nhật PICKUP → SUCCESS thay vì tạo FINAL
+                    //  Cập nhật PICKUP → SUCCESS
                     rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
                             .stream()
                             .filter(d -> "PICKUP".equalsIgnoreCase(d.getType()))
