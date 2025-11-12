@@ -267,29 +267,39 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        // Lấy chi tiết chính
+        // Tìm chi tiết PICKUP
+        RentalOrderDetail pickupDetail = order.getDetails().stream()
+                .filter(d -> "PICKUP".equalsIgnoreCase(d.getType()))
+                .reduce((first, second) -> second)
+                .orElse(null);
+
+        if (pickupDetail == null)
+            throw new BadRequestException("Không tìm thấy chi tiết PICKUP trong đơn thuê");
+
+        //  Nếu chưa thanh toán phần còn lại (PICKUP chưa SUCCESS) thì chặn
+        if (!"SUCCESS".equalsIgnoreCase(pickupDetail.getStatus()))
+            throw new BadRequestException("Khách hàng chưa thanh toán phần còn lại — không thể bàn giao xe");
+
+        //  Lấy chi tiết chính (RENTAL)
         RentalOrderDetail mainDetail = getMainDetail(order);
-        if (mainDetail == null) {
-            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
-        }
+        if (mainDetail == null)
+            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê chính (RENTAL)");
 
-        // Lấy xe
+        //  Lấy xe
         Vehicle vehicle = mainDetail.getVehicle();
-        if (vehicle == null) {
+        if (vehicle == null)
             throw new BadRequestException("Không tìm thấy xe trong chi tiết đơn");
-        }
 
-        //  Cập nhật trạng thái
-        order.setStatus("RENTAL");               // Đơn đang trong quá trình thuê
-        mainDetail.setStatus("SUCCESS");         // Chi tiết xác nhận pickup thành công
-        vehicle.setStatus("RENTAL");             // Xe đã được thuê
+        //  Cập nhật trạng thái — KHÔNG tạo thêm detail nào
+        order.setStatus("RENTAL");
+        vehicle.setStatus("RENTAL");
 
         //  Lưu DB
         rentalOrderDetailRepository.save(mainDetail);
         vehicleRepository.save(vehicle);
         rentalOrderRepository.save(order);
 
-        //  Ghi lại timeline để theo dõi lịch sử
+        //  Lưu lịch sử vào timeline
         VehicleTimeline timeline = VehicleTimeline.builder()
                 .vehicle(vehicle)
                 .order(order)
@@ -306,7 +316,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         return mapToResponse(order, mainDetail);
     }
-
 
     @Override
     @Transactional
