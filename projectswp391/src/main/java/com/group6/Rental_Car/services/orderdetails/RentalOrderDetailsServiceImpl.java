@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -87,9 +88,24 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
     @Override
     public List<OrderDetailResponse> getDetailsByOrder(UUID orderId) {
+        // Lấy order để check trạng thái hiện tại
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        // Nếu đơn đã đặt cọc hoặc đã thanh toán -> ẩn RENTAL
+        boolean hideRental = order.getStatus().equalsIgnoreCase("DEPOSITED")
+                || order.getStatus().equalsIgnoreCase("PAID");
+
         List<OrderDetailResponse> details = rentalOrderDetailRepository.findByOrder_OrderId(orderId)
                 .stream()
-                .filter(d -> !"RENTAL".equalsIgnoreCase(d.getType())) //
+                .filter(d -> {
+                    if (hideRental) {
+                        return !"RENTAL".equalsIgnoreCase(
+                                Optional.ofNullable(d.getType()).orElse("")
+                        );
+                    }
+                    return true; // nếu chưa đặt cọc thì vẫn hiển thị RENTAL
+                })
                 .map(this::toResponse)
                 .collect(Collectors.toList());
 
@@ -105,12 +121,17 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
             dto.setEndTime(s.getResolvedAt());
             dto.setPrice(s.getCost());
             dto.setStatus(s.getStatus());
-            dto.setDescription(s.getServiceType() +
-                    (s.getDescription() != null ? " - " + s.getDescription() : ""));
+            dto.setDescription(
+                    s.getServiceType() +
+                            (s.getDescription() != null ? " - " + s.getDescription() : "")
+            );
             details.add(dto);
         }
 
-        return details;
+        // Có thể sort nhẹ để FE hiển thị đẹp hơn
+        return details.stream()
+                .sorted((a, b) -> a.getStartTime().compareTo(b.getStartTime()))
+                .collect(Collectors.toList());
     }
 
     @Override
