@@ -25,7 +25,7 @@ import static com.group6.Rental_Car.utils.ValidationUtil.*;
 @Service
 @RequiredArgsConstructor
 public class VehicleServiceImpl implements VehicleService {
-    private static final Set<String> ALLOWED_STATUS = Set.of("available", "rented", "maintenance");
+    private static final Set<String> ALLOWED_STATUS = Set.of("available", "rented", "maintenance","BOOKED");
     private static final Set<String> ALLOWED_VARIANT = Set.of("air", "pro", "plus");
 
     private final VehicleRepository vehicleRepository;
