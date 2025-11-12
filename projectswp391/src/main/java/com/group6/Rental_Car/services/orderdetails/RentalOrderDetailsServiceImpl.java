@@ -16,6 +16,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -88,13 +89,13 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
     @Override
     public List<OrderDetailResponse> getDetailsByOrder(UUID orderId) {
-        // Lấy order để check trạng thái hiện tại
+        // Lấy order
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        // Nếu đơn đã đặt cọc hoặc đã thanh toán -> ẩn RENTAL
-        boolean hideRental = order.getStatus().equalsIgnoreCase("DEPOSITED")
-                || order.getStatus().equalsIgnoreCase("PAID");
+        // Ẩn RENTAL nếu đơn không còn ở trạng thái khởi tạo
+        boolean hideRental = List.of("DEPOSITED", "PAID", "BOOKED", "RENTAL", "RETURNED", "COMPLETED")
+                .contains(order.getStatus().toUpperCase());
 
         List<OrderDetailResponse> details = rentalOrderDetailRepository.findByOrder_OrderId(orderId)
                 .stream()
@@ -104,12 +105,12 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
                                 Optional.ofNullable(d.getType()).orElse("")
                         );
                     }
-                    return true; // nếu chưa đặt cọc thì vẫn hiển thị RENTAL
+                    return true;
                 })
                 .map(this::toResponse)
                 .collect(Collectors.toList());
 
-        // Gộp thêm các OrderService (nếu có)
+        // Gộp thêm các service (nếu có)
         List<OrderService> services = orderServiceRepository.findByOrder_OrderId(orderId);
         for (OrderService s : services) {
             OrderDetailResponse dto = new OrderDetailResponse();
@@ -128,9 +129,9 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
             details.add(dto);
         }
 
-        // Có thể sort nhẹ để FE hiển thị đẹp hơn
+        // Sắp xếp theo thời gian cho dễ nhìn
         return details.stream()
-                .sorted((a, b) -> a.getStartTime().compareTo(b.getStartTime()))
+                .sorted(Comparator.comparing(OrderDetailResponse::getStartTime))
                 .collect(Collectors.toList());
     }
 
