@@ -318,7 +318,30 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     public OrderResponse previewReturn(UUID orderId, Integer actualDays) {
-        return confirmReturn(orderId, actualDays);
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        Vehicle vehicle = mainDetail.getVehicle();
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
+
+        long actualDaysCount = actualDays != null
+                ? actualDays
+                : ChronoUnit.DAYS.between(mainDetail.getStartTime(), LocalDateTime.now());
+
+        BigDecimal total = rule.getDailyPrice().multiply(BigDecimal.valueOf(actualDaysCount));
+
+        if (actualDaysCount > ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime())) {
+            long extra = actualDaysCount - ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime());
+            total = total.add(rule.getLateFeePerDay().multiply(BigDecimal.valueOf(extra)));
+        }
+
+        //  KHÔNG cập nhật order, chỉ tạo response
+        OrderResponse response = mapToResponse(order, mainDetail);
+        response.setTotalPrice(total);
+        response.setStatus(order.getStatus()); // Giữ nguyên trạng thái hiện tại
+        return response;
     }
 
     @Override
@@ -438,6 +461,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (detail == null) return modelMapper.map(order, OrderResponse.class);
 
         OrderResponse res = modelMapper.map(order, OrderResponse.class);
+        res.setStatus(order.getStatus());
         Vehicle v = detail.getVehicle();
         res.setVehicleId(v != null ? v.getVehicleId() : null);
         res.setStartTime(detail.getStartTime());
