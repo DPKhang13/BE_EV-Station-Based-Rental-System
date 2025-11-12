@@ -189,21 +189,23 @@ public class PaymentServiceImpl implements PaymentService {
                     BigDecimal remaining = order.getTotalPrice().subtract(payment.getAmount());
                     payment.setRemainingAmount(remaining.max(BigDecimal.ZERO));
 
-                    //  Cập nhật DEPOSITED → SUCCESS
+                    //  Nếu có RENTAL thì update nó thành DEPOSITED luôn
                     rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
                             .stream()
-                            .filter(d -> "DEPOSITED".equalsIgnoreCase(d.getType()))
-                            .reduce((first, second) -> second)
+                            .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                            .findFirst()
                             .ifPresent(detail -> {
+                                detail.setType("DEPOSITED");
                                 detail.setStatus("SUCCESS");
+                                detail.setPrice(payment.getAmount());
+                                detail.setDescription("Thanh toán đặt cọc");
+                                detail.setStartTime(LocalDateTime.now());
+                                detail.setEndTime(LocalDateTime.now());
                                 rentalOrderDetailRepository.save(detail);
                             });
 
-                    //  Tạo PICKUP nếu còn tiền
-                    boolean hasPickup = order.getDetails().stream()
-                            .anyMatch(d -> "PICKUP".equalsIgnoreCase(d.getType()));
-
-                    if (!hasPickup && remaining.compareTo(BigDecimal.ZERO) > 0) {
+                    //  Nếu còn tiền → tạo PICKUP
+                    if (remaining.compareTo(BigDecimal.ZERO) > 0) {
                         RentalOrderDetail pickup = RentalOrderDetail.builder()
                                 .order(order)
                                 .vehicle(order.getDetails().get(0).getVehicle())
