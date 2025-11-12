@@ -89,10 +89,11 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
     public List<OrderDetailResponse> getDetailsByOrder(UUID orderId) {
         List<OrderDetailResponse> details = rentalOrderDetailRepository.findByOrder_OrderId(orderId)
                 .stream()
+                .filter(d -> !"RENTAL".equalsIgnoreCase(d.getType())) //
                 .map(this::toResponse)
                 .collect(Collectors.toList());
 
-        // Gộp thêm các OrderService của order đó
+        // Gộp thêm các OrderService (nếu có)
         List<OrderService> services = orderServiceRepository.findByOrder_OrderId(orderId);
         for (OrderService s : services) {
             OrderDetailResponse dto = new OrderDetailResponse();
@@ -104,7 +105,8 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
             dto.setEndTime(s.getResolvedAt());
             dto.setPrice(s.getCost());
             dto.setStatus(s.getStatus());
-            dto.setDescription(s.getServiceType() + (s.getDescription() != null ? " - " + s.getDescription() : ""));
+            dto.setDescription(s.getServiceType() +
+                    (s.getDescription() != null ? " - " + s.getDescription() : ""));
             details.add(dto);
         }
 
