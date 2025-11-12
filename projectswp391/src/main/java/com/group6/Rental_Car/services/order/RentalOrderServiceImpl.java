@@ -371,21 +371,24 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
-        //  Lấy tất cả đơn chưa hoàn tất
+        // Lấy tất cả đơn chưa hoàn tất
         List<RentalOrder> processingOrders = rentalOrderRepository.findAll().stream()
                 .filter(o -> {
-                    String s = o.getStatus().toUpperCase();
+                    String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
                     return s.startsWith("PENDING")     // PENDING_DEPOSIT, PENDING_FINAL, PENDING_FULL_PAYMENT
                             || s.equals("RENTAL")      // đang thuê
                             || s.equals("DEPOSITED");  // đã đặt cọc
                 })
+                //  sort theo createdAt mới nhất
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                 .toList();
 
         return processingOrders.stream().map(order -> {
             User customer = order.getCustomer();
 
             // Lấy chi tiết chính
-            RentalOrderDetail rentalDetail = order.getDetails().stream()
+            RentalOrderDetail rentalDetail = Optional.ofNullable(order.getDetails())
+                    .orElse(List.of()).stream()
                     .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
                     .findFirst()
                     .orElse(null);
@@ -393,33 +396,30 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             Vehicle vehicle = rentalDetail != null ? rentalDetail.getVehicle() : null;
             RentalStation station = vehicle != null ? vehicle.getRentalStation() : null;
 
-            //  Tổng tiền từ tất cả các chi tiết orderDetail (trừ REFUND)
-            BigDecimal totalFromDetails = order.getDetails() != null
-                    ? order.getDetails().stream()
+            // Tổng tiền từ tất cả chi tiết orderDetail (trừ REFUND)
+            BigDecimal totalFromDetails = Optional.ofNullable(order.getDetails())
+                    .orElse(List.of()).stream()
                     .filter(d -> !"REFUND".equalsIgnoreCase(d.getType()))
                     .map(d -> Optional.ofNullable(d.getPrice()).orElse(BigDecimal.ZERO))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    : BigDecimal.ZERO;
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            //  Tổng phí dịch vụ (nếu có)
-            BigDecimal totalServiceCost = order.getServices() != null
-                    ? order.getServices().stream()
+            // Tổng phí dịch vụ
+            BigDecimal totalServiceCost = Optional.ofNullable(order.getServices())
+                    .orElse(List.of()).stream()
                     .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    : BigDecimal.ZERO;
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            //  Tổng tiền thực tế
+            // Tổng tiền thực tế
             BigDecimal totalPrice = totalFromDetails.add(totalServiceCost);
 
-            //  Tổng đã thanh toán (chỉ SUCCESS)
-            BigDecimal totalPaid = order.getPayments() != null
-                    ? order.getPayments().stream()
+            // Tổng đã thanh toán
+            BigDecimal totalPaid = Optional.ofNullable(order.getPayments())
+                    .orElse(List.of()).stream()
                     .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
                     .map(p -> Optional.ofNullable(p.getAmount()).orElse(BigDecimal.ZERO))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    : BigDecimal.ZERO;
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            //  Còn lại = tổng tiền - đã thanh toán
+            // Còn lại = tổng tiền - đã thanh toán
             BigDecimal remainingAmount = totalPrice.subtract(totalPaid);
 
             return OrderVerificationResponse.builder()
@@ -435,7 +435,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .startTime(rentalDetail != null ? rentalDetail.getStartTime() : null)
                     .endTime(rentalDetail != null ? rentalDetail.getEndTime() : null)
 
-                    .totalPrice(totalPrice)         //  Hiển thị y như getOrderDetails
+                    .totalPrice(totalPrice)
                     .totalServices(totalServiceCost)
                     .remainingAmount(remainingAmount)
 
