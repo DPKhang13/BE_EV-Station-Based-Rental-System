@@ -122,7 +122,8 @@ public class PaymentServiceImpl implements PaymentService {
         long vnpAmount = amount.abs().multiply(BigDecimal.valueOf(100)).longValue();
         Map<String, String> vnpParams = vnpayConfig.getVNPayConfig();
         vnpParams.put("vnp_Amount", String.valueOf(vnpAmount));
-        vnpParams.put("vnp_TxnRef", payment.getPaymentId().toString());
+        String uniqueTxnRef = UUID.randomUUID().toString().substring(0, 8);
+        vnpParams.put("vnp_TxnRef", uniqueTxnRef);
         vnpParams.put("vnp_OrderInfo", "Thanh toán đơn " + order.getOrderId());
         vnpParams.put("vnp_IpAddr", "127.0.0.1");
 
@@ -154,11 +155,12 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("VNPay callback: {}", params);
 
         String txnRef = params.get("vnp_TxnRef");
+        String rawPaymentId = txnRef.contains("-") ? txnRef.split("-")[0] : txnRef;
         String responseCode = params.get("vnp_ResponseCode");
         if (txnRef == null || responseCode == null)
             throw new BadRequestException("VNPay callback thiếu tham số cần thiết");
 
-        UUID paymentId = UUID.fromString(txnRef);
+        UUID paymentId = UUID.fromString(rawPaymentId);
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
         RentalOrder order = payment.getRentalOrder();
