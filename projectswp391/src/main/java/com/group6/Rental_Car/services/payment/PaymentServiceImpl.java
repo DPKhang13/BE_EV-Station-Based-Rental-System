@@ -122,7 +122,8 @@ public class PaymentServiceImpl implements PaymentService {
         long vnpAmount = amount.abs().multiply(BigDecimal.valueOf(100)).longValue();
         Map<String, String> vnpParams = vnpayConfig.getVNPayConfig();
         vnpParams.put("vnp_Amount", String.valueOf(vnpAmount));
-        String uniqueTxnRef = payment.getPaymentId().toString() + "-" + System.currentTimeMillis();
+        String encodedPaymentId = payment.getPaymentId().toString().replace("-", "");
+        String uniqueTxnRef = encodedPaymentId + "-" + System.currentTimeMillis();
         vnpParams.put("vnp_TxnRef", uniqueTxnRef);
         vnpParams.put("vnp_OrderInfo", "Thanh toán đơn " + order.getOrderId());
         vnpParams.put("vnp_IpAddr", "127.0.0.1");
@@ -157,7 +158,17 @@ public class PaymentServiceImpl implements PaymentService {
         String txnRef = params.get("vnp_TxnRef");
         if (txnRef == null) throw new BadRequestException("Thiếu mã giao dịch VNPay");
 
-        String rawPaymentId = txnRef.contains("-") ? txnRef.split("-")[0] : txnRef;
+// Lấy phần UUID (trước dấu "-")
+        String rawEncodedId = txnRef.split("-")[0];
+
+// Giải mã lại thành UUID (chèn lại dấu "-")
+        if (rawEncodedId.length() != 32) {
+            throw new BadRequestException("Mã giao dịch không hợp lệ");
+        }
+        String rawPaymentId = rawEncodedId.replaceFirst(
+                "(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})",
+                "$1-$2-$3-$4-$5"
+        );
         String responseCode = params.get("vnp_ResponseCode");
         if (txnRef == null || responseCode == null)
             throw new BadRequestException("VNPay callback thiếu tham số cần thiết");
