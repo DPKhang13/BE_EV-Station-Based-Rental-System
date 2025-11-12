@@ -33,5 +33,6 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50)
     private PaymentStatus status;
+    private BigDecimal remainingAmount;
 
 }

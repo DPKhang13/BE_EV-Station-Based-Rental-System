@@ -20,4 +20,5 @@ public class PaymentResponse {
     private String message;
     private String paymentUrl;
     private short paymentType;
+    private BigDecimal remainingAmount;
 }
