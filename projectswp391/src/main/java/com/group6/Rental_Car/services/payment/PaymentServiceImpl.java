@@ -122,7 +122,7 @@ public class PaymentServiceImpl implements PaymentService {
         long vnpAmount = amount.abs().multiply(BigDecimal.valueOf(100)).longValue();
         Map<String, String> vnpParams = vnpayConfig.getVNPayConfig();
         vnpParams.put("vnp_Amount", String.valueOf(vnpAmount));
-        String uniqueTxnRef = UUID.randomUUID().toString().substring(0, 8);
+        String uniqueTxnRef = payment.getPaymentId().toString() + "-" + System.currentTimeMillis();
         vnpParams.put("vnp_TxnRef", uniqueTxnRef);
         vnpParams.put("vnp_OrderInfo", "Thanh toán đơn " + order.getOrderId());
         vnpParams.put("vnp_IpAddr", "127.0.0.1");
@@ -155,6 +155,8 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("VNPay callback: {}", params);
 
         String txnRef = params.get("vnp_TxnRef");
+        if (txnRef == null) throw new BadRequestException("Thiếu mã giao dịch VNPay");
+
         String rawPaymentId = txnRef.contains("-") ? txnRef.split("-")[0] : txnRef;
         String responseCode = params.get("vnp_ResponseCode");
         if (txnRef == null || responseCode == null)
