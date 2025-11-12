@@ -462,7 +462,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         OrderResponse res = modelMapper.map(order, OrderResponse.class);
         res.setStatus(order.getStatus());
-
         Vehicle v = detail.getVehicle();
         res.setVehicleId(v != null ? v.getVehicleId() : null);
         res.setStartTime(detail.getStartTime());
@@ -475,24 +474,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             res.setStationName(v.getRentalStation().getName());
         }
 
-        //  TÍNH TỔNG TIỀN THANH TOÁN
-        BigDecimal totalPaid = BigDecimal.ZERO;
-        if (order.getPayments() != null) {
-            totalPaid = order.getPayments().stream()
-                    .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
-                    .map(Payment::getAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
-
-        BigDecimal remaining = order.getTotalPrice().subtract(totalPaid);
-        if (remaining.compareTo(BigDecimal.ZERO) < 0) remaining = BigDecimal.ZERO;
-
-        res.setPaidAmount(totalPaid);
-        res.setRemainingAmount(remaining);
-
         return res;
     }
-
 
     private JwtUserDetails currentUser() {
         var auth = SecurityContextHolder.getContext().getAuthentication();

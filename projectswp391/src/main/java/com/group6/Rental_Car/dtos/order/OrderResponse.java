@@ -31,7 +31,6 @@ public class OrderResponse {
 
     private Integer stationId;
     private String stationName;
-    private BigDecimal paidAmount;        // Tổng tiền đã thanh toán
-    private BigDecimal remainingAmount;   // Số tiền còn lại chưa thanh toán
+
 
 }
