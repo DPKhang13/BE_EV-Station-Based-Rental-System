@@ -36,18 +36,16 @@ public class PaymentServiceImpl implements PaymentService {
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final PaymentRepository paymentRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
-    private final VehicleRepository vehicleRepository;
     private final UserRepository userRepository;
 
     // ===============================
-    //  TẠO LINK / GIAO DỊCH THANH TOÁN
+    // 🔹 TẠO LINK THANH TOÁN / CẬP NHẬT PAYMENT
     // ===============================
     @Override
     @Transactional
     public PaymentResponse createPaymentUrl(PaymentDto dto, UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
         RentalOrder order = rentalOrderRepository.findById(dto.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
@@ -57,56 +55,60 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         String method = Optional.ofNullable(dto.getMethod()).orElse("VNPAY");
-
         BigDecimal total = order.getTotalPrice().abs();
-        BigDecimal amount;
 
-        // Xác định số tiền cần thanh toán
+        //  Lấy payment hiện có của order
+        Payment payment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                .stream()
+                .findFirst()
+                .orElseGet(() -> {
+                    Payment p = Payment.builder()
+                            .rentalOrder(order)
+                            .amount(BigDecimal.ZERO)
+                            .remainingAmount(total)
+                            .method(method)
+                            .paymentType((short) 1)
+                            .status(PaymentStatus.PENDING)
+                            .build();
+                    return paymentRepository.save(p);
+                });
+
+        //  Xác định số tiền
+        BigDecimal amount;
         switch (type) {
-            case 1 -> amount = total.multiply(BigDecimal.valueOf(0.5)); // Đặt cọc 50%
-            case 2 -> {
-                // phần còn lại = tổng - đã cọc
-                BigDecimal depositPaid = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
-                        .stream()
-                        .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                        .map(Payment::getAmount)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-                amount = total.subtract(depositPaid);
-                if (amount.compareTo(BigDecimal.ZERO) <= 0)
-                    throw new BadRequestException("Không có số tiền nào cần thanh toán thêm");
-            }
-            case 3 -> amount = total; // full payment
-            case 4 -> amount = total.negate(); // hoàn tiền
+            case 1 -> amount = total.multiply(BigDecimal.valueOf(0.5)); // đặt cọc
+            case 2 -> amount = total.subtract(payment.getAmount());     // phần còn lại
+            case 3 -> amount = total;                                   // toàn bộ
+            case 4 -> amount = total.negate();                          // hoàn tiền
             default -> throw new BadRequestException("Loại thanh toán không hợp lệ");
         }
 
-        BigDecimal remainingAmount = total.subtract(amount.abs());
-        if (remainingAmount.compareTo(BigDecimal.ZERO) < 0) remainingAmount = BigDecimal.ZERO;
+        //  Nếu hoàn tiền
+        if (type == 4) return handleRefund(order, payment, amount);
 
-        // Tạo record Payment
-        Payment payment = Payment.builder()
-                .rentalOrder(order)
-                .amount(amount)
-                .remainingAmount(remainingAmount)
-                .method(method)
-                .paymentType(type)
-                .status(PaymentStatus.PENDING)
-                .build();
+        //  Cập nhật payment hiện tại (không tạo mới)
+        BigDecimal newAmount = (type == 3) ? total : payment.getAmount().add(amount);
+        BigDecimal newRemaining = total.subtract(newAmount).max(BigDecimal.ZERO);
+        payment.setAmount(newAmount);
+        payment.setRemainingAmount(newRemaining);
+        payment.setPaymentType(type);
+        payment.setMethod(method);
+        payment.setStatus(PaymentStatus.PENDING);
         paymentRepository.save(payment);
 
-        // Tạo order detail
-        String detailType = switch (type) {
-            case 1 -> "DEPOSITED";
-            case 2 -> "FINAL";
-            case 3 -> "FULL_PAYMENT";
-            case 4 -> "REFUND";
-            default -> "UNKNOWN";
-        };
+        //  Cập nhật trạng thái order
+        switch (type) {
+            case 1 -> order.setStatus("PENDING_DEPOSIT");
+            case 2 -> order.setStatus("PENDING_FINAL");
+            case 3 -> order.setStatus("PENDING_FULL_PAYMENT");
+        }
+        rentalOrderRepository.save(order);
 
+        //  Ghi chi tiết transaction vào rental_order_detail
         RentalOrderDetail detail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(order.getDetails().get(0).getVehicle())
-                .type(detailType)
+                .type(getTypeNameByPayment(type))
                 .startTime(LocalDateTime.now())
                 .endTime(LocalDateTime.now())
                 .price(amount.abs())
@@ -115,30 +117,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
         rentalOrderDetailRepository.save(detail);
 
-        //  Nếu là refund thì xử lý ngay — không tạo link VNPay
-        if (type == 4) {
-            payment.setStatus(PaymentStatus.SUCCESS);
-            order.setStatus("REFUNDED");
-            paymentRepository.save(payment);
-            rentalOrderRepository.save(order);
-            detail.setStatus("SUCCESS");
-            rentalOrderDetailRepository.save(detail);
-
-            recordTransaction(order, payment, "REFUND");
-
-            return PaymentResponse.builder()
-                    .paymentId(payment.getPaymentId())
-                    .orderId(order.getOrderId())
-                    .amount(amount.abs())
-                    .remainingAmount(BigDecimal.ZERO)
-                    .method("INTERNAL_REFUND")
-                    .status(PaymentStatus.SUCCESS)
-                    .paymentType((short) 4)
-                    .message("Hoàn tiền thành công")
-                    .build();
-        }
-
-        //  Tạo URL VNPay
+        //  Tạo link VNPay
         long vnpAmount = amount.abs().multiply(BigDecimal.valueOf(100)).longValue();
         Map<String, String> vnpParams = vnpayConfig.getVNPayConfig();
         vnpParams.put("vnp_Amount", String.valueOf(vnpAmount));
@@ -150,22 +129,13 @@ public class PaymentServiceImpl implements PaymentService {
         String hashData = Utils.getPaymentURL(vnpParams, false);
         String vnpSecureHash = Utils.hmacSHA512(VNP_SECRET, hashData);
         queryUrl += "&vnp_SecureHash=" + vnpSecureHash;
-
         String paymentUrl = VNP_URL + "?" + queryUrl;
-
-        // Cập nhật trạng thái đơn
-        switch (type) {
-            case 1 -> order.setStatus("PENDING_DEPOSIT");
-            case 2 -> order.setStatus("PENDING_FINAL");
-            case 3 -> order.setStatus("PENDING_FULL_PAYMENT");
-        }
-        rentalOrderRepository.save(order);
 
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
                 .orderId(order.getOrderId())
                 .amount(amount)
-                .remainingAmount(remainingAmount)
+                .remainingAmount(payment.getRemainingAmount())
                 .method(method)
                 .status(payment.getStatus())
                 .paymentType(type)
@@ -175,7 +145,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ===============================
-    //  XỬ LÝ CALLBACK VNPAY
+    //  CALLBACK VNPAY
     // ===============================
     @Override
     @Transactional
@@ -184,54 +154,28 @@ public class PaymentServiceImpl implements PaymentService {
 
         String txnRef = params.get("vnp_TxnRef");
         String responseCode = params.get("vnp_ResponseCode");
-        BigDecimal amount = new BigDecimal(params.getOrDefault("vnp_Amount", "0"))
-                .divide(BigDecimal.valueOf(100));
-
-        if (txnRef == null || responseCode == null) {
+        if (txnRef == null || responseCode == null)
             throw new BadRequestException("VNPay callback thiếu tham số cần thiết");
-        }
 
         UUID paymentId = UUID.fromString(txnRef);
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found: " + txnRef));
-
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
         RentalOrder order = payment.getRentalOrder();
+
         boolean success = "00".equals(responseCode);
-
-        String expectedType = switch (payment.getPaymentType()) {
-            case 1 -> "DEPOSITED";
-            case 2 -> "FINAL";
-            case 3 -> "FULL_PAYMENT";
-            default -> "UNKNOWN";
-        };
-
-        RentalOrderDetail detail = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
-                .stream()
-                .filter(d -> expectedType.equalsIgnoreCase(d.getType()))
-                .reduce((first, second) -> second)
-                .orElse(null);
-
         if (success) {
             payment.setStatus(PaymentStatus.SUCCESS);
-            if (detail != null) detail.setStatus("SUCCESS");
-
+            payment.setRemainingAmount(BigDecimal.ZERO);
             switch (payment.getPaymentType()) {
                 case 1 -> order.setStatus("DEPOSITED");
-                case 2, 3 -> order.setStatus("PAID");
+                case 2, 3 -> order.setStatus("SUCCESS");
             }
-
-            recordTransaction(order, payment,
-                    payment.getPaymentType() == 1 ? "DEPOSIT"
-                            : payment.getPaymentType() == 2 ? "FINAL_PAYMENT"
-                            : "FULL_PAYMENT");
-
+            recordTransaction(order, payment, getTypeNameByPayment(payment.getPaymentType()));
         } else {
             payment.setStatus(PaymentStatus.FAILED);
             order.setStatus("PAYMENT_FAILED");
-            if (detail != null) detail.setStatus("FAILED");
         }
 
-        if (detail != null) rentalOrderDetailRepository.save(detail);
         paymentRepository.save(payment);
         rentalOrderRepository.save(order);
 
@@ -247,6 +191,45 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
     }
 
+    // ===============================
+    //  HOÀN TIỀN
+    // ===============================
+    private PaymentResponse handleRefund(RentalOrder order, Payment payment, BigDecimal amount) {
+        payment.setStatus(PaymentStatus.SUCCESS);
+        payment.setPaymentType((short) 4);
+        order.setStatus("REFUNDED");
+        paymentRepository.save(payment);
+        rentalOrderRepository.save(order);
+
+        RentalOrderDetail refundDetail = RentalOrderDetail.builder()
+                .order(order)
+                .vehicle(order.getDetails().get(0).getVehicle())
+                .type("REFUND")
+                .startTime(LocalDateTime.now())
+                .endTime(LocalDateTime.now())
+                .price(amount.abs())
+                .status("SUCCESS")
+                .description("Hoàn tiền đơn thuê #" + order.getOrderId())
+                .build();
+        rentalOrderDetailRepository.save(refundDetail);
+
+        recordTransaction(order, payment, "REFUND");
+
+        return PaymentResponse.builder()
+                .paymentId(payment.getPaymentId())
+                .orderId(order.getOrderId())
+                .amount(amount.abs())
+                .remainingAmount(BigDecimal.ZERO)
+                .method("INTERNAL_REFUND")
+                .status(PaymentStatus.SUCCESS)
+                .paymentType((short) 4)
+                .message("Hoàn tiền thành công")
+                .build();
+    }
+
+    // ===============================
+    //  TIỆN ÍCH PHỤ
+    // ===============================
     private void recordTransaction(RentalOrder order, Payment payment, String type) {
         TransactionHistory history = new TransactionHistory();
         history.setUser(order.getCustomer());
@@ -266,30 +249,40 @@ public class PaymentServiceImpl implements PaymentService {
             default -> "Giao dịch không xác định";
         };
     }
+
+    private String getTypeNameByPayment(short type) {
+        return switch (type) {
+            case 1 -> "DEPOSITED";
+            case 2 -> "FINAL";
+            case 3 -> "FULL_PAYMENT";
+            case 4 -> "REFUND";
+            default -> "UNKNOWN";
+        };
+    }
     @Override
     @Transactional
     public PaymentResponse refund(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        BigDecimal refundAmount = order.getTotalPrice().abs();
+        Payment payment = paymentRepository.findByRentalOrder_OrderId(orderId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found for order"));
+
+        BigDecimal refundAmount = payment.getAmount().abs();
         if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Không có số tiền nào để hoàn");
         }
 
-        Payment refund = Payment.builder()
-                .rentalOrder(order)
-                .amount(refundAmount)
-                .remainingAmount(BigDecimal.ZERO)
-                .method("INTERNAL_REFUND")
-                .paymentType((short) 4)
-                .status(PaymentStatus.SUCCESS)
-                .build();
-        paymentRepository.save(refund);
-
+        // Cập nhật lại payment và order
+        payment.setStatus(PaymentStatus.SUCCESS);
+        payment.setPaymentType((short) 4);
         order.setStatus("REFUNDED");
+        paymentRepository.save(payment);
         rentalOrderRepository.save(order);
 
+        // Tạo order detail hoàn tiền
         RentalOrderDetail refundDetail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(order.getDetails().get(0).getVehicle())
@@ -302,10 +295,10 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
         rentalOrderDetailRepository.save(refundDetail);
 
-        recordTransaction(order, refund, "REFUND");
+        recordTransaction(order, payment, "REFUND");
 
         return PaymentResponse.builder()
-                .paymentId(refund.getPaymentId())
+                .paymentId(payment.getPaymentId())
                 .orderId(order.getOrderId())
                 .amount(refundAmount)
                 .remainingAmount(BigDecimal.ZERO)
