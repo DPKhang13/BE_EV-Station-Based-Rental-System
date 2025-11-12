@@ -99,7 +99,9 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
                 .stream()
                 .filter(d -> {
                     if (hideRental) {
-                        String type = Optional.ofNullable(d.getType()).orElse("").trim().toUpperCase();
+                        String type = Optional.ofNullable(d.getType())
+                                .map(t -> t.trim().toUpperCase())
+                                .orElse("");
                         return !"RENTAL".equals(type);
                     }
                     return true;
