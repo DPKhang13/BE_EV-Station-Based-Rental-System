@@ -204,7 +204,6 @@ public class PaymentServiceImpl implements PaymentService {
                                 rentalOrderDetailRepository.save(detail);
                             });
 
-                    //  Nếu còn tiền → tạo PICKUP
                     if (remaining.compareTo(BigDecimal.ZERO) > 0) {
                         RentalOrderDetail pickup = RentalOrderDetail.builder()
                                 .order(order)
