@@ -199,10 +199,35 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     @Override
     public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
         return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
-                .map(order -> mapToResponse(order, getMainDetail(order)))
-                .collect(Collectors.toList());
-    }
+                .map(order -> {
+                    OrderResponse res = modelMapper.map(order, OrderResponse.class);
 
+                    // ===== Lấy detail chính (RENTAL) để gắn thêm info =====
+                    RentalOrderDetail mainDetail = order.getDetails().stream()
+                            .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (mainDetail != null) {
+                        Vehicle v = mainDetail.getVehicle();
+                        res.setVehicleId(v != null ? v.getVehicleId() : null);
+                        res.setStartTime(mainDetail.getStartTime());
+                        res.setEndTime(mainDetail.getEndTime());
+
+                        if (v != null && v.getRentalStation() != null) {
+                            res.setStationId(v.getRentalStation().getStationId());
+                            res.setStationName(v.getRentalStation().getName());
+                        }
+                    }
+
+                    res.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
+                    res.setTotalPrice(order.getTotalPrice());
+                    res.setStatus(order.getStatus());
+
+                    return res;
+                })
+                .toList();
+    }
     @Override
     public List<VehicleOrderHistoryResponse> getOrderHistoryByCustomer(UUID customerId) {
         return rentalOrderRepository.findByCustomer_UserId(customerId).stream()

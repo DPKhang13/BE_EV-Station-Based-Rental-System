@@ -56,12 +56,11 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BadRequestException("Loại thanh toán không hợp lệ (1=cọc, 2=thanh toán cuối)");
         }
 
-        BigDecimal amount;
         String method = Optional.ofNullable(dto.getMethod()).orElse("VNPAY");
 
-        // Xác định số tiền thanh toán
+        BigDecimal amount;
         if (type == 1) {
-            amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5)); // Cọc 50%
+            amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5)); // đặt cọc 50%
         } else {
             BigDecimal depositPaid = paymentRepository
                     .findByRentalOrder_OrderId(order.getOrderId()).stream()
@@ -71,13 +70,16 @@ public class PaymentServiceImpl implements PaymentService {
             amount = order.getTotalPrice().subtract(depositPaid);
         }
 
+        // đảm bảo không âm
+        amount = amount.abs();
         BigDecimal remainingAmount = order.getTotalPrice().subtract(amount);
+        if (remainingAmount.compareTo(BigDecimal.ZERO) < 0) remainingAmount = BigDecimal.ZERO;
 
         // Tạo payment pending
         Payment payment = Payment.builder()
                 .rentalOrder(order)
                 .amount(amount)
-                .remainingAmount(remainingAmount.max(BigDecimal.ZERO))
+                .remainingAmount(remainingAmount)
                 .method(method)
                 .paymentType(type)
                 .status(PaymentStatus.PENDING)
@@ -154,7 +156,7 @@ public class PaymentServiceImpl implements PaymentService {
         RentalOrder order = payment.getRentalOrder();
         boolean success = "00".equals(responseCode);
 
-        // Tìm order detail tương ứng
+        // Lấy order detail tương ứng
         String expectedType = (payment.getPaymentType() == 1) ? "DEPOSITED" : "FINAL";
         RentalOrderDetail detail = rentalOrderDetailRepository
                 .findByOrder_OrderId(order.getOrderId()).stream()
@@ -164,7 +166,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (success) {
             payment.setStatus(PaymentStatus.SUCCESS);
-            BigDecimal remaining = order.getTotalPrice().subtract(payment.getAmount());
+            BigDecimal remaining = order.getTotalPrice().subtract(payment.getAmount().abs());
             payment.setRemainingAmount(remaining.max(BigDecimal.ZERO));
 
             if (detail != null) detail.setStatus("SUCCESS");
@@ -207,7 +209,7 @@ public class PaymentServiceImpl implements PaymentService {
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
                 .orderId(order.getOrderId())
-                .amount(amount)
+                .amount(payment.getAmount())
                 .remainingAmount(payment.getRemainingAmount())
                 .method(payment.getMethod())
                 .status(payment.getStatus())
@@ -225,8 +227,8 @@ public class PaymentServiceImpl implements PaymentService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        BigDecimal refundAmount = order.getTotalPrice();
-        if (refundAmount == null || refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal refundAmount = order.getTotalPrice().abs();
+        if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Không có số tiền nào để hoàn");
         }
 
@@ -243,7 +245,6 @@ public class PaymentServiceImpl implements PaymentService {
         order.setStatus("REFUNDED");
         rentalOrderRepository.save(order);
 
-        // Ghi detail refund để tracking
         RentalOrderDetail refundDetail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(order.getDetails().get(0).getVehicle())
@@ -262,7 +263,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentId(refund.getPaymentId())
                 .orderId(order.getOrderId())
                 .amount(refundAmount)
-                .remainingAmount(refund.getRemainingAmount())
+                .remainingAmount(BigDecimal.ZERO)
                 .method(refund.getMethod())
                 .status(refund.getStatus())
                 .paymentType(refund.getPaymentType())
@@ -276,7 +277,7 @@ public class PaymentServiceImpl implements PaymentService {
     private void recordTransaction(RentalOrder order, Payment payment, String type) {
         TransactionHistory history = new TransactionHistory();
         history.setUser(order.getCustomer());
-        history.setAmount(payment.getAmount());
+        history.setAmount(payment.getAmount().abs());
         history.setType(type);
         history.setStatus("SUCCESS");
         history.setCreatedAt(LocalDateTime.now());

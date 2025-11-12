@@ -1,6 +1,6 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.orderservice.OrderServiceRequest;
+import com.group6.Rental_Car.dtos.orderservice.OrderServiceCreateRequest;
 import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
 import com.group6.Rental_Car.services.orderservice.OrderServiceService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,14 +20,14 @@ public class OrderServiceController {
     private final OrderServiceService orderServiceService;
 
     @PostMapping
-    public ResponseEntity<OrderServiceResponse> create(@RequestBody OrderServiceRequest request) {
+    public ResponseEntity<OrderServiceResponse> create(@RequestBody OrderServiceCreateRequest request) {
         return ResponseEntity.ok(orderServiceService.createService(request));
     }
 
     @PutMapping("/{serviceId}")
     public ResponseEntity<OrderServiceResponse> update(
             @PathVariable Long serviceId,
-            @RequestBody OrderServiceRequest request
+            @RequestBody OrderServiceCreateRequest request
     ) {
         return ResponseEntity.ok(orderServiceService.updateService(serviceId, request));
     }

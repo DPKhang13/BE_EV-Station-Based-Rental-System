@@ -2,10 +2,12 @@ package com.group6.Rental_Car.services.orderdetails;
 
 import com.group6.Rental_Car.dtos.orderdetail.OrderDetailCreateRequest;
 import com.group6.Rental_Car.dtos.orderdetail.OrderDetailResponse;
+import com.group6.Rental_Car.entities.OrderService;
 import com.group6.Rental_Car.entities.RentalOrder;
 import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.OrderServiceRepository;
 import com.group6.Rental_Car.repositories.RentalOrderDetailRepository;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,7 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
     private final RentalOrderRepository rentalOrderRepository;
     private final VehicleRepository vehicleRepository;
     private final ModelMapper modelMapper;
+    private final OrderServiceRepository orderServiceRepository;
 
     @Override
     public OrderDetailResponse createDetail(OrderDetailCreateRequest request) {
@@ -83,10 +87,28 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
     @Override
     public List<OrderDetailResponse> getDetailsByOrder(UUID orderId) {
-        return rentalOrderDetailRepository.findByOrder_OrderId(orderId)
+        List<OrderDetailResponse> details = rentalOrderDetailRepository.findByOrder_OrderId(orderId)
                 .stream()
                 .map(this::toResponse)
-                .toList();
+                .collect(Collectors.toList());
+
+        // Gộp thêm các OrderService của order đó
+        List<OrderService> services = orderServiceRepository.findByOrder_OrderId(orderId);
+        for (OrderService s : services) {
+            OrderDetailResponse dto = new OrderDetailResponse();
+            dto.setDetailId(s.getServiceId());
+            dto.setOrderId(orderId);
+            dto.setVehicleId(s.getVehicle() != null ? s.getVehicle().getVehicleId() : null);
+            dto.setType("SERVICE");
+            dto.setStartTime(s.getOccurredAt());
+            dto.setEndTime(s.getResolvedAt());
+            dto.setPrice(s.getCost());
+            dto.setStatus(s.getStatus());
+            dto.setDescription(s.getServiceType() + (s.getDescription() != null ? " - " + s.getDescription() : ""));
+            details.add(dto);
+        }
+
+        return details;
     }
 
     @Override

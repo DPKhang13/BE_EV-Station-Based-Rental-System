@@ -10,7 +10,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderServiceResponse {
-    private Long serviceId;
     private UUID orderId;
     private Long detailId;
     private Long vehicleId;

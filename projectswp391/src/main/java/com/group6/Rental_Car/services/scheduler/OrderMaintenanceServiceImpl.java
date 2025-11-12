@@ -31,7 +31,7 @@ public class OrderMaintenanceServiceImpl implements OrderMaintenanceService {
             if (created == null) continue;
 
             Duration duration = Duration.between(created, LocalDateTime.now());
-            if (duration.toMinutes() >= 10) {
+            if (duration.toMinutes() >= 30) {
                 order.setStatus("PAYMENT_FAILED");
 
                 Vehicle vehicle = order.getDetails().stream()
@@ -45,7 +45,7 @@ public class OrderMaintenanceServiceImpl implements OrderMaintenanceService {
                 }
 
                 rentalOrderRepository.save(order);
-                log.info(" Auto-cancel order {} — quá 10 phút chưa thanh toán", order.getOrderId());
+                log.info(" Auto-cancel order {} — quá 30 phút chưa thanh toán", order.getOrderId());
             }
         }
     }
