@@ -63,7 +63,7 @@ public class OrderServiceServiceImpl implements OrderServiceService {
                 .station(station)
                 .occurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : java.time.LocalDateTime.now())
                 .resolvedAt(request.getResolvedAt())
-                .status(request.getStatus() != null ? request.getStatus() : "pending")
+                .status(request.getStatus() != null ? request.getStatus() : "PENDING")
                 .note(request.getNote())
                 .build();
 

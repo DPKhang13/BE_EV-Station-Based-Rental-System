@@ -43,7 +43,7 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
                 .endTime(request.getEndTime())
                 .price(request.getPrice())
                 .description(request.getDescription())
-                .status("pending")
+                .status("PENDING")
                 .build();
 
         RentalOrderDetail saved = rentalOrderDetailRepository.save(detail);
@@ -68,7 +68,6 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
         existing.setEndTime(request.getEndTime());
         existing.setPrice(request.getPrice());
         existing.setDescription(request.getDescription());
-        existing.setStatus("confirmed");
 
         RentalOrderDetail saved = rentalOrderDetailRepository.save(existing);
         return toResponse(saved);
@@ -100,7 +99,7 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
     @Override
     public List<OrderDetailResponse> getActiveDetailsByVehicle(Long vehicleId) {
-        List<String> activeStatuses = List.of("pending", "active", "confirmed");
+        List<String> activeStatuses = List.of("PENDING", "SUCCESS", "FAILED");
         return rentalOrderDetailRepository.findByVehicle_VehicleIdAndStatusIn(vehicleId, activeStatuses)
                 .stream()
                 .map(this::toResponse)
@@ -109,7 +108,7 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
     @Override
     public List<OrderDetailResponse> getActiveDetailsByOrder(UUID orderId) {
-        List<String> activeStatuses = List.of("pending", "active", "confirmed");
+        List<String> activeStatuses = List.of("PENDING", "SUCCESS", "FAILED");
         return rentalOrderDetailRepository.findByOrder_OrderIdAndStatusIn(orderId, activeStatuses)
                 .stream()
                 .map(this::toResponse)

@@ -93,7 +93,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .startTime(start)
                 .endTime(end)
                 .price(totalPrice)
-                .status("CONFIRM")
+                .status("PENDING")
                 .build();
         rentalOrderDetailRepository.save(detail);
 
@@ -164,11 +164,30 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
+    @Transactional
     public void deleteOrder(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        // Lấy chi tiết chính
+        RentalOrderDetail mainDetail = getMainDetail(order);
+
+        // Nếu có detail thì update status và giải phóng xe
+        if (mainDetail != null) {
+            mainDetail.setStatus("FAILED");
+            rentalOrderDetailRepository.save(mainDetail);
+
+            Vehicle vehicle = mainDetail.getVehicle();
+            if (vehicle != null) {
+                vehicle.setStatus("AVAILABLE");
+                vehicleRepository.save(vehicle);
+            }
+        }
+
+        // Cuối cùng xóa order
         rentalOrderRepository.delete(order);
     }
+
 
     @Override
     public List<OrderResponse> getRentalOrders() {
@@ -223,10 +242,46 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        order.setStatus("RENTAL");
+        // Lấy chi tiết chính
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        if (mainDetail == null) {
+            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
+        }
+
+        // Lấy xe
+        Vehicle vehicle = mainDetail.getVehicle();
+        if (vehicle == null) {
+            throw new BadRequestException("Không tìm thấy xe trong chi tiết đơn");
+        }
+
+        //  Cập nhật trạng thái
+        order.setStatus("RENTAL");               // Đơn đang trong quá trình thuê
+        mainDetail.setStatus("SUCCESS");         // Chi tiết xác nhận pickup thành công
+        vehicle.setStatus("RENTAL");             // Xe đã được thuê
+
+        //  Lưu DB
+        rentalOrderDetailRepository.save(mainDetail);
+        vehicleRepository.save(vehicle);
         rentalOrderRepository.save(order);
-        return mapToResponse(order, getMainDetail(order));
+
+        //  Ghi lại timeline để theo dõi lịch sử
+        VehicleTimeline timeline = VehicleTimeline.builder()
+                .vehicle(vehicle)
+                .order(order)
+                .detail(mainDetail)
+                .day(LocalDateTime.now().toLocalDate())
+                .startTime(mainDetail.getStartTime())
+                .endTime(mainDetail.getEndTime())
+                .status("RENTAL")
+                .sourceType("ORDER_PICKUP")
+                .note("Xe được khách nhận cho đơn thuê #" + order.getOrderId())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        vehicleTimelineRepository.save(timeline);
+
+        return mapToResponse(order, mainDetail);
     }
+
 
     @Override
     @Transactional
@@ -248,11 +303,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             total = total.add(rule.getLateFeePerDay().multiply(BigDecimal.valueOf(extra)));
         }
 
-        mainDetail.setStatus("DONE");
         mainDetail.setPrice(total);
         rentalOrderDetailRepository.save(mainDetail);
 
-        vehicle.setStatus("AVAILABLE");
+        vehicle.setStatus("CHECKING");
         vehicleRepository.save(vehicle);
 
         order.setTotalPrice(total);
@@ -269,14 +323,15 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
-        List<RentalOrder> pendingOrders = rentalOrderRepository.findAll().stream()
-                .filter(o -> "DEPOSITED".equalsIgnoreCase(o.getStatus()))
+        // Lấy các đơn đang xử lý hoặc đang thuê
+        List<RentalOrder> processingOrders = rentalOrderRepository.findAll().stream()
+                .filter(o -> List.of("PENDING", "RENTAL").contains(o.getStatus().toUpperCase()))
                 .toList();
 
-        return pendingOrders.stream().map(order -> {
+        return processingOrders.stream().map(order -> {
             User customer = order.getCustomer();
 
-            // Lấy chi tiết thuê chính
+            // Lấy chi tiết chính (order con)
             RentalOrderDetail rentalDetail = order.getDetails().stream()
                     .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
                     .findFirst()
@@ -288,21 +343,31 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             // Tổng dịch vụ (nếu có)
             BigDecimal totalServiceCost = order.getServices() != null
                     ? order.getServices().stream()
-                    .map(s -> s.getCost() != null ? s.getCost() : BigDecimal.ZERO)
+                    .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     : BigDecimal.ZERO;
 
-            //  Tổng tiền đã thanh toán (bao gồm hoàn tiền, vì REFUND là âm)
-            BigDecimal totalPaid = order.getPayments() != null
+            // Tổng tiền thanh toán (gồm cả hoàn tiền)
+            BigDecimal totalPayments = order.getPayments() != null
                     ? order.getPayments().stream()
-                    .map(p -> p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO)
+                    .map(p -> {
+                        BigDecimal amount = Optional.ofNullable(p.getAmount()).orElse(BigDecimal.ZERO);
+                        // Nếu là REFUND → tính số âm
+                        if (p.getPaymentType() == 3) {
+                            return amount.negate();
+                        }
+                        return amount;
+                    })
                     .reduce(BigDecimal.ZERO, BigDecimal::add)
                     : BigDecimal.ZERO;
 
-            //  Tổng còn lại = (thuê + dịch vụ) - tổng đã thanh toán
+            // Tổng tiền thực tế = tổng payment
+            BigDecimal totalOrderAmount = totalPayments;
+
+            // Tổng còn lại = tổng giá trị thuê + dịch vụ - payment
             BigDecimal remainingAmount = order.getTotalPrice()
                     .add(totalServiceCost)
-                    .subtract(totalPaid);
+                    .subtract(totalPayments);
 
             return OrderVerificationResponse.builder()
                     .userId(customer.getUserId())
@@ -317,7 +382,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .startTime(rentalDetail != null ? rentalDetail.getStartTime() : null)
                     .endTime(rentalDetail != null ? rentalDetail.getEndTime() : null)
 
-                    .totalPrice(order.getTotalPrice())
+                    .totalPrice(totalOrderAmount) // Tổng tiền theo tất cả payment
                     .totalServices(totalServiceCost)
                     .remainingAmount(remainingAmount)
 

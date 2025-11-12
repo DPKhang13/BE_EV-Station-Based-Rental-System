@@ -61,11 +61,15 @@ public class PaymentServiceImpl implements PaymentService {
 
         //  Xác định số tiền cần thanh toán
         if (type == 1) {
-            // 50% cọc
-            amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5));
+            amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5)); // Cọc 50%
         } else {
-            // 50% còn lại
-            amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5));
+            BigDecimal depositPaid = paymentRepository
+                    .findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .map(Payment::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            amount = order.getTotalPrice().subtract(depositPaid); // Trả phần còn lại
         }
 
         // Tạo bản ghi Payment (pending)
