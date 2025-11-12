@@ -3,6 +3,7 @@
     import com.group6.Rental_Car.dtos.orderservice.OrderServiceCreateRequest;
     import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
     import com.group6.Rental_Car.entities.*;
+    import com.group6.Rental_Car.enums.PaymentStatus;
     import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
     import com.group6.Rental_Car.repositories.*;
     import com.group6.Rental_Car.utils.JwtUserDetails;
@@ -12,6 +13,7 @@
     import org.springframework.stereotype.Service;
     import org.springframework.transaction.annotation.Transactional;
 
+    import java.math.BigDecimal;
     import java.time.LocalDateTime;
     import java.util.List;
     import java.util.Objects;
@@ -30,54 +32,66 @@
         private final UserRepository userRepository;
         private final RentalStationRepository stationRepository;
         private final ModelMapper modelMapper;
+        private final PaymentRepository paymentRepository;
 
         // ===============================
-        // 🧩 TẠO DỊCH VỤ LIÊN QUAN ĐẾN ORDER
+        //  TẠO DỊCH VỤ LIÊN QUAN ĐẾN ORDER
         // ===============================
         @Override
+        @Transactional
         public OrderServiceResponse createService(OrderServiceCreateRequest request) {
-            //  1. Lấy đơn thuê
+            // 1⃣ Lấy đơn thuê
             RentalOrder order = rentalOrderRepository.findById(request.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-            //  2. Lấy xe chính của đơn
+            //  Lấy xe
             Vehicle vehicle = order.getDetails().stream()
                     .map(RentalOrderDetail::getVehicle)
                     .filter(Objects::nonNull)
                     .findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe thuộc đơn thuê"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe trong đơn"));
 
-            //  3. Lấy thông tin trạm (nếu có)
+            //  Lấy trạm
             RentalStation station = vehicle.getRentalStation();
 
-            //  4. Lấy nhân viên đang đăng nhập (nếu có)
+            //  Lấy nhân viên đăng nhập (nếu có)
             User performedBy = null;
             var auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.getPrincipal() instanceof JwtUserDetails jwt) {
                 performedBy = userRepository.findById(jwt.getUserId()).orElse(null);
             }
 
-            //  5. Tạo chi tiết dịch vụ (lưu thẳng vào bảng rental_order_detail)
+            //  Tạo chi tiết dịch vụ
             RentalOrderDetail serviceDetail = RentalOrderDetail.builder()
                     .order(order)
                     .vehicle(vehicle)
                     .type("SERVICE_" + request.getServiceType().toUpperCase())
                     .startTime(LocalDateTime.now())
-                    .endTime(LocalDateTime.now()) // chưa hoàn tất, chưa có endTime
+                    .endTime(LocalDateTime.now())
                     .price(request.getCost())
                     .status("PENDING")
-                    .description(
-                            Optional.ofNullable(request.getDescription())
-                                    .orElse("Phí dịch vụ " + request.getServiceType())
-                    )
+                    .description(Optional.ofNullable(request.getDescription())
+                            .orElse("Phí dịch vụ " + request.getServiceType()))
                     .build();
             rentalOrderDetailRepository.save(serviceDetail);
 
-            //  6. Cập nhật tổng tiền đơn thuê
+            //  Cập nhật tổng tiền đơn thuê
             order.setTotalPrice(order.getTotalPrice().add(request.getCost()));
             rentalOrderRepository.save(order);
 
-            // 7. Chuẩn bị response
+            //  Cập nhật payment còn lại (remainingAmount)
+            Payment latestPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId()).stream()
+                    .filter(p -> p.getStatus() == PaymentStatus.SUCCESS || p.getStatus() == PaymentStatus.PENDING)
+                    .reduce((first, second) -> second) // lấy payment cuối cùng
+                    .orElse(null);
+
+            if (latestPayment != null) {
+                BigDecimal newRemaining = latestPayment.getRemainingAmount().add(request.getCost());
+                latestPayment.setRemainingAmount(newRemaining);
+                paymentRepository.save(latestPayment);
+            }
+
+            //  Tạo response
             OrderServiceResponse response = new OrderServiceResponse();
             response.setOrderId(order.getOrderId());
             response.setDetailId(serviceDetail.getDetailId());

@@ -40,7 +40,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final UserRepository userRepository;
 
     // ===============================
-    //  TẠO LINK THANH TOÁN
+    //  TẠO LINK / GIAO DỊCH THANH TOÁN
     // ===============================
     @Override
     @Transactional
@@ -51,31 +51,39 @@ public class PaymentServiceImpl implements PaymentService {
         RentalOrder order = rentalOrderRepository.findById(dto.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        short type = dto.getPaymentType(); // 1=cọc, 2=thanh toán cuối
-        if (type != 1 && type != 2) {
-            throw new BadRequestException("Loại thanh toán không hợp lệ (1=cọc, 2=thanh toán cuối)");
+        short type = dto.getPaymentType(); // 1=cọc, 2=phần còn lại, 3=toàn bộ, 4=hoàn tiền
+        if (type < 1 || type > 4) {
+            throw new BadRequestException("paymentType phải là 1(cọc), 2(phần còn lại), 3(toàn bộ), 4(hoàn tiền)");
         }
 
         String method = Optional.ofNullable(dto.getMethod()).orElse("VNPAY");
 
+        BigDecimal total = order.getTotalPrice().abs();
         BigDecimal amount;
-        if (type == 1) {
-            amount = order.getTotalPrice().multiply(BigDecimal.valueOf(0.5)); // đặt cọc 50%
-        } else {
-            BigDecimal depositPaid = paymentRepository
-                    .findByRentalOrder_OrderId(order.getOrderId()).stream()
-                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                    .map(Payment::getAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            amount = order.getTotalPrice().subtract(depositPaid);
+
+        // Xác định số tiền cần thanh toán
+        switch (type) {
+            case 1 -> amount = total.multiply(BigDecimal.valueOf(0.5)); // Đặt cọc 50%
+            case 2 -> {
+                // phần còn lại = tổng - đã cọc
+                BigDecimal depositPaid = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                        .stream()
+                        .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                        .map(Payment::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                amount = total.subtract(depositPaid);
+                if (amount.compareTo(BigDecimal.ZERO) <= 0)
+                    throw new BadRequestException("Không có số tiền nào cần thanh toán thêm");
+            }
+            case 3 -> amount = total; // full payment
+            case 4 -> amount = total.negate(); // hoàn tiền
+            default -> throw new BadRequestException("Loại thanh toán không hợp lệ");
         }
 
-        // đảm bảo không âm
-        amount = amount.abs();
-        BigDecimal remainingAmount = order.getTotalPrice().subtract(amount);
+        BigDecimal remainingAmount = total.subtract(amount.abs());
         if (remainingAmount.compareTo(BigDecimal.ZERO) < 0) remainingAmount = BigDecimal.ZERO;
 
-        // Tạo payment pending
+        // Tạo record Payment
         Payment payment = Payment.builder()
                 .rentalOrder(order)
                 .amount(amount)
@@ -86,22 +94,52 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
         paymentRepository.save(payment);
 
-        // Tạo order detail tương ứng
-        String detailType = (type == 1) ? "DEPOSITED" : "FINAL";
+        // Tạo order detail
+        String detailType = switch (type) {
+            case 1 -> "DEPOSITED";
+            case 2 -> "FINAL";
+            case 3 -> "FULL_PAYMENT";
+            case 4 -> "REFUND";
+            default -> "UNKNOWN";
+        };
+
         RentalOrderDetail detail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(order.getDetails().get(0).getVehicle())
                 .type(detailType)
                 .startTime(LocalDateTime.now())
                 .endTime(LocalDateTime.now())
-                .price(amount)
+                .price(amount.abs())
                 .status("PENDING")
-                .description("Thanh toán " + (type == 1 ? "đặt cọc" : "phần còn lại"))
+                .description(getDescriptionByType(type))
                 .build();
         rentalOrderDetailRepository.save(detail);
 
-        // Chuẩn bị URL VNPay
-        long vnpAmount = amount.multiply(BigDecimal.valueOf(100)).longValue();
+        //  Nếu là refund thì xử lý ngay — không tạo link VNPay
+        if (type == 4) {
+            payment.setStatus(PaymentStatus.SUCCESS);
+            order.setStatus("REFUNDED");
+            paymentRepository.save(payment);
+            rentalOrderRepository.save(order);
+            detail.setStatus("SUCCESS");
+            rentalOrderDetailRepository.save(detail);
+
+            recordTransaction(order, payment, "REFUND");
+
+            return PaymentResponse.builder()
+                    .paymentId(payment.getPaymentId())
+                    .orderId(order.getOrderId())
+                    .amount(amount.abs())
+                    .remainingAmount(BigDecimal.ZERO)
+                    .method("INTERNAL_REFUND")
+                    .status(PaymentStatus.SUCCESS)
+                    .paymentType((short) 4)
+                    .message("Hoàn tiền thành công")
+                    .build();
+        }
+
+        //  Tạo URL VNPay
+        long vnpAmount = amount.abs().multiply(BigDecimal.valueOf(100)).longValue();
         Map<String, String> vnpParams = vnpayConfig.getVNPayConfig();
         vnpParams.put("vnp_Amount", String.valueOf(vnpAmount));
         vnpParams.put("vnp_TxnRef", payment.getPaymentId().toString());
@@ -116,14 +154,18 @@ public class PaymentServiceImpl implements PaymentService {
         String paymentUrl = VNP_URL + "?" + queryUrl;
 
         // Cập nhật trạng thái đơn
-        order.setStatus(type == 1 ? "PENDING_DEPOSIT" : "PENDING_FINAL");
+        switch (type) {
+            case 1 -> order.setStatus("PENDING_DEPOSIT");
+            case 2 -> order.setStatus("PENDING_FINAL");
+            case 3 -> order.setStatus("PENDING_FULL_PAYMENT");
+        }
         rentalOrderRepository.save(order);
 
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
                 .orderId(order.getOrderId())
                 .amount(amount)
-                .remainingAmount(payment.getRemainingAmount())
+                .remainingAmount(remainingAmount)
                 .method(method)
                 .status(payment.getStatus())
                 .paymentType(type)
@@ -133,7 +175,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ===============================
-    //  XỬ LÝ CALLBACK TỪ VNPAY
+    //  XỬ LÝ CALLBACK VNPAY
     // ===============================
     @Override
     @Transactional
@@ -156,45 +198,32 @@ public class PaymentServiceImpl implements PaymentService {
         RentalOrder order = payment.getRentalOrder();
         boolean success = "00".equals(responseCode);
 
-        // Lấy order detail tương ứng
-        String expectedType = (payment.getPaymentType() == 1) ? "DEPOSITED" : "FINAL";
-        RentalOrderDetail detail = rentalOrderDetailRepository
-                .findByOrder_OrderId(order.getOrderId()).stream()
+        String expectedType = switch (payment.getPaymentType()) {
+            case 1 -> "DEPOSITED";
+            case 2 -> "FINAL";
+            case 3 -> "FULL_PAYMENT";
+            default -> "UNKNOWN";
+        };
+
+        RentalOrderDetail detail = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                .stream()
                 .filter(d -> expectedType.equalsIgnoreCase(d.getType()))
                 .reduce((first, second) -> second)
                 .orElse(null);
 
         if (success) {
             payment.setStatus(PaymentStatus.SUCCESS);
-            BigDecimal remaining = order.getTotalPrice().subtract(payment.getAmount().abs());
-            payment.setRemainingAmount(remaining.max(BigDecimal.ZERO));
-
             if (detail != null) detail.setStatus("SUCCESS");
 
-            // Cập nhật order cha
-            if (payment.getPaymentType() == 1) {
-                order.setStatus("DEPOSITED");
-
-                // Sau khi đặt cọc, tạo detail phần còn lại
-                if (remaining.compareTo(BigDecimal.ZERO) > 0) {
-                    RentalOrderDetail remainingDetail = RentalOrderDetail.builder()
-                            .order(order)
-                            .vehicle(order.getDetails().get(0).getVehicle())
-                            .type("PENDING_FINAL")
-                            .startTime(LocalDateTime.now())
-                            .endTime(LocalDateTime.now())
-                            .price(remaining)
-                            .status("PENDING")
-                            .description("Phần còn lại chờ thanh toán")
-                            .build();
-                    rentalOrderDetailRepository.save(remainingDetail);
-                }
-            } else {
-                order.setStatus("PAID");
+            switch (payment.getPaymentType()) {
+                case 1 -> order.setStatus("DEPOSITED");
+                case 2, 3 -> order.setStatus("PAID");
             }
 
             recordTransaction(order, payment,
-                    payment.getPaymentType() == 1 ? "DEPOSIT" : "FINAL_PAYMENT");
+                    payment.getPaymentType() == 1 ? "DEPOSIT"
+                            : payment.getPaymentType() == 2 ? "FINAL_PAYMENT"
+                            : "FULL_PAYMENT");
 
         } else {
             payment.setStatus(PaymentStatus.FAILED);
@@ -218,9 +247,25 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
     }
 
-    // ===============================
-    //  HOÀN TIỀN (REFUND)
-    // ===============================
+    private void recordTransaction(RentalOrder order, Payment payment, String type) {
+        TransactionHistory history = new TransactionHistory();
+        history.setUser(order.getCustomer());
+        history.setAmount(payment.getAmount().abs());
+        history.setType(type);
+        history.setStatus("SUCCESS");
+        history.setCreatedAt(LocalDateTime.now());
+        transactionHistoryRepository.save(history);
+    }
+
+    private String getDescriptionByType(short type) {
+        return switch (type) {
+            case 1 -> "Thanh toán đặt cọc";
+            case 2 -> "Thanh toán phần còn lại";
+            case 3 -> "Thanh toán toàn bộ đơn thuê";
+            case 4 -> "Hoàn tiền cho khách hàng";
+            default -> "Giao dịch không xác định";
+        };
+    }
     @Override
     @Transactional
     public PaymentResponse refund(UUID orderId) {
@@ -237,7 +282,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(refundAmount)
                 .remainingAmount(BigDecimal.ZERO)
                 .method("INTERNAL_REFUND")
-                .paymentType((short) 3)
+                .paymentType((short) 4)
                 .status(PaymentStatus.SUCCESS)
                 .build();
         paymentRepository.save(refund);
@@ -264,23 +309,10 @@ public class PaymentServiceImpl implements PaymentService {
                 .orderId(order.getOrderId())
                 .amount(refundAmount)
                 .remainingAmount(BigDecimal.ZERO)
-                .method(refund.getMethod())
-                .status(refund.getStatus())
-                .paymentType(refund.getPaymentType())
+                .method("INTERNAL_REFUND")
+                .status(PaymentStatus.SUCCESS)
+                .paymentType((short) 4)
                 .message("Hoàn tiền thành công")
                 .build();
-    }
-
-    // ===============================
-    //  LƯU LỊCH SỬ GIAO DỊCH
-    // ===============================
-    private void recordTransaction(RentalOrder order, Payment payment, String type) {
-        TransactionHistory history = new TransactionHistory();
-        history.setUser(order.getCustomer());
-        history.setAmount(payment.getAmount().abs());
-        history.setType(type);
-        history.setStatus("SUCCESS");
-        history.setCreatedAt(LocalDateTime.now());
-        transactionHistoryRepository.save(history);
     }
 }

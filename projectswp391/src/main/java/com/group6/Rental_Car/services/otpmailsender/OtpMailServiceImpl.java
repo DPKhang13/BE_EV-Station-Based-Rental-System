@@ -27,7 +27,7 @@ public class OtpMailServiceImpl implements OtpMailService {
         String otp = String.format("%06d", new Random().nextInt(999999));
         Instant expiredAt = Instant.now().plusMillis(OTP_EXPIRATION_MS);
 
-        otpStore.put(email, new OtpRecord(otp, expiredAt)); // ✅ key là email
+        otpStore.put(email, new OtpRecord(otp, expiredAt)); // key là email
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
