@@ -86,7 +86,8 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
         }
         rentalOrderDetailRepository.deleteById(detailId);
     }
-    public List<OrderDetailResponse> getDetailsByOrder(UUID orderId, boolean isStaffView) {
+    @Override
+    public List<OrderDetailResponse> getDetailsByOrderStaff(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
@@ -97,14 +98,8 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
                             .map(t -> t.trim().toUpperCase())
                             .orElse("");
 
-                    //  Nếu là staff -> ẩn RENTAL luôn
-                    if (isStaffView && "RENTAL".equals(type)) {
-                        return false;
-                    }
-
-                    //  Nếu không phải staff -> chỉ ẩn khi order không còn pending
-                    boolean hideRental = !order.getStatus().equalsIgnoreCase("PENDING");
-                    return !(hideRental && "RENTAL".equals(type));
+                    //  Chỉ lấy DEPOSITED hoặc PICKUP
+                    return "DEPOSITED".equals(type) || "PICKUP".equals(type);
                 })
                 .map(this::toResponse)
                 .sorted(Comparator.comparing(OrderDetailResponse::getStartTime))
@@ -112,7 +107,6 @@ public class RentalOrderDetailsServiceImpl implements RentalOrderDetailService {
 
         return details;
     }
-
     @Override
     public List<OrderDetailResponse> getDetailsByOrder(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)

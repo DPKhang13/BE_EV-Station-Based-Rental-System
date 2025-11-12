@@ -86,9 +86,8 @@ public class RentalOrderDetailController {
     }
     @GetMapping("/order/staff/{orderId}")
     public ResponseEntity<List<OrderDetailResponse>> getOrderDetails(
-            @PathVariable UUID orderId,
-            @RequestParam(defaultValue = "false") boolean staffView
+            @PathVariable UUID orderId
     ) {
-        return ResponseEntity.ok(rentalOrderDetailService.getDetailsByOrder(orderId, staffView));
+        return ResponseEntity.ok(rentalOrderDetailService.getDetailsByOrder(orderId));
     }
 }
