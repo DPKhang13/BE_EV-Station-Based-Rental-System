@@ -104,18 +104,26 @@ public class PaymentServiceImpl implements PaymentService {
         rentalOrderRepository.save(order);
 
         // Ghi chi tiết transaction
-        if (type != 2) { // Đừng tạo mới khi thanh toán phần còn lại
-            RentalOrderDetail detail = RentalOrderDetail.builder()
-                    .order(order)
-                    .vehicle(order.getDetails().get(0).getVehicle())
-                    .type(getTypeNameByPayment(type))
-                    .startTime(LocalDateTime.now())
-                    .endTime(LocalDateTime.now())
-                    .price(amount.abs())
-                    .status("PENDING")
-                    .description(getDescriptionByType(type))
-                    .build();
-            rentalOrderDetailRepository.save(detail);
+        if (type != 2) { // Không tạo mới khi thanh toán phần còn lại
+            String typeName = getTypeNameByPayment(type);
+
+            boolean exists = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .anyMatch(d -> typeName.equalsIgnoreCase(d.getType()));
+
+            if (!exists) {
+                RentalOrderDetail detail = RentalOrderDetail.builder()
+                        .order(order)
+                        .vehicle(order.getDetails().get(0).getVehicle())
+                        .type(typeName)
+                        .startTime(LocalDateTime.now())
+                        .endTime(LocalDateTime.now())
+                        .price(amount.abs())
+                        .status("PENDING")
+                        .description(getDescriptionByType(type))
+                        .build();
+                rentalOrderDetailRepository.save(detail);
+            }
         }
 
         // Tạo link VNPay
@@ -205,17 +213,32 @@ public class PaymentServiceImpl implements PaymentService {
                             });
 
                     if (remaining.compareTo(BigDecimal.ZERO) > 0) {
-                        RentalOrderDetail pickup = RentalOrderDetail.builder()
-                                .order(order)
-                                .vehicle(order.getDetails().get(0).getVehicle())
-                                .type("PICKUP")
-                                .startTime(LocalDateTime.now())
-                                .endTime(LocalDateTime.now())
-                                .price(remaining)
-                                .status("PENDING")
-                                .description("Thanh toán phần còn lại khi nhận xe")
-                                .build();
-                        rentalOrderDetailRepository.save(pickup);
+                        Optional<RentalOrderDetail> pickupOpt = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                                .stream()
+                                .filter(d -> "PICKUP".equalsIgnoreCase(d.getType()))
+                                .findFirst();
+
+                        if (pickupOpt.isEmpty()) {
+                            // Chưa có PICKUP → tạo mới
+                            RentalOrderDetail pickup = RentalOrderDetail.builder()
+                                    .order(order)
+                                    .vehicle(order.getDetails().get(0).getVehicle())
+                                    .type("PICKUP")
+                                    .startTime(LocalDateTime.now())
+                                    .endTime(LocalDateTime.now())
+                                    .price(remaining)
+                                    .status("PENDING")
+                                    .description("Thanh toán phần còn lại khi nhận xe")
+                                    .build();
+                            rentalOrderDetailRepository.save(pickup);
+                        } else {
+                            // Có rồi → chỉ update lại giá và status
+                            RentalOrderDetail pickup = pickupOpt.get();
+                            pickup.setPrice(remaining);
+                            pickup.setStatus("PENDING");
+                            pickup.setDescription("Thanh toán phần còn lại khi nhận xe");
+                            rentalOrderDetailRepository.save(pickup);
+                        }
                     }
                 }
 
