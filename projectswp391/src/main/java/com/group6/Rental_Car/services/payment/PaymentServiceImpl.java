@@ -225,12 +225,17 @@ public class PaymentServiceImpl implements PaymentService {
                                 .stream()
                                 .filter(d -> "PICKUP".equalsIgnoreCase(d.getType()))
                                 .findFirst();
-
+                        Vehicle mainVehicle = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                                .stream()
+                                .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                                .map(RentalOrderDetail::getVehicle)
+                                .findFirst()
+                                .orElse(null);
                         if (pickupOpt.isEmpty()) {
                             // Chưa có PICKUP → tạo mới
                             RentalOrderDetail pickup = RentalOrderDetail.builder()
                                     .order(order)
-                                    .vehicle(order.getDetails().get(0).getVehicle())
+                                    .vehicle(mainVehicle)
                                     .type("PICKUP")
                                     .startTime(LocalDateTime.now())
                                     .endTime(LocalDateTime.now())
