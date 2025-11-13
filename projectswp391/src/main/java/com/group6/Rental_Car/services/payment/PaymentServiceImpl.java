@@ -357,14 +357,22 @@ public class PaymentServiceImpl implements PaymentService {
 
     private PaymentResponse buildVNPayReturn(RentalOrder order, Payment payment, BigDecimal amount) {
 
+        // Validate amount
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Payment amount must be greater than 0");
+        }
+
         Map<String, String> params = vnpayConfig.getVNPayConfig();
-        params.put("vnp_Amount", amount.multiply(BigDecimal.valueOf(100)).toString());
+
+        // Convert to integer (VNPay requires integer, no decimals)
+        long amountInVND = amount.multiply(BigDecimal.valueOf(100)).longValue();
+        params.put("vnp_Amount", String.valueOf(amountInVND));
 
         String encoded = payment.getPaymentId().toString().replace("-", "");
         String txnRef = encoded + "-" + System.currentTimeMillis();
 
         params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Thanh toán đơn " + order.getOrderId());
+        params.put("vnp_OrderInfo", "Thanh toan don hang " + order.getOrderId());
         params.put("vnp_IpAddr", "127.0.0.1");
 
         String query = Utils.getPaymentURL(params, true);
