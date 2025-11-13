@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,7 +40,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         WHERE rod.start_time BETWEEN :from AND :to
           AND UPPER(ro.status) IN ('RENTAL', 'COMPLETED', 'RETURN', 'ACTIVE')
     """, nativeQuery = true)
-    Double revenueBetween(@Param("from") Timestamp from, @Param("to") Timestamp to);
+    Double revenueBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     // Doanh thu theo ngày
     @Query(value = """
@@ -53,7 +53,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         GROUP BY day
         ORDER BY day
     """, nativeQuery = true)
-    List<Object[]> revenueByDay(@Param("from") Timestamp from, @Param("to") Timestamp to);
+    List<Object[]> revenueByDay(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     // Doanh thu theo trạm (dựa vào vehicle)
     @Query(value = """
@@ -69,8 +69,8 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         GROUP BY s.station_id, s.name
         ORDER BY total DESC
     """, nativeQuery = true)
-    List<Object[]> revenuePerStation(@Param("from") Timestamp from,
-                                     @Param("to") Timestamp to);
+    List<Object[]> revenuePerStation(@Param("from") LocalDateTime from,
+                                     @Param("to") LocalDateTime to);
 
     // Doanh thu hôm nay
     @Query(value = """

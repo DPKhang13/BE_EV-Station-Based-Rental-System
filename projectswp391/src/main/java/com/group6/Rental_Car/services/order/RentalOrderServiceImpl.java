@@ -37,6 +37,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final UserRepository userRepository;
     private final ModelMapper modelMapper;
     private final VehicleTimelineRepository vehicleTimelineRepository;
+    private final EmployeeScheduleRepository employeeScheduleRepository;
 
     @Override
     @Transactional
@@ -315,6 +316,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .build();
         vehicleTimelineRepository.save(timeline);
 
+        // Tăng pickup_count cho staff hiện tại
+        JwtUserDetails currentStaff = currentUser();
+        incrementPickupCount(currentStaff.getUserId());
+
         return mapToResponse(order, mainDetail);
     }
 
@@ -329,11 +334,14 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
 
-        // Lấy actualReturnTime từ request, nếu null thì dùng thời gian hiện tại
-        LocalDateTime actualReturnTime = (request != null && request.getActualReturnTime() != null)
-                ? request.getActualReturnTime()
-                : LocalDateTime.now();
-
+        // Lấy actualReturnTime từ request, nếu null thì dùng endTime từ detail
+        LocalDateTime actualReturnTime;
+        if (request != null && request.getActualReturnTime() != null) {
+            actualReturnTime = request.getActualReturnTime();
+        } else {
+            // Nếu không nhập thì lấy thời gian kết thúc dự kiến từ detail
+            actualReturnTime = mainDetail.getEndTime();
+        }
 
         // Tính số ngày thuê thực tế
         long actualDays = ChronoUnit.DAYS.between(mainDetail.getStartTime(), actualReturnTime);
@@ -364,12 +372,30 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         mainDetail.setPrice(total);
         rentalOrderDetailRepository.save(mainDetail);
 
-        vehicle.setStatus("CHECKING");
-        vehicleRepository.save(vehicle);
+        // Kiểm tra xem có service nào cần thanh toán không
+        List<OrderService> pendingServices = orderServiceRepository
+                .findByOrder_OrderId(orderId)
+                .stream()
+                .filter(s -> "PENDING".equalsIgnoreCase(s.getStatus()))
+                .toList();
 
+        // Nếu KHÔNG có service nào → hoàn tất đơn luôn
+        if (pendingServices.isEmpty()) {
+            vehicle.setStatus("CHECKING");
+            order.setStatus("COMPLETED");
+        } else {
+            // Nếu CÓ service → chờ thanh toán
+            vehicle.setStatus("CHECKING");
+            order.setStatus("PENDING_FINAL_PAYMENT"); // Chờ thanh toán type 5 (services + phí trễ)
+        }
+
+        vehicleRepository.save(vehicle);
         order.setTotalPrice(total);
-        order.setStatus("COMPLETED");
         rentalOrderRepository.save(order);
+
+        // Tăng return_count cho staff hiện tại
+        JwtUserDetails currentStaff = currentUser();
+        incrementReturnCount(currentStaff.getUserId());
 
         return mapToResponse(order, mainDetail);
     }
@@ -410,9 +436,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
                     return s.startsWith("PENDING")
                             || s.equals("PAID")
-                            || s.equals("RENTAL") // PENDING_DEPOSIT, PENDING_FINAL, PENDING_FULL_PAYMENT
-                            || s.equals("PENDING_FINAL")      // đang thuê
-                            || s.equals("DEPOSITED");  // đã đặt cọc
+                            || s.equals("RENTAL")              // đang thuê
+                            || s.equals("DEPOSITED")           // đã đặt cọc
+                            || s.equals("PENDING_FINAL_PAYMENT"); // chờ thanh toán cuối (services + phí trễ)
                 })
                 //  sort theo createdAt mới nhất
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
@@ -546,5 +572,64 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (auth == null || !(auth.getPrincipal() instanceof JwtUserDetails jwt))
             throw new BadRequestException("Phiên đăng nhập không hợp lệ");
         return jwt;
+    }
+
+
+    private String getCurrentShiftTime() {
+        int hour = LocalDateTime.now().getHour();
+        if (hour >= 6 && hour < 12) {
+            return "MORNING";
+        } else if (hour >= 12 && hour < 18) {
+            return "AFTERNOON";
+        } else if (hour >= 18 && hour < 22) {
+            return "EVENING";
+        }
+        return "NIGHT"; // 22-6
+    }
+
+    /**
+     * Tăng pickup_count cho staff trong ca làm việc hiện tại
+     */
+    private void incrementPickupCount(UUID staffId) {
+        try {
+            String shiftTime = getCurrentShiftTime();
+            java.time.LocalDate today = java.time.LocalDate.now();
+
+            Optional<EmployeeSchedule> scheduleOpt =
+                employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
+                    staffId, today, shiftTime);
+
+            if (scheduleOpt.isPresent()) {
+                EmployeeSchedule schedule = scheduleOpt.get();
+                schedule.setPickupCount(schedule.getPickupCount() + 1);
+                employeeScheduleRepository.save(schedule);
+            }
+        } catch (Exception e) {
+            // Log error nhưng không throw exception để không ảnh hưởng flow chính
+            System.err.println("Failed to increment pickup count: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Tăng return_count cho staff trong ca làm việc hiện tại
+     */
+    private void incrementReturnCount(UUID staffId) {
+        try {
+            String shiftTime = getCurrentShiftTime();
+            java.time.LocalDate today = java.time.LocalDate.now();
+
+            Optional<EmployeeSchedule> scheduleOpt =
+                employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
+                    staffId, today, shiftTime);
+
+            if (scheduleOpt.isPresent()) {
+                EmployeeSchedule schedule = scheduleOpt.get();
+                schedule.setReturnCount(schedule.getReturnCount() + 1);
+                employeeScheduleRepository.save(schedule);
+            }
+        } catch (Exception e) {
+            // Log error nhưng không throw exception để không ảnh hưởng flow chính
+            System.err.println("Failed to increment return count: " + e.getMessage());
+        }
     }
 }

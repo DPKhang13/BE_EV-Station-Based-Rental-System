@@ -41,6 +41,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final UserRepository userRepository;
     private final OrderServiceRepository orderServiceRepository;
+    private final VehicleRepository vehicleRepository;
 
     // ============================================================
     // CREATE PAYMENT URL
@@ -257,8 +258,22 @@ public class PaymentServiceImpl implements PaymentService {
             orderServiceRepository.save(s);
         });
 
+        // Nếu order đang chờ thanh toán cuối (sau khi return xe)
+        if ("PENDING_FINAL_PAYMENT".equalsIgnoreCase(order.getStatus())) {
+            order.setStatus("COMPLETED");
 
-        order.setStatus("SERVICE_PAID");
+            // Chuyển xe về AVAILABLE (đã kiểm tra xong và thanh toán đủ)
+            Vehicle vehicle = getMainVehicle(order);
+            if (vehicle != null && "CHECKING".equalsIgnoreCase(vehicle.getStatus())) {
+                vehicle.setStatus("AVAILABLE");
+                vehicle.setUpdatedAt(LocalDateTime.now());
+                vehicleRepository.save(vehicle);
+            }
+        } else {
+            // Các trường hợp khác (thanh toán service bình thường)
+            order.setStatus("SERVICE_PAID");
+        }
+
         paymentRepository.save(payment);
         rentalOrderRepository.save(order);
 

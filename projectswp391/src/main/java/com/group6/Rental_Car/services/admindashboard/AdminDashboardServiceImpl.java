@@ -6,7 +6,6 @@ import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -35,8 +34,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             to = tmp;
         }
 
-        Timestamp tsFrom = Timestamp.valueOf(from.atStartOfDay());
-        Timestamp tsTo = Timestamp.valueOf(LocalDateTime.of(to, LocalTime.MAX));
+        LocalDateTime dtFrom = from.atStartOfDay();
+        LocalDateTime dtTo = LocalDateTime.of(to, LocalTime.MAX);
 
         // ===== VEHICLE KPIs =====
         long totalVehicles = vehicleRepository.count();
@@ -47,7 +46,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // ===== ORDER KPIs =====
         long totalOrders = rentalOrderRepository.count();
         long completedOrders = rentalOrderRepository.countByStatus("COMPLETED");
-        double revenueInRange = Optional.ofNullable(rentalOrderRepository.revenueBetween(tsFrom, tsTo)).orElse(0d);
+        double revenueInRange = Optional.ofNullable(rentalOrderRepository.revenueBetween(dtFrom, dtTo)).orElse(0d);
 
         // ===== USER KPIs =====
         long totalUsers = userRepository.count();
@@ -56,7 +55,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long customers = userRepository.countByRole(Role.customer);
 
         // ===== SERVICE KPIs =====
-        double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(tsFrom, tsTo)).orElse(0d);
+        double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(dtFrom, dtTo)).orElse(0d);
         List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(from, to);
         long totalServices = servicesInRange.size();
 
@@ -73,7 +72,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ));
 
         // ===== SERVICES BY DAY =====
-        var serviceDayRows = orderServiceRepository.countByDay(tsFrom, tsTo);
+        var serviceDayRows = orderServiceRepository.countByDay(dtFrom, dtTo);
         Map<LocalDate, Long> serviceDayMap = serviceDayRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
                 r -> ((Number) r[1]).longValue()
@@ -102,7 +101,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ).toList();
 
         // ===== REVENUE BY STATION =====
-        var revStationRows = rentalOrderRepository.revenuePerStation(tsFrom, tsTo);
+        var revStationRows = rentalOrderRepository.revenuePerStation(dtFrom, dtTo);
         var revenueByStation = revStationRows.stream()
                 .map(r -> AdminDashboardResponse.StationRevenue.builder()
                         .stationId(((Number) r[0]).intValue())
@@ -112,7 +111,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .toList();
 
         // ===== REVENUE BY DAY =====
-        var revRows = rentalOrderRepository.revenueByDay(tsFrom, tsTo);
+        var revRows = rentalOrderRepository.revenueByDay(dtFrom, dtTo);
         Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
                 r -> ((Number) r[1]).doubleValue()
@@ -135,6 +134,22 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         TreeMap::new
                 ));
 
+        // ===== VEHICLES BY STATUS =====
+        List<AdminDashboardResponse.LabelCount> vehiclesByStatus = Arrays.asList(
+                AdminDashboardResponse.LabelCount.builder()
+                        .label("AVAILABLE")
+                        .count(availableVehicles)
+                        .build(),
+                AdminDashboardResponse.LabelCount.builder()
+                        .label("RENTAL")
+                        .count(rentedVehicles)
+                        .build(),
+                AdminDashboardResponse.LabelCount.builder()
+                        .label("MAINTENANCE")
+                        .count(maintenanceVehicles)
+                        .build()
+        );
+
         // ===== BUILD RESPONSE =====
         var kpi = AdminDashboardResponse.Kpi.builder()
                 .totalVehicles(totalVehicles)
@@ -148,6 +163,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .admins(admins)
                 .staffs(staffs)
                 .customers(customers)
+                .totalServiceCost(totalServiceCost)
+                .totalServices(totalServices)
                 .build();
 
         var serviceKpi = AdminDashboardResponse.ServiceKpi.builder()
@@ -159,6 +176,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
+                .vehiclesByStatus(vehiclesByStatus)
                 .revenueByDay(revenueByDay)
                 .revenueByStation(revenueByStation)
                 .avgRating(avgRating)
