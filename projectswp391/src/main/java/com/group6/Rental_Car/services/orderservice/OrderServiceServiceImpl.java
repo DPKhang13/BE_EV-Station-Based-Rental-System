@@ -3,7 +3,6 @@
     import com.group6.Rental_Car.dtos.orderservice.OrderServiceCreateRequest;
     import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
     import com.group6.Rental_Car.entities.*;
-    import com.group6.Rental_Car.enums.PaymentStatus;
     import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
     import com.group6.Rental_Car.repositories.*;
     import com.group6.Rental_Car.utils.JwtUserDetails;
@@ -13,7 +12,6 @@
     import org.springframework.stereotype.Service;
     import org.springframework.transaction.annotation.Transactional;
 
-    import java.math.BigDecimal;
     import java.time.LocalDateTime;
     import java.util.List;
     import java.util.Objects;
@@ -54,59 +52,63 @@
             //  Lấy trạm
             RentalStation station = vehicle.getRentalStation();
 
-            //  Lấy nhân viên đăng nhập (nếu có)
-            User performedBy = null;
-            var auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth != null && auth.getPrincipal() instanceof JwtUserDetails jwt) {
-                performedBy = userRepository.findById(jwt.getUserId()).orElse(null);
-            }
+        //  Lấy nhân viên đăng nhập (nếu có)
+        User performedBy = null;
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof JwtUserDetails jwt) {
+            performedBy = userRepository.findById(jwt.getUserId()).orElse(null);
+        }
 
-            //  Tạo chi tiết dịch vụ
-            RentalOrderDetail serviceDetail = RentalOrderDetail.builder()
-                    .order(order)
-                    .vehicle(vehicle)
-                    .type("SERVICE_" + request.getServiceType().toUpperCase())
-                    .startTime(LocalDateTime.now())
-                    .endTime(LocalDateTime.now())
-                    .price(request.getCost())
-                    .status("PENDING")
-                    .description(Optional.ofNullable(request.getDescription())
-                            .orElse("Phí dịch vụ " + request.getServiceType()))
-                    .build();
-            rentalOrderDetailRepository.save(serviceDetail);
+        //  1. LƯU VÀO BẢNG ORDERSERVICE (bảng chính để quản lý service)
+        OrderService service = OrderService.builder()
+                .order(order)
+                .vehicle(vehicle)
+                .station(station)
+                .performedBy(performedBy)
+                .serviceType(request.getServiceType().toUpperCase())
+                .description(Optional.ofNullable(request.getDescription())
+                        .orElse("Phí dịch vụ " + request.getServiceType()))
+                .cost(request.getCost())
+                .status("PENDING")
+                .occurredAt(LocalDateTime.now())
+                .build();
+        OrderService savedService = orderServiceRepository.save(service);
 
-            //  Cập nhật tổng tiền đơn thuê
-            order.setTotalPrice(order.getTotalPrice().add(request.getCost()));
-            rentalOrderRepository.save(order);
+        //  2. LƯU VÀO BẢNG RENTAL_ORDER_DETAIL (để getDetailsByOrder và payment có thể lấy được)
+        RentalOrderDetail serviceDetail = RentalOrderDetail.builder()
+                .order(order)
+                .vehicle(vehicle)
+                .type("SERVICE_" + request.getServiceType().toUpperCase())
+                .startTime(LocalDateTime.now())
+                .endTime(LocalDateTime.now())
+                .price(request.getCost())
+                .status("PENDING")
+                .description(Optional.ofNullable(request.getDescription())
+                        .orElse("Phí dịch vụ " + request.getServiceType()))
+                .build();
+        rentalOrderDetailRepository.save(serviceDetail);
 
-            //  Cập nhật payment còn lại (remainingAmount)
-            Payment latestPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId()).stream()
-                    .filter(p -> p.getStatus() == PaymentStatus.SUCCESS || p.getStatus() == PaymentStatus.PENDING)
-                    .reduce((first, second) -> second) // lấy payment cuối cùng
-                    .orElse(null);
+        //  3. Cập nhật tổng tiền đơn thuê
+        order.setTotalPrice(order.getTotalPrice().add(request.getCost()));
+        rentalOrderRepository.save(order);
 
-            if (latestPayment != null) {
-                BigDecimal newRemaining = latestPayment.getRemainingAmount().add(request.getCost());
-                latestPayment.setRemainingAmount(newRemaining);
-                paymentRepository.save(latestPayment);
-            }
+        //  4. Tạo response từ OrderService (bảng chính)
+        OrderServiceResponse response = new OrderServiceResponse();
+        response.setServiceId(savedService.getServiceId());
+        response.setOrderId(order.getOrderId());
+        response.setDetailId(serviceDetail.getDetailId());
+        response.setVehicleId(vehicle.getVehicleId());
+        response.setServiceType(request.getServiceType());
+        response.setDescription(savedService.getDescription());
+        response.setCost(request.getCost());
+        response.setStatus("PENDING");
+        response.setOccurredAt(savedService.getOccurredAt());
+        response.setResolvedAt(savedService.getResolvedAt());
+        response.setStationName(station != null ? station.getName() : null);
+        response.setPerformedByName(performedBy != null ? performedBy.getFullName() : null);
+        response.setNote(null);
 
-            //  Tạo response
-            OrderServiceResponse response = new OrderServiceResponse();
-            response.setOrderId(order.getOrderId());
-            response.setDetailId(serviceDetail.getDetailId());
-            response.setVehicleId(vehicle.getVehicleId());
-            response.setServiceType(request.getServiceType());
-            response.setDescription(serviceDetail.getDescription());
-            response.setCost(request.getCost());
-            response.setStatus("PENDING");
-            response.setOccurredAt(serviceDetail.getStartTime());
-            response.setResolvedAt(serviceDetail.getEndTime());
-            response.setStationName(station != null ? station.getName() : null);
-            response.setPerformedByName(performedBy != null ? performedBy.getFullName() : null);
-            response.setNote(null);
-
-            return response;
+        return response;
         }
 
         @Override

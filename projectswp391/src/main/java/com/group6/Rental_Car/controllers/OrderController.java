@@ -1,14 +1,11 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
-import com.group6.Rental_Car.dtos.order.OrderResponse;
-import com.group6.Rental_Car.dtos.order.OrderReturnRequest;
-import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
-import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
+import com.group6.Rental_Car.dtos.order.*;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.services.order.RentalOrderService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -48,6 +45,19 @@ public class OrderController {
             @RequestBody OrderUpdateRequest request
     ) {
         OrderResponse response = rentalOrderService.updateOrder(orderId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{orderId}/change-vehicle")
+    public ResponseEntity<OrderResponse> changeVehicle(
+            @PathVariable UUID orderId,
+            @Valid @RequestBody ChangeVehicleRequest request
+    ) {
+        OrderResponse response = rentalOrderService.changeVehicle(
+                orderId,
+                request.getNewVehicleId(),
+                request.getNote()
+        );
         return ResponseEntity.ok(response);
     }
 

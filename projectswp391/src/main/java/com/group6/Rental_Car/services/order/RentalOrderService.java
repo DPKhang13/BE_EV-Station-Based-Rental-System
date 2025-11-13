@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface RentalOrderService {
     OrderResponse createOrder(OrderCreateRequest orderCreateRequest);
     OrderResponse updateOrder(UUID orderId, OrderUpdateRequest orderUpdateRequest);
+    OrderResponse changeVehicle(UUID orderId, Long newVehicleId, String note);
     List<VehicleOrderHistoryResponse> getOrderHistoryByCustomer(UUID customerId);
     void deleteOrder(UUID orderId);
     List<OrderResponse> getRentalOrders();

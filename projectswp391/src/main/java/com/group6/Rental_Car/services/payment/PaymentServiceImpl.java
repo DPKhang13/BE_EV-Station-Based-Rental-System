@@ -42,6 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final UserRepository userRepository;
     private final OrderServiceRepository orderServiceRepository;
     private final VehicleRepository vehicleRepository;
+    private final VehicleTimelineRepository vehicleTimelineRepository;
 
     // ============================================================
     // CREATE PAYMENT URL
@@ -262,12 +263,11 @@ public class PaymentServiceImpl implements PaymentService {
         if ("PENDING_FINAL_PAYMENT".equalsIgnoreCase(order.getStatus())) {
             order.setStatus("COMPLETED");
 
-            // Chuyển xe về AVAILABLE (đã kiểm tra xong và thanh toán đủ)
+            // XÓA timeline khi order hoàn thành (không cần giữ nữa)
+            // Timeline chỉ dùng để hiển thị xe đang được book, xe đã trả rồi thì xóa
             Vehicle vehicle = getMainVehicle(order);
-            if (vehicle != null && "CHECKING".equalsIgnoreCase(vehicle.getStatus())) {
-                vehicle.setStatus("AVAILABLE");
-                vehicle.setUpdatedAt(LocalDateTime.now());
-                vehicleRepository.save(vehicle);
+            if (vehicle != null) {
+                deleteTimelineForOrder(order.getOrderId(), vehicle.getVehicleId());
             }
         } else {
             // Các trường hợp khác (thanh toán service bình thường)
@@ -660,5 +660,23 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentType((short) 4)
                 .message("Hoàn tiền thành công")
                 .build();
+    }
+
+    /**
+     * Xóa timeline khi order hoàn thành
+     * Timeline chỉ dùng để track xe đang được book, xe đã trả thì không cần nữa
+     */
+    private void deleteTimelineForOrder(UUID orderId, Long vehicleId) {
+        if (vehicleId == null) return;
+
+        List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+        List<VehicleTimeline> toDelete = timelines.stream()
+                .filter(t -> t.getOrder() != null && t.getOrder().getOrderId().equals(orderId))
+                .toList();
+
+        if (!toDelete.isEmpty()) {
+            vehicleTimelineRepository.deleteAll(toDelete);
+            log.info("🗑️ Deleted {} timeline(s) for completed order {}", toDelete.size(), orderId);
+        }
     }
 }

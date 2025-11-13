@@ -10,8 +10,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class OrderServiceResponse {
+    private Long serviceId;  // ID của service trong bảng orderservice
     private UUID orderId;
-    private Long detailId;
+    private Long detailId;   // ID của detail trong bảng rental_order_detail
     private Long vehicleId;
     private String serviceType;
     private String description;
