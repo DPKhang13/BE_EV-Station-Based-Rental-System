@@ -384,7 +384,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         List<RentalOrder> processingOrders = rentalOrderRepository.findAll().stream()
                 .filter(o -> {
                     String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
-                    return s.startsWith("PENDING")     // PENDING_DEPOSIT, PENDING_FINAL, PENDING_FULL_PAYMENT
+                    return s.startsWith("PENDING")
+                            || s.equals("RENTAL") // PENDING_DEPOSIT, PENDING_FINAL, PENDING_FULL_PAYMENT
                             || s.equals("PENDING_FINAL")      // đang thuê
                             || s.equals("DEPOSITED");  // đã đặt cọc
                 })
