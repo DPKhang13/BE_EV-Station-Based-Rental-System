@@ -2,6 +2,7 @@ package com.group6.Rental_Car.services.order;
 
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
+import com.group6.Rental_Car.dtos.order.OrderReturnRequest;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
 import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
@@ -17,7 +18,7 @@ public interface RentalOrderService {
     List<OrderResponse> getRentalOrders();
     List<OrderResponse> findByCustomer_UserId(UUID customerId);
     OrderResponse confirmPickup(UUID orderId);
-    OrderResponse confirmReturn(UUID orderId, Integer manualActualDays);
+    OrderResponse confirmReturn(UUID orderId, OrderReturnRequest request);
     List<OrderVerificationResponse> getPendingVerificationOrders();
     OrderResponse previewReturn(UUID orderId, Integer actualDays);
     List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId);

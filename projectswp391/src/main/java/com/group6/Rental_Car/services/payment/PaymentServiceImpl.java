@@ -126,9 +126,9 @@ public class PaymentServiceImpl implements PaymentService {
 
         updateOrderStatus(order, type);
 
-        // TYPE != 2 -> create DEPOSIT or FULL_PAYMENT detail
+        // TYPE != 2 -> create DEPOSIT or FULL_PAYMENT detail with PENDING status
         if (type != 2) {
-            createOrUpdateDetail(order, vehicle, getTypeName(type), amount, getDescription(type));
+            createOrUpdateDetail(order, vehicle, getTypeName(type), amount, getDescription(type), "PENDING");
         }
 
         return buildMoMoPaymentUrl(order, payment, amount);
@@ -327,7 +327,7 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal fullAmount = payment.getAmount();
         payment.setRemainingAmount(BigDecimal.ZERO);
 
-        createOrUpdateDetail(order, v, "FULL_PAYMENT", fullAmount, "Thanh toán toàn bộ đơn");
+        createOrUpdateDetail(order, v, "FULL_PAYMENT", fullAmount, "Thanh toán toàn bộ đơn", "SUCCESS");
     }
 
     private Vehicle getMainVehicle(RentalOrder order) {
@@ -338,9 +338,6 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new BadRequestException("Missing RENTAL detail"));
     }
 
-    private void createOrUpdateDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc) {
-        createOrUpdateDetail(order, v, type, price, desc, "SUCCESS");
-    }
 
     private void createOrUpdateDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc, String status) {
 
@@ -355,26 +352,30 @@ public class PaymentServiceImpl implements PaymentService {
             d.setPrice(price);
             d.setStatus(status);
             d.setDescription(desc);
-            d.setStartTime(LocalDateTime.now());
-            d.setEndTime(LocalDateTime.now());
+            // Don't update startTime/endTime for payment details
             rentalOrderDetailRepository.save(d);
         } else {
             createDetail(order, v, type, price, desc, status);
         }
     }
 
-    private void createDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc) {
-        createDetail(order, v, type, price, desc, "PENDING");
-    }
 
     private void createDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc, String status) {
+        // Lấy startTime và endTime từ detail RENTAL
+        RentalOrderDetail rentalDetail = order.getDetails().stream()
+                .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                .findFirst()
+                .orElse(null);
+
+        LocalDateTime startTime = rentalDetail != null ? rentalDetail.getStartTime() : LocalDateTime.now();
+        LocalDateTime endTime = rentalDetail != null ? rentalDetail.getEndTime() : LocalDateTime.now();
 
         RentalOrderDetail detail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(v)
                 .type(type)
-                .startTime(LocalDateTime.now())
-                .endTime(LocalDateTime.now())
+                .startTime(startTime)
+                .endTime(endTime)
                 .price(price)
                 .status(status)
                 .description(desc)
@@ -610,12 +611,21 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.save(payment);
         rentalOrderRepository.save(order);
 
+        // Lấy startTime và endTime từ detail RENTAL
+        RentalOrderDetail rentalDetail = order.getDetails().stream()
+                .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                .findFirst()
+                .orElse(null);
+
+        LocalDateTime startTime = rentalDetail != null ? rentalDetail.getStartTime() : LocalDateTime.now();
+        LocalDateTime endTime = rentalDetail != null ? rentalDetail.getEndTime() : LocalDateTime.now();
+
         RentalOrderDetail refundDetail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(order.getDetails().getFirst().getVehicle())
                 .type("REFUND")
-                .startTime(LocalDateTime.now())
-                .endTime(LocalDateTime.now())
+                .startTime(startTime)
+                .endTime(endTime)
                 .price(refundAmount)
                 .status("SUCCESS")
                 .description("Hoàn tiền đơn thuê #" + order.getOrderId())

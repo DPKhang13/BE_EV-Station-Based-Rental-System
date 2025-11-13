@@ -2,6 +2,7 @@ package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
+import com.group6.Rental_Car.dtos.order.OrderReturnRequest;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
 import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
@@ -63,9 +64,11 @@ public class OrderController {
     }
 
     @PostMapping("/{orderId}/return")
-    public ResponseEntity<OrderResponse> confirmReturn(@PathVariable UUID orderId) {
+    public ResponseEntity<OrderResponse> confirmReturn(
+            @PathVariable UUID orderId,
+            @RequestBody(required = false) OrderReturnRequest request) {
 
-        OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
+        OrderResponse response = rentalOrderService.confirmReturn(orderId, request);
         return ResponseEntity.ok(response);
     }
     @GetMapping("/{orderId}/preview-return")

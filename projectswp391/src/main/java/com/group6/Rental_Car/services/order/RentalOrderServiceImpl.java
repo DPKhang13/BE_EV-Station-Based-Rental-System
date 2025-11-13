@@ -30,6 +30,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final RentalOrderRepository rentalOrderRepository;
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final VehicleRepository vehicleRepository;
+    private final OrderServiceRepository orderServiceRepository;
     private final VehicleModelService vehicleModelService;
     private final PricingRuleService pricingRuleService;
     private final CouponService couponService;
@@ -319,7 +320,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     @Transactional
-    public OrderResponse confirmReturn(UUID orderId, Integer manualActualDays) {
+    public OrderResponse confirmReturn(UUID orderId, OrderReturnRequest request) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
@@ -328,13 +329,36 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
 
-        long actualDays = manualActualDays != null ? manualActualDays
-                : ChronoUnit.DAYS.between(mainDetail.getStartTime(), LocalDateTime.now());
+        // Lấy actualReturnTime từ request, nếu null thì dùng thời gian hiện tại
+        LocalDateTime actualReturnTime = (request != null && request.getActualReturnTime() != null)
+                ? request.getActualReturnTime()
+                : LocalDateTime.now();
+
+
+        // Tính số ngày thuê thực tế
+        long actualDays = ChronoUnit.DAYS.between(mainDetail.getStartTime(), actualReturnTime);
         BigDecimal total = rule.getDailyPrice().multiply(BigDecimal.valueOf(actualDays));
 
-        if (actualDays > ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime())) {
-            long extra = actualDays - ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime());
-            total = total.add(rule.getLateFeePerDay().multiply(BigDecimal.valueOf(extra)));
+        // Tính số ngày dự kiến
+        long expectedDays = ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime());
+
+        // Nếu trả trễ, tính phí trễ và lưu vào OrderService
+        if (actualDays > expectedDays) {
+            long lateDays = actualDays - expectedDays;
+            BigDecimal lateFee = rule.getLateFeePerDay().multiply(BigDecimal.valueOf(lateDays));
+            total = total.add(lateFee);
+
+            // Tạo OrderService cho phí trễ
+            OrderService lateService = OrderService.builder()
+                    .order(order)
+                    .vehicle(vehicle)
+                    .serviceType("LATE_FEE")
+                    .description("Trả xe trễ " + lateDays + " ngày")
+                    .cost(lateFee)
+                    .status("PENDING")
+                    .occurredAt(actualReturnTime)
+                    .build();
+            orderServiceRepository.save(lateService);
         }
 
         mainDetail.setPrice(total);
