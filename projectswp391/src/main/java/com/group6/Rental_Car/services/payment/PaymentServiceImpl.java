@@ -372,12 +372,22 @@ public class PaymentServiceImpl implements PaymentService {
         String txnRef = encoded + "-" + System.currentTimeMillis();
 
         params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Thanh toan don hang " + order.getOrderId());
+        // Remove diacritics and special chars from OrderInfo
+        params.put("vnp_OrderInfo", "Order " + order.getOrderId());
         params.put("vnp_IpAddr", "127.0.0.1");
+
+        log.info(" VNPay Params before signing:");
+        params.forEach((k, v) -> log.info("  {} = {}", k, v));
 
         String query = Utils.getPaymentURL(params, true);
         String hashData = Utils.getPaymentURL(params, false);
         String secureHash = Utils.hmacSHA512(VNP_SECRET, hashData);
+
+        String paymentUrl = VNP_URL + "?" + query + "&vnp_SecureHash=" + secureHash;
+
+        log.info(" Payment URL: {}", paymentUrl);
+        log.info(" Hash Data: {}", hashData);
+        log.info(" Secure Hash: {}", secureHash);
 
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
@@ -387,7 +397,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentType(payment.getPaymentType())
                 .method(payment.getMethod())
                 .status(payment.getStatus())
-                .paymentUrl(VNP_URL + "?" + query + "&vnp_SecureHash=" + secureHash)
+                .paymentUrl(paymentUrl)
                 .build();
     }
 

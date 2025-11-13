@@ -48,12 +48,15 @@ public class Utils {
         return paramsMap.entrySet().stream()
                 .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
                 .sorted(Map.Entry.comparingByKey())
-                .map(entry ->
-                        (encodeKey ? URLEncoder.encode(entry.getKey(),
-                                StandardCharsets.US_ASCII)
-                                : entry.getKey()) + "=" +
-                                URLEncoder.encode(entry.getValue()
-                                        , StandardCharsets.US_ASCII))
+                .map(entry -> {
+                    String key = encodeKey
+                        ? URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
+                        : entry.getKey();
+                    String value = encodeKey
+                        ? URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8)
+                        : entry.getValue();
+                    return key + "=" + value;
+                })
                 .collect(Collectors.joining("&"));
     }
 }
