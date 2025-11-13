@@ -113,11 +113,16 @@ public class PaymentServiceImpl implements PaymentService {
                         String t = Optional.ofNullable(d.getType()).orElse("").toUpperCase();
                         return t.equals("DEPOSITED") || t.equals("RENTAL");
                     });
-
+            Vehicle mainVehicle = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                    .map(RentalOrderDetail::getVehicle)
+                    .findFirst()
+                    .orElse(null);
             if (!exists) {
                 RentalOrderDetail detail = RentalOrderDetail.builder()
                         .order(order)
-                        .vehicle(order.getDetails().get(0).getVehicle())
+                        .vehicle(mainVehicle)
                         .type(typeName)
                         .startTime(LocalDateTime.now())
                         .endTime(LocalDateTime.now())
