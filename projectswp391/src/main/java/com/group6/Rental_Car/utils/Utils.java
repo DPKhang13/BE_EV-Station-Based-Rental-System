@@ -44,15 +44,37 @@ public class Utils {
         }
     }
 
-    public static String getPaymentURL(Map<String, String> paramsMap, boolean encodeKey) {
+    public static String hmacSHA256(String key, String data) {
+        try {
+            // Create HmacSHA256 instance for MoMo
+            Mac hmacSHA256 = Mac.getInstance("HmacSHA256");
+            SecretKeySpec secretKeySpec = new SecretKeySpec(
+                    key.getBytes(StandardCharsets.UTF_8),
+                    "HmacSHA256"
+            );
+            hmacSHA256.init(secretKeySpec);
+
+            // Calculate the HMAC
+            byte[] hashBytes = hmacSHA256.doFinal(data.getBytes(StandardCharsets.UTF_8));
+
+            // Convert to hex string
+            StringBuilder hashHex = new StringBuilder();
+            for (byte b : hashBytes) {
+                hashHex.append(String.format("%02x", b & 0xff));
+            }
+            return hashHex.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Error while generating HMAC SHA256 hash", e);
+        }
+    }
+
+    public static String getPaymentURL(Map<String, String> paramsMap, boolean encodeValue) {
         return paramsMap.entrySet().stream()
                 .filter(entry -> entry.getValue() != null && !entry.getValue().isEmpty())
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
-                    String key = encodeKey
-                        ? URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8)
-                        : entry.getKey();
-                    String value = encodeKey
+                    String key = entry.getKey();
+                    String value = encodeValue
                         ? URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8)
                         : entry.getValue();
                     return key + "=" + value;

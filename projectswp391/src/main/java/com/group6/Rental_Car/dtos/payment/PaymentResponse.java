@@ -1,24 +1,29 @@
 package com.group6.Rental_Car.dtos.payment;
 
 import com.group6.Rental_Car.enums.PaymentStatus;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class PaymentResponse {
     private UUID paymentId;
     private UUID orderId;
     private BigDecimal amount;
+    private BigDecimal remainingAmount;
+    private Short paymentType;
     private String method;
     private PaymentStatus status;
-    private String message;
     private String paymentUrl;
-    private short paymentType;
-    private BigDecimal remainingAmount;
+    private String qrCodeUrl;
+    private String deeplink;
+    private String message;
 }
+

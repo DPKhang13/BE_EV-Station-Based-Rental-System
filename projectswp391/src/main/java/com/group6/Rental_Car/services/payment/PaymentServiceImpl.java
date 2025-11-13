@@ -1,6 +1,9 @@
 package com.group6.Rental_Car.services.payment;
 
-import com.group6.Rental_Car.config.VNpayConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.group6.Rental_Car.config.MoMoConfig;
+import com.group6.Rental_Car.dtos.payment.MomoCreatePaymentRequest;
+import com.group6.Rental_Car.dtos.payment.MomoCreatePaymentResponse;
 import com.group6.Rental_Car.dtos.payment.PaymentDto;
 import com.group6.Rental_Car.dtos.payment.PaymentResponse;
 import com.group6.Rental_Car.entities.*;
@@ -11,26 +14,27 @@ import com.group6.Rental_Car.repositories.*;
 import com.group6.Rental_Car.utils.Utils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
+
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentServiceImpl implements PaymentService {
 
-    @Value("${VNP_HASHSECRET}")
-    private String VNP_SECRET;
-
-    @Value("${VNP_URL}")
-    private String VNP_URL;
-
-    private final VNpayConfig vnpayConfig;
+    private final MoMoConfig momoConfig;
+    private final ObjectMapper objectMapper;
     private final RentalOrderRepository rentalOrderRepository;
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final PaymentRepository paymentRepository;
@@ -63,7 +67,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         Vehicle vehicle = getMainVehicle(order);
         BigDecimal total = order.getTotalPrice();
-        String method = Optional.ofNullable(dto.getMethod()).orElse("VNPAY");
+        String method = Optional.ofNullable(dto.getMethod()).orElse("MOMO");
 
         // ============================
         // CALC AMOUNT dựa vào type
@@ -118,7 +122,7 @@ public class PaymentServiceImpl implements PaymentService {
             createOrUpdateDetail(order, vehicle, getTypeName(type), amount, getDescription(type));
         }
 
-        return buildVNPayReturn(order, payment, amount);
+        return buildMoMoPaymentUrl(order, payment, amount);
     }
 
     // ============================================================
@@ -145,7 +149,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .amount(amount)
                         .remainingAmount(BigDecimal.ZERO)
                         .paymentType((short) 5)
-                        .method("VNPAY")
+                        .method("MOMO")
                         .status(PaymentStatus.PENDING)
                         .build()
         );
@@ -153,23 +157,24 @@ public class PaymentServiceImpl implements PaymentService {
         order.setStatus("PENDING_SERVICE_PAYMENT");
         rentalOrderRepository.save(order);
 
-        return buildVNPayReturn(order, payment, amount);
+        return buildMoMoPaymentUrl(order, payment, amount);
     }
 
     // ============================================================
-    // CALLBACK — VNPay
+    // CALLBACK — MoMo
     // ============================================================
     @Override
     @Transactional
-    public PaymentResponse handleVNPayCallback(Map<String, String> params) {
+    public PaymentResponse handleMoMoCallback(Map<String, String> params) {
 
-        String txnRef = params.get("vnp_TxnRef");
-        if (txnRef == null)
-            throw new BadRequestException("Missing txnRef");
+        String orderId = params.get("orderId");
+        if (orderId == null)
+            throw new BadRequestException("Missing orderId in MoMo callback");
 
-        log.info("📥 Callback received - txnRef: {}", txnRef);
+        log.info("📥 MoMo Callback received - orderId: {}", orderId);
 
-        String raw = txnRef.split("-")[0];
+        // Extract paymentId from orderId (format: {paymentId}-{timestamp})
+        String raw = orderId.split("-")[0];
         String uuid = raw.replaceFirst(
                 "(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})",
                 "$1-$2-$3-$4-$5"
@@ -185,13 +190,18 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.getAmount(), payment.getRemainingAmount());
 
         RentalOrder order = payment.getRentalOrder();
-        boolean ok = "00".equals(params.get("vnp_ResponseCode"));
+
+        // MoMo resultCode: 0 = success
+        String resultCode = params.get("resultCode");
+        boolean ok = "0".equals(resultCode);
 
         if (!ok) {
             payment.setStatus(PaymentStatus.FAILED);
             order.setStatus("PAYMENT_FAILED");
             paymentRepository.save(payment);
             rentalOrderRepository.save(order);
+            log.error("❌ MoMo payment failed - resultCode: {}, message: {}",
+                resultCode, params.get("message"));
             return buildCallbackResponse(order, payment, false);
         }
 
@@ -355,51 +365,152 @@ public class PaymentServiceImpl implements PaymentService {
         rentalOrderDetailRepository.save(detail);
     }
 
-    private PaymentResponse buildVNPayReturn(RentalOrder order, Payment payment, BigDecimal amount) {
+    private PaymentResponse buildMoMoPaymentUrl(RentalOrder order, Payment payment, BigDecimal amount) {
 
         // Validate amount
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Payment amount must be greater than 0");
         }
 
-        Map<String, String> params = vnpayConfig.getVNPayConfig();
+        try {
+            String partnerCode = momoConfig.getPartnerCode();
+            String accessKey = momoConfig.getAccessKey();
+            String secretKey = momoConfig.getSecretKey();
+            String returnUrl = momoConfig.getReturnUrl();
+            String notifyUrl = momoConfig.getNotifyUrl();
+            String endpoint = momoConfig.getEndpoint();
+            String requestType = momoConfig.getRequestType();
 
-        // Convert to integer (VNPay requires integer, no decimals)
-        long amountInVND = amount.multiply(BigDecimal.valueOf(100)).longValue();
-        params.put("vnp_Amount", String.valueOf(amountInVND));
+            String encoded = payment.getPaymentId().toString().replace("-", "");
+            String orderId = encoded + "-" + System.currentTimeMillis();
+            String orderInfo = "Order " + order.getOrderId();
 
-        String encoded = payment.getPaymentId().toString().replace("-", "");
-        String txnRef = encoded + "-" + System.currentTimeMillis();
+            // MoMo amount is in VND (no need to multiply by 100)
+            String amountStr = String.valueOf(amount.longValue());
+            String extraData = "";
 
-        params.put("vnp_TxnRef", txnRef);
-        // Remove diacritics and special chars from OrderInfo
-        params.put("vnp_OrderInfo", "Order " + order.getOrderId());
-        params.put("vnp_IpAddr", "127.0.0.1");
+            // Create raw signature THEO THỨ TỰ ALPHABET
+            String rawSignature = "accessKey=" + accessKey +
+                    "&amount=" + amountStr +
+                    "&extraData=" + extraData +
+                    "&ipnUrl=" + notifyUrl +
+                    "&orderId=" + orderId +
+                    "&orderInfo=" + orderInfo +
+                    "&partnerCode=" + partnerCode +
+                    "&redirectUrl=" + returnUrl +
+                    "&requestId=" + orderId +
+                    "&requestType=" + requestType;
 
-        log.info(" VNPay Params before signing:");
-        params.forEach((k, v) -> log.info("  {} = {}", k, v));
+            log.info("🔐 MoMo Raw Signature: {}", rawSignature);
 
-        String query = Utils.getPaymentURL(params, true);
-        String hashData = Utils.getPaymentURL(params, false);
-        String secureHash = Utils.hmacSHA512(VNP_SECRET, hashData);
+            String signature = Utils.hmacSHA256(secretKey, rawSignature);
+            log.info("🔑 MoMo Signature: {}", signature);
 
-        String paymentUrl = VNP_URL + "?" + query + "&vnp_SecureHash=" + secureHash;
+            // Build request using DTO
+            MomoCreatePaymentRequest momoRequest = MomoCreatePaymentRequest.builder()
+                    .partnerCode(partnerCode)
+                    .accessKey(accessKey)
+                    .requestId(orderId)
+                    .amount(amountStr)
+                    .orderId(orderId)
+                    .orderInfo(orderInfo)
+                    .redirectUrl(returnUrl)
+                    .ipnUrl(notifyUrl)
+                    .requestType(requestType)
+                    .extraData(extraData)
+                    .lang("vi")
+                    .signature(signature)
+                    .build();
 
-        log.info(" Payment URL: {}", paymentUrl);
-        log.info(" Hash Data: {}", hashData);
-        log.info(" Secure Hash: {}", secureHash);
+            // Serialize to JSON using ObjectMapper
+            String requestBody = objectMapper.writeValueAsString(momoRequest);
+            log.info("📤 MoMo Request Body: {}", requestBody);
 
-        return PaymentResponse.builder()
-                .paymentId(payment.getPaymentId())
-                .orderId(order.getOrderId())
-                .amount(amount)
-                .remainingAmount(payment.getRemainingAmount())
-                .paymentType(payment.getPaymentType())
-                .method(payment.getMethod())
-                .status(payment.getStatus())
-                .paymentUrl(paymentUrl)
-                .build();
+            // Call MoMo API
+            URI uri = new URI(endpoint);
+            HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
+            conn.setDoOutput(true);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+
+            OutputStream os = conn.getOutputStream();
+            os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+            os.flush();
+            os.close();
+
+            // Read response
+            int responseCode = conn.getResponseCode();
+            log.info("📨 MoMo Response Code: {}", responseCode);
+
+            BufferedReader br = new BufferedReader(
+                new InputStreamReader(
+                    responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
+                    StandardCharsets.UTF_8
+                )
+            );
+
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                response.append(line);
+            }
+            br.close();
+            conn.disconnect();
+
+            String responseStr = response.toString();
+            log.info("📨 MoMo Response: {}", responseStr);
+
+            // Parse response using DTO
+            MomoCreatePaymentResponse momoResponse = objectMapper.readValue(
+                    responseStr,
+                    MomoCreatePaymentResponse.class
+            );
+
+            // Log parsed response
+            log.info("📦 Parsed MoMo Response - resultCode: {}, errorCode: {}, message: {}",
+                    momoResponse.getResultCode(), momoResponse.getErrorCode(), momoResponse.getMessage());
+
+            // Check if payment URL creation failed
+            // resultCode = 0 means success, other values mean error
+            Integer resultCode = momoResponse.getResultCode();
+            Integer errorCode = momoResponse.getErrorCode();
+
+            // Check error conditions
+            if (resultCode != null && resultCode != 0) {
+                String errorMsg = momoResponse.getMessage() != null ? momoResponse.getMessage() : "Unknown error";
+                throw new BadRequestException("MoMo Error: " + errorMsg + " (ResultCode: " + resultCode + ")");
+            }
+
+            if (errorCode != null && errorCode != 0) {
+                String errorMsg = momoResponse.getMessage() != null ? momoResponse.getMessage() : "Unknown error";
+                throw new BadRequestException("MoMo Error: " + errorMsg + " (ErrorCode: " + errorCode + ")");
+            }
+
+            if (momoResponse.getPayUrl() == null || momoResponse.getPayUrl().isEmpty()) {
+                throw new BadRequestException("MoMo Error: Payment URL is empty");
+            }
+
+            log.info("✅ MoMo payment URL created successfully");
+
+            return PaymentResponse.builder()
+                    .paymentId(payment.getPaymentId())
+                    .orderId(order.getOrderId())
+                    .amount(amount)
+                    .remainingAmount(payment.getRemainingAmount())
+                    .paymentType(payment.getPaymentType())
+                    .method(payment.getMethod())
+                    .status(payment.getStatus())
+                    .paymentUrl(momoResponse.getPayUrl())
+                    .qrCodeUrl(momoResponse.getQrCodeUrl())
+                    .deeplink(momoResponse.getDeeplink())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("❌ Error creating MoMo payment: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to create MoMo payment: " + e.getMessage(), e);
+        }
     }
+
 
     private PaymentResponse buildCallbackResponse(RentalOrder order, Payment payment, boolean success) {
 

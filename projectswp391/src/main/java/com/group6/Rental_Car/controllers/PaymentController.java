@@ -5,6 +5,7 @@ import com.group6.Rental_Car.dtos.payment.PaymentResponse;
 import com.group6.Rental_Car.services.payment.PaymentService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,54 +22,74 @@ import java.util.UUID;
 @RequestMapping("/api/payment")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Payment", description = "MoMo Payment API")
 public class PaymentController {
 
     private final PaymentService paymentService;
 
     @PostMapping("/url")
-    public ResponseEntity<?> createUrl(@RequestBody PaymentDto paymentDto,
-                                       @AuthenticationPrincipal JwtUserDetails jwtUserDetails) {
+    @Operation(summary = "Create MoMo payment URL")
+    public ResponseEntity<PaymentResponse> createPaymentUrl(
+            @RequestBody PaymentDto paymentDto,
+            @AuthenticationPrincipal JwtUserDetails jwtUserDetails) {
 
-        return new ResponseEntity<>(paymentService.createPaymentUrl(paymentDto, jwtUserDetails.getUserId()), HttpStatus.OK);
+        PaymentResponse response = paymentService.createPaymentUrl(paymentDto, jwtUserDetails.getUserId());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/refund/{orderId}")
+    @Operation(summary = "Refund payment")
     public ResponseEntity<PaymentResponse> refund(@PathVariable UUID orderId) {
         PaymentResponse response = paymentService.refund(orderId);
         return ResponseEntity.ok(response);
     }
-    @GetMapping("/vnpay-callback")
-    @Operation(summary = "VNPay callback")
-    public ResponseEntity<?> vnpayCallback(
-            @RequestParam String vnp_TxnRef,
-            @RequestParam String vnp_Amount,
-            @RequestParam String vnp_ResponseCode,
-            @RequestParam String vnp_SecureHash) {
-        Map<String, String> vnpParams = Map.of(
-                "vnp_TxnRef", vnp_TxnRef,
-                "vnp_Amount", vnp_Amount,
-                "vnp_ResponseCode", vnp_ResponseCode,
-                "vnp_SecureHash", vnp_SecureHash
-        );
-        return ResponseEntity.ok(paymentService.handleVNPayCallback(vnpParams));
-    }
-    @PostMapping("/verify-vnpay")
-    public ResponseEntity<PaymentResponse> verifyVNPayPayment(
-            @RequestBody Map<String, String> vnpParams) {
 
-        log.info("[VNPay Verify] Received params: {}", vnpParams);
+    @PostMapping("/momo-callback")
+    @Operation(summary = "MoMo IPN callback (called by MoMo server)")
+    public ResponseEntity<?> momoCallback(@RequestBody Map<String, String> momoParams) {
+        log.info("📥 MoMo IPN Callback: {}", momoParams);
 
         try {
-            String responseCode = vnpParams.get("vnp_ResponseCode");
-            log.info("[VNPay Verify] Response Code: {}", responseCode);
-
-            PaymentResponse result = paymentService.handleVNPayCallback(vnpParams);
-
-            log.info("[VNPay Verify] Success: {}", result);
-            return ResponseEntity.ok(result);
-
+            PaymentResponse response = paymentService.handleMoMoCallback(momoParams);
+            log.info("✅ MoMo callback processed successfully: {}", response);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("[VNPay Verify] Error: ", e);
+            log.error("❌ MoMo callback error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                        "message", "ERROR",
+                        "error", e.getMessage()
+                    ));
+        }
+    }
+
+    @GetMapping("/momo-return")
+    @Operation(summary = "MoMo return URL (user redirected from MoMo)")
+    public void momoReturn(
+            @RequestParam Map<String, String> params,
+            HttpServletResponse response) throws IOException {
+
+        log.info("🔙 MoMo Return: {}", params);
+
+        String resultCode = params.get("resultCode");
+        String orderId = params.get("orderId");
+
+        // Redirect to frontend with result
+        String frontendUrl = "http://localhost:5173/payment-callback?resultCode=" + resultCode + "&orderId=" + orderId;
+        response.sendRedirect(frontendUrl);
+    }
+
+    @PostMapping("/verify")
+    @Operation(summary = "Verify MoMo payment from frontend")
+    public ResponseEntity<PaymentResponse> verifyPayment(@RequestBody Map<String, String> momoParams) {
+        log.info("🔍 [MoMo Verify] Received params: {}", momoParams);
+
+        try {
+            PaymentResponse result = paymentService.handleMoMoCallback(momoParams);
+            log.info("✅ [MoMo Verify] Success: {}", result);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("❌ [MoMo Verify] Error: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(PaymentResponse.builder()
                             .message("PAYMENT_FAILED")
@@ -76,3 +97,5 @@ public class PaymentController {
         }
     }
 }
+
+
