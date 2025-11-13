@@ -31,6 +31,7 @@ public class OrderResponse {
 
     private Integer stationId;
     private String stationName;
-
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime actualReturnTime;// số ngày thuê thực tế (nếu người dùng muốn override)
 
 }
