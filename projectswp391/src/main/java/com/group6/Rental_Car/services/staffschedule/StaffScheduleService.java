@@ -14,4 +14,5 @@ public interface StaffScheduleService {
     StaffScheduleResponse update(Integer id, StaffScheduleUpdateRequest req);
     Page<StaffScheduleResponse> getAll(Pageable pageable);
     List<StaffResponse> getStaffList();
+    StaffScheduleResponse getStaffById(Integer id);
 }
