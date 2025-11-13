@@ -278,11 +278,11 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal deposit = payment.getAmount();
 
         // Create deposit detail
-        createOrUpdateDetail(order, v, "DEPOSIT", deposit, "Thanh toán đặt cọc");
+        createOrUpdateDetail(order, v, "DEPOSIT", deposit, "Thanh toán đặt cọc", "SUCCESS");
 
         // AUTO CREATE PICKUP ONCE - nếu có remainingAmount
         if (payment.getRemainingAmount() != null && payment.getRemainingAmount().compareTo(BigDecimal.ZERO) > 0) {
-            createDetail(order, v, "PICKUP", payment.getRemainingAmount(), "Thanh toán phần còn lại");
+            createOrUpdateDetail(order, v, "PICKUP", payment.getRemainingAmount(), "Thanh toán phần còn lại", "PENDING");
         }
     }
 
@@ -339,6 +339,10 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void createOrUpdateDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc) {
+        createOrUpdateDetail(order, v, type, price, desc, "SUCCESS");
+    }
+
+    private void createOrUpdateDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc, String status) {
 
         Optional<RentalOrderDetail> opt = rentalOrderDetailRepository
                 .findByOrder_OrderId(order.getOrderId())
@@ -349,17 +353,21 @@ public class PaymentServiceImpl implements PaymentService {
         if (opt.isPresent()) {
             RentalOrderDetail d = opt.get();
             d.setPrice(price);
-            d.setStatus("SUCCESS");
+            d.setStatus(status);
             d.setDescription(desc);
             d.setStartTime(LocalDateTime.now());
             d.setEndTime(LocalDateTime.now());
             rentalOrderDetailRepository.save(d);
         } else {
-            createDetail(order, v, type, price, desc);
+            createDetail(order, v, type, price, desc, status);
         }
     }
 
     private void createDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc) {
+        createDetail(order, v, type, price, desc, "PENDING");
+    }
+
+    private void createDetail(RentalOrder order, Vehicle v, String type, BigDecimal price, String desc, String status) {
 
         RentalOrderDetail detail = RentalOrderDetail.builder()
                 .order(order)
@@ -368,7 +376,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .startTime(LocalDateTime.now())
                 .endTime(LocalDateTime.now())
                 .price(price)
-                .status("PENDING")
+                .status(status)
                 .description(desc)
                 .build();
 
