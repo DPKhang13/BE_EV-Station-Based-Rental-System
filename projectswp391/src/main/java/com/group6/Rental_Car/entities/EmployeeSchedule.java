@@ -40,4 +40,11 @@ public class EmployeeSchedule {
 
     @Column(name = "shift_time", nullable = false, length = 50)
     private String shiftTime;
+
+    @Column(name = "pickup_count", nullable = false)
+    private int pickupCount;
+
+    @Column(name = "return_count", nullable = false)
+    private int returnCount;
+
 }

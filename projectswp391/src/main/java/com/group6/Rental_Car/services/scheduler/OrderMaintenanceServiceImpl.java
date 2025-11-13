@@ -1,8 +1,12 @@
 package com.group6.Rental_Car.services.scheduler;
+
 import com.group6.Rental_Car.entities.RentalOrder;
+import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
+import com.group6.Rental_Car.entities.VehicleTimeline;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
+import com.group6.Rental_Car.repositories.VehicleTimelineRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +23,7 @@ public class OrderMaintenanceServiceImpl implements OrderMaintenanceService {
 
     private final RentalOrderRepository rentalOrderRepository;
     private final VehicleRepository vehicleRepository;
+    private final VehicleTimelineRepository vehicleTimelineRepository;
 
     @Override
     @Transactional
@@ -30,17 +35,34 @@ public class OrderMaintenanceServiceImpl implements OrderMaintenanceService {
             if (created == null) continue;
 
             Duration duration = Duration.between(created, LocalDateTime.now());
-            if (duration.toMinutes() >= 10) {
+            if (duration.toMinutes() >= 30) {
+
+                //  Cập nhật trạng thái đơn
                 order.setStatus("PAYMENT_FAILED");
 
-                Vehicle vehicle = order.getVehicle();
+                //  Tìm xe trong chi tiết chính
+                Vehicle vehicle = order.getDetails().stream()
+                        .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                        .map(RentalOrderDetail::getVehicle)
+                        .findFirst()
+                        .orElse(null);
+
                 if (vehicle != null) {
+                    //  Giải phóng xe
                     vehicle.setStatus("AVAILABLE");
                     vehicleRepository.save(vehicle);
+
+                    //  Xóa toàn bộ timeline liên quan đến xe này
+                    List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicle.getVehicleId());
+                    if (!timelines.isEmpty()) {
+                        vehicleTimelineRepository.deleteAll(timelines);
+                        log.info(" Xóa {} timeline của xe {} do order {} bị hủy",
+                                timelines.size(), vehicle.getVehicleId(), order.getOrderId());
+                    }
                 }
 
                 rentalOrderRepository.save(order);
-                log.info(" Auto-cancel order {} — quá 10 phút chưa thanh toán", order.getOrderId());
+                log.info("Auto-cancel order {} — quá 30 phút chưa thanh toán", order.getOrderId());
             }
         }
     }

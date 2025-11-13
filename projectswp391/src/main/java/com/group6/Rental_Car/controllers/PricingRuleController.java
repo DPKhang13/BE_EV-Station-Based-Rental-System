@@ -4,6 +4,7 @@ import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
 import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,25 +12,26 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/pricingrules")
+@RequestMapping("/api/pricing-rules")
 @RequiredArgsConstructor
-@Tag(name = "API PricingRule", description = "Lấy bảng giá và cập nhật bảng giá theo seatCount & variant")
+@Tag(name = "Pricing Rule API", description = "API quản lý bảng giá thuê xe theo số chỗ và loại xe")
 public class PricingRuleController {
 
     private final PricingRuleService pricingRuleService;
 
-    @GetMapping("/get")
-    public ResponseEntity<List<?>> getAllPricingRules() {
-        List<PricingRuleResponse> response = pricingRuleService.getAllPricingRules();
-        return ResponseEntity.ok(response);
+    @GetMapping
+    public ResponseEntity<List<PricingRuleResponse>> getAllPricingRules() {
+        List<PricingRuleResponse> rules = pricingRuleService.getAllPricingRules();
+        return ResponseEntity.ok(rules);
     }
-    @PutMapping("/update/{seatCount}/{variant}")
-    public ResponseEntity<?> updatePricingRule(
+
+    @PutMapping("/{seatCount}/{variant}")
+    public ResponseEntity<PricingRuleResponse> updatePricingRule(
             @PathVariable Integer seatCount,
             @PathVariable String variant,
-            @RequestBody PricingRuleUpdateRequest req
+            @Valid @RequestBody PricingRuleUpdateRequest request
     ) {
-        PricingRuleResponse response = pricingRuleService.updatePricingRule(seatCount, variant, req);
-        return ResponseEntity.ok(response);
+        PricingRuleResponse updated = pricingRuleService.updatePricingRule(seatCount, variant, request);
+        return ResponseEntity.ok(updated);
     }
 }

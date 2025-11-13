@@ -3,6 +3,7 @@ package com.group6.Rental_Car.controllers;
 import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
 import com.group6.Rental_Car.dtos.order.OrderResponse;
 import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
+import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.services.order.RentalOrderService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
@@ -67,8 +68,24 @@ public class OrderController {
         OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
         return ResponseEntity.ok(response);
     }
+    @GetMapping("/{orderId}/preview-return")
+    public ResponseEntity<OrderResponse> previewReturn(
+            @PathVariable UUID orderId,
+            @RequestParam(required = false) Integer actualHours) {
+
+        OrderResponse response = rentalOrderService.previewReturn(orderId, actualHours);
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/pending-verification")
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
         return rentalOrderService.getPendingVerificationOrders();
+    }
+    @GetMapping("/vehicle/{vehicleId}/history")
+    public ResponseEntity<List<VehicleOrderHistoryResponse>> getVehicleOrderHistory(@PathVariable Long vehicleId) {
+        return ResponseEntity.ok(rentalOrderService.getOrderHistoryByVehicle(vehicleId));
+    }
+    @GetMapping("/customer/{customerId}/history")
+    public ResponseEntity<List<VehicleOrderHistoryResponse>> getCustomerOrderHistory(@PathVariable UUID customerId) {
+        return ResponseEntity.ok(rentalOrderService.getOrderHistoryByCustomer(customerId));
     }
 }

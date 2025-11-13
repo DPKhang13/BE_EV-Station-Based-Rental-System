@@ -2,21 +2,28 @@ package com.group6.Rental_Car.dtos.order;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
 @Data
+@Builder
 @AllArgsConstructor
-@RequiredArgsConstructor
+@NoArgsConstructor
 public class OrderCreateRequest {
-    private UUID customerId;        // ID khách hàng đặt xe
-    private Long vehicleId;
+
+    private UUID customerId;          // ID khách hàng (backend có thể override từ JWT)
+    private Long vehicleId;           // Xe được chọn
+
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime startTime; // Thời gian bắt đầu thuê
-    private LocalDateTime endTime;   // Thời gian kết thúc thuê
-    private String couponCode;        // Mã giảm giá (có thể null nếu không dùng)
-    private Integer plannedHours;
-    private Integer actualHours;
+    private LocalDateTime startTime;  // Thời điểm bắt đầu thuê
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime endTime;    // Thời điểm kết thúc thuê
+
+    private String couponCode;        // Mã giảm giá (nếu có)
+    private boolean holiday;          // Có phải ngày lễ hay không (áp dụng holidayPrice)
 }

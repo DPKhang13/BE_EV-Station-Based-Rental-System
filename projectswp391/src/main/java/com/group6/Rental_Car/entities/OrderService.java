@@ -5,65 +5,58 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
-@Builder
 @Entity
 @Table(name = "orderservice")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class OrderService {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "service_id")
-    private Integer serviceId;
+    private Long serviceId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id")
+    @JoinColumn(name = "order_id", nullable = false)
     private RentalOrder order;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "detail_id")
     private RentalOrderDetail detail;
 
-    // === vehicle & station ===
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 
-    @Column(name = "station_id")
-    private Integer stationId;
+    @Column(name = "service_type", nullable = false, length = 100)
+    private String serviceType; // MAINTENANCE | CLEANING | REPAIR | INCIDENT | OTHER
 
-    // === các cột đúng tên trong orderservice ===
-    @Column(name = "service_type", length = 100, nullable = false)
-    private String serviceType;
-
-    @Column(name = "description", columnDefinition = "text")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "cost", precision = 12, scale = 2)
-    private BigDecimal cost;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal cost = BigDecimal.ZERO;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "performed_by")
     private User performedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "station_id")
+    private RentalStation station;
+
     @Column(name = "occurred_at")
-    private LocalDateTime occurredAt;
+    private LocalDateTime occurredAt = LocalDateTime.now();
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
-    // pending | processing | done | cancelled
-    @Column(name = "status", length = 30)
-    private String status;
+    @Column(nullable = false, length = 30)
+    private String status = "pending"; // pending | processing | done | cancelled
 
-    @Column(name = "note")
+    @Column(columnDefinition = "TEXT")
     private String note;
-
-    @PrePersist
-    void prePersist() {
-        if (occurredAt == null) occurredAt = LocalDateTime.now();
-        if (serviceType == null || serviceType.isBlank()) serviceType = "MAINTENANCE";
-        if (status == null || status.isBlank()) status = "pending";
-    }
 }

@@ -1,41 +1,43 @@
 package com.group6.Rental_Car.dtos.admindashboard;
 
 import lombok.*;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @Data
-@Getter @Setter @Builder
-@AllArgsConstructor @NoArgsConstructor
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class AdminDashboardResponse {
-    private Kpi kpi;                                  // Các chỉ số tổng quan
+
+    // ======= KPI CHÍNH =======
+    private Kpi kpi;                                  // Tổng quan KPI
     private List<LabelCount> vehiclesByStatus;        // available/rented/maintenance
-    private List<StationCount> vehiclesByStation;     // theo trạm
-    private List<DayRevenue> revenueByDay;            // doanh thu theo ngày (range)
-    private Double avgRating;                         // rating trung bình (1..5)
-    private Map<Integer, Long> ratingDistribution;    // phân phối rating
-
-    // ==== INCIDENT ====
-    private IncidentKpi incidentKpi;                  // KPI cho sự cố trong khoảng ngày
-    private List<DayCount> incidentsByDay;            // Số incident theo ngày (để vẽ chart)
-    private Map<String, Long> incidentsByStatus;      // Phân phối theo status (OPEN/IN_PROGRESS/RESOLVED…)
-    private Map<String, Long> incidentsBySeverity;    // Phân phối theo mức độ (LOW/MEDIUM/HIGH/CRITICAL…)
-    private List<RecentIncident> recentIncidents;     // Danh sách incident gần nhất
-
-    private List<StationRevenue> revenueByStation;    // Danh sách doanh thu theo trạm xe
-
-    //Giờ thuê cao điểm
-    private List<HourCount> orderByHour;
-    private PeakHourWindow peakHourWindow;
+    private List<StationCount> vehiclesByStation;     // xe theo trạm
+    private List<DayRevenue> revenueByDay;            // doanh thu theo ngày
+    private Double avgRating;                         // rating trung bình
+    private Map<Integer, Long> ratingDistribution;    // phân bố rating
+    private List<StationRevenue> revenueByStation;    // doanh thu từng trạm
+    private List<StationRevenueAnalysis> revenueByStationAnalysis; // phân tích doanh thu
+    private List<HourCount> orderByHour;              // đơn hàng theo giờ
+    private PeakHourWindow peakHourWindow;            // giờ cao điểm
+    private List<DayCount> servicesByDay;          // Dịch vụ theo ngày (dùng cho chart)
+    private ServiceKpi serviceKpi;                 // Thống kê dịch vụ (Service KPI)
+    // ======= DỊCH VỤ GẦN NHẤT =======
+    private List<RecentService> recentServices;       // danh sách dịch vụ gần nhất
 
     // ----------------- NESTED DTOs -----------------
 
     @Data
-    @Getter @Setter @Builder
-    @AllArgsConstructor @NoArgsConstructor
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class Kpi {
         private Long totalVehicles;
         private Long availableVehicles;
@@ -45,72 +47,61 @@ public class AdminDashboardResponse {
         private Long totalOrders;
         private Long activeOrders;
 
-        private Double revenueInRange;            // doanh thu (range ngày)
+        private Double revenueInRange;
         private Long totalUsers;
         private Long admins;
         private Long staffs;
         private Long customers;
 
-        // Giữ lại cho tương thích cũ; nếu đã migrate sang Incident, có thể bỏ sau
-        private Double maintenanceCostInRange;
+        private Double totalServiceCost; // tổng chi phí dịch vụ (maintenance/repair/cleaning)
+        private Long totalServices;      // tổng số dịch vụ trong khoảng
     }
 
+    // ========== LABEL + COUNT ==========
     @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
     public static class LabelCount {
         private String label;
         private Long count;
     }
 
+    // ========== VEHICLE THEO TRẠM ==========
     @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
     public static class StationCount {
         private Integer stationId;
         private String stationName;
         private Long total;
+        private Long rented;
+        private Double utilization;
     }
 
+    // ========== REVENUE ==========
     @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
     public static class DayRevenue {
         private LocalDate date;
         private Double total;
     }
 
-    // ====== INCIDENT DTOs ======
-
     @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
-    public static class IncidentKpi {
-        private Long totalIncidentsInRange;       // tổng số incident trong khoảng ngày
-        private Long openIncidents;               // trạng thái OPEN/PENDING
-        private Long inProgressIncidents;         // đang xử lý
-        private Long resolvedIncidents;           // đã xử lý
-        private Double incidentCostInRange;       // tổng chi phí incident trong khoảng ngày
-    }
-
-    @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
-    public static class DayCount {
-        private LocalDate date;
-        private Long count;
-    }
-
-    @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
-    public static class RecentIncident {
-        private Integer incidentId;
-        private Long vehicleId;
-        private String vehicleName;
-        private String description;
-        private String severity;                  // LOW/MEDIUM/HIGH/CRITICAL
-        private String status;                    // OPEN/IN_PROGRESS/RESOLVED
-        private LocalDate occurredOn;
-        private Double cost;
-    }
-
-    @Data
-    @Getter @Setter @Builder @AllArgsConstructor @NoArgsConstructor
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class StationRevenue {
         private Integer stationId;
         private String stationName;
@@ -118,18 +109,86 @@ public class AdminDashboardResponse {
     }
 
     @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class StationRevenueAnalysis {
+        private Integer stationId;
+        private String stationName;
+        private Double avgPerDay;
+        private Double todayRevenue;
+        private Double weekRevenue;
+        private Double monthRevenue;
+        private Double growthDay;
+        private Double growthWeek;
+        private Double growthMonth;
+    }
+
+    // ========== GIỜ THUÊ XE ==========
+    @Data
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
     public static class HourCount {
         private Integer hour;
         private Long count;
     }
 
     @Data
-    @Getter @Setter @AllArgsConstructor @NoArgsConstructor @Builder
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
     public static class PeakHourWindow {
         private Integer startHour;
         private Integer endHour;
         private Integer windowSize;
         private Long total;
+    }
+
+    // ========== DỊCH VỤ GẦN NHẤT ==========
+    @Data
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class RecentService {
+        private Long serviceId;
+        private Long vehicleId;
+        private String vehicleName;
+        private String serviceType;   // MAINTENANCE | CLEANING | REPAIR | OTHER
+        private String description;
+        private String status;        // pending | processing | done | cancelled
+        private Double cost;
+        private LocalDateTime occurredAt;
+        private LocalDateTime resolvedAt;
+    }
+    @Data
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class DayCount {
+        private LocalDate date;  // Ngày
+        private Long count;      // Số lượng (service, order, etc.)
+    }
+    @Data
+    @Getter
+    @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    @Builder
+    public static class ServiceKpi {
+        private Long totalServices;                      // Tổng số dịch vụ
+        private Double totalCost;                        // Tổng chi phí dịch vụ
+        private Map<String, Long> servicesByType;         // Phân loại theo kiểu dịch vụ (Maintenance, Repair, ...)
+        private Map<String, Long> servicesByStatus;       // Phân loại theo trạng thái (pending, done, ...)
     }
 }

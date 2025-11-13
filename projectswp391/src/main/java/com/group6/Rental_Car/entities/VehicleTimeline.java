@@ -2,60 +2,60 @@ package com.group6.Rental_Car.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Getter @Setter
-@NoArgsConstructor
-@AllArgsConstructor @Builder
 @Entity
 @Table(name = "vehicle_timeline")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class VehicleTimeline {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "timeline_id")
     private Long timelineId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "vehicle_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 
-    @Column(name = "day", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
+    private RentalOrder order; // Đơn thuê liên quan (có thể null nếu là service)
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "detail_id")
+    private RentalOrderDetail detail; // Chi tiết thuê
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "service_id")
+    private OrderService service; // Service liên quan (maintenance, cleaning...)
+
+    @Column(nullable = false)
     private LocalDate day;
 
-    @Column(name = "start_time")
+    @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;
 
     @Column(name = "end_time")
     private LocalDateTime endTime;
 
-    // free | booked | maintenance | service
-    @Column(name = "status", length = 30, nullable = false)
-    private String status;
+    @Column(length = 30)
+    private String status; // BOOKED | IN_USE | MAINTENANCE | AVAILABLE | RETURNED ...
 
-    // ORDER_DETAIL | ORDER_SERVICE | MANUAL_BLOCK
     @Column(name = "source_type", length = 20)
-    private String sourceType;
+    private String sourceType; // ORDER | DETAIL | SERVICE
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id")
-    private RentalOrder order;
+    @Column(columnDefinition = "TEXT")
+    private String note;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "detail_id")
-    private RentalOrderDetail detail;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_id")
-    private OrderService service;
-
-    @Column(name = "note")
-    private String note; // SOFT_HOLD | HARD_LOCK | lý do khác
-
-    @Column(name = "updated_at")
+    @CreationTimestamp
+    @Column(name = "updated_at", nullable = false, updatable = false)
     private LocalDateTime updatedAt;
-
-    @PrePersist @PreUpdate
-    void touch() { updatedAt = LocalDateTime.now(); }
 }

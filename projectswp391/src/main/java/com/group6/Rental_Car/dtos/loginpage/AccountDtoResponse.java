@@ -11,11 +11,11 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class AccountDtoResponse {
-    private UUID userId;       // id vừa tạo
-    private String fullName;   // tên người dùng
-    private String email;      // email
+    private UUID userId;
+    private String fullName;
+    private String email;
     private String phone;
-    private Role role;         // quyền (Enum)
+    private Role role;
     private UserStatus status;
-    private Integer stationId;// trạng thái
+    private Integer stationId;
 }

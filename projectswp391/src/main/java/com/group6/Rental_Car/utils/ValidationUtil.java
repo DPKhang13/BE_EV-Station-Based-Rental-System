@@ -77,7 +77,7 @@ public class ValidationUtil {
             if (variant == null) {
                 throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 4");
             }
-            if (!variant.equals("Air") && !variant.equals("Pro") && !variant.equals("Plus")) {
+            if (!variant.equalsIgnoreCase("air") && !variant.equalsIgnoreCase("pro") && !variant.equalsIgnoreCase("plus")) {
                 throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 4");
             }
             return variant;
@@ -85,7 +85,7 @@ public class ValidationUtil {
             if (variant == null) {
                 throw new BadRequestException("variant is required when seatCount = 7");
             }
-            if (!variant.equals("Air") && !variant.equals("Pro") && !variant.equals("Plus")) {
+            if (!variant.equalsIgnoreCase("air") && !variant.equalsIgnoreCase("pro") && !variant.equalsIgnoreCase("plus")) {
                 throw new BadRequestException("variant must be one of: air|pro|plus when seatCount = 7");
             }
             return variant;

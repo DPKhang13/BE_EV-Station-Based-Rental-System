@@ -6,7 +6,6 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,27 +21,34 @@ public class RentalOrder {
     @Id
     @GeneratedValue
     @UuidGenerator(style = UuidGenerator.Style.TIME)
+    @Column(name = "order_id")
     private UUID orderId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
     private User customer;
 
-    @Column(name = "total_price")
-    private BigDecimal totalPrice;
+    @Column(name = "total_price", precision = 12, scale = 2)
+    private BigDecimal totalPrice = BigDecimal.ZERO;
 
-    // pending | active | completed | cancelled
-    @Column(name = "status")
+    @Column(length = 50)
     private String status;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
-
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RentalOrderDetail> details = new ArrayList<>();
+    @Column(name = "created_at", updatable = false, nullable = false)
+    private LocalDateTime createdAt = LocalDateTime.now();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "coupon_id")
-    private Coupon coupon; // thêm liên kết coupon (optional)
-}
+    private Coupon coupon;
 
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RentalOrderDetail> details;
+
+    @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Payment> payments;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderService> services;
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
+    private List<VehicleTimeline> timelines;
+}

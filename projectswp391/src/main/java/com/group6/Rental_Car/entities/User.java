@@ -52,4 +52,7 @@ public class User {
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private List<Notification> notifications = new ArrayList<>();
+
+    @OneToMany(mappedBy = "staff", fetch = FetchType.LAZY)
+    private List<EmployeeSchedule> employeeSchedules;
 }

@@ -30,16 +30,12 @@ public class Vehicle {
 
     @Column(name = "vehicle_name", length = 100)
     private String vehicleName;
-
-    @Column(name = "image_url", length = 500)
-    private String imageUrl;
-
-    // Một xe có nhiều đơn thuê
-    @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY)
-    private List<RentalOrder> rentalOrders;
-
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<VehicleModel> attributes;
+    @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<RentalOrderDetail> orderDetails;
+    @OneToMany(mappedBy = "vehicle", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<VehicleTimeline> timelines;
 
 
 }

@@ -12,6 +12,8 @@ public class VNpayConfig {
 
     @Value("${VNP_TMNCODE}")
     private String VNP_TMNCODE;
+    @Value("${VNP_RETURNURL}")
+    private String VNP_RETURNURL;
 
     public Map<String, String> getVNPayConfig() {
         Map<String, String> vnpParamsMap = new HashMap<>();
@@ -24,9 +26,8 @@ public class VNpayConfig {
         vnpParamsMap.put("vnp_OrderInfo", "Thanh toan don hang:" +  Utils.randomNumber(8));
         vnpParamsMap.put("vnp_OrderType", "other");
         vnpParamsMap.put("vnp_Locale", "vn");
-        vnpParamsMap.put("vnp_ReturnUrl", "https://localhost:8080/api/payment/vnpay-callback");
+        vnpParamsMap.put("vnp_ReturnUrl", VNP_RETURNURL);
 
-        // ====== Thời gian tạo & hết hạn ======
         Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
         SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
         String vnpCreateDate = formatter.format(calendar.getTime());

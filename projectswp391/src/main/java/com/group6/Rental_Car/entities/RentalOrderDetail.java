@@ -2,7 +2,6 @@ package com.group6.Rental_Car.entities;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -14,42 +13,35 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class RentalOrderDetail {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "detail_id")
     private Long detailId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private RentalOrder order;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 
-    // DEPOSIT | RENTAL | RETURN | SERVICE | OTHER
-    @Column(name = "type")
-    private String type;
+    @Column(nullable = false, length = 50)
+    private String type; // DEPOSIT | RENTAL | RETURN | SERVICE | OTHER
 
-    @Column(name = "start_time")
+    @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;
 
-    @Column(name = "end_time")
+    @Column(name = "end_time", nullable = false)
     private LocalDateTime endTime;
 
-    @Column(name = "price")
-    private BigDecimal price;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal price = BigDecimal.ZERO;
 
-    @Column(name = "description")
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    // pending | confirmed | active | done | cancelled
-    @Column(name = "status")
-    private String status;
-
-    @PrePersist
-    void prePersist() {
-        if (status == null || status.isBlank()) status = "pending";
-        if (price == null) price = BigDecimal.ZERO;
-    }
+    @Column(nullable = false, length = 50)
+    private String status = "pending"; // pending | confirmed | active | done | cancelled
 }
