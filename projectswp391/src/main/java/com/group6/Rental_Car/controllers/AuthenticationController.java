@@ -203,4 +203,10 @@ public class AuthenticationController {
         userService.getAllCustomer();
         return ResponseEntity.ok(userService.getAllCustomer());
     }
+    @GetMapping("/getUser/{userId}")
+    public ResponseEntity<AccountDtoResponse> getUserById(@PathVariable UUID userId)
+    {
+        AccountDtoResponse response = userService.getUserById(userId);
+        return ResponseEntity.ok(response);
+    }
 }
