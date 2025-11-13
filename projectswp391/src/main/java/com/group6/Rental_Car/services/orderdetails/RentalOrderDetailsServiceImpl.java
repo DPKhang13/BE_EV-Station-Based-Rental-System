@@ -131,9 +131,11 @@ import java.util.stream.Collectors;
 
             String status = order.getStatus().toUpperCase();
 
+            // Show RENTAL khi: PENDING (chưa thanh toán), CREATED, BOOKED
             boolean showOnlyRental =
+                    status.equals("PENDING") ||
                     status.equals("CREATED") ||
-                            status.equals("BOOKED");
+                    status.equals("BOOKED");
 
             List<RentalOrderDetail> raw = rentalOrderDetailRepository.findByOrder_OrderId(orderId);
 

@@ -406,21 +406,15 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             Vehicle vehicle = rentalDetail != null ? rentalDetail.getVehicle() : null;
             RentalStation station = vehicle != null ? vehicle.getRentalStation() : null;
 
-            // Tổng tiền từ tất cả chi tiết orderDetail (trừ REFUND)
-            BigDecimal totalFromDetails = Optional.ofNullable(order.getDetails())
-                    .orElse(List.of()).stream()
-                    .filter(d -> !"REFUND".equalsIgnoreCase(d.getType()))
-                    .map(d -> Optional.ofNullable(d.getPrice()).orElse(BigDecimal.ZERO))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            // Tổng phí dịch vụ
+            // Tổng phí dịch vụ phát sinh
             BigDecimal totalServiceCost = Optional.ofNullable(order.getServices())
                     .orElse(List.of()).stream()
                     .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            // Tổng tiền thực tế
-            BigDecimal totalPrice = totalFromDetails.add(totalServiceCost);
+            // Tổng tiền = order.totalPrice (giá thuê) + service cost
+            BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO)
+                    .add(totalServiceCost);
 
             // Tổng đã thanh toán
             BigDecimal totalPaid = Optional.ofNullable(order.getPayments())
@@ -429,8 +423,13 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .map(p -> Optional.ofNullable(p.getAmount()).orElse(BigDecimal.ZERO))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            // Còn lại = tổng tiền - đã thanh toán
-            BigDecimal remainingAmount = totalPrice.subtract(totalPaid);
+            // Còn lại = Lấy từ payment deposit nếu c��, không thì tính = total - paid
+            BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
+                    .orElse(List.of()).stream()
+                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst()
+                    .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
+                    .orElse(totalPrice.subtract(totalPaid));
 
             return OrderVerificationResponse.builder()
                     .userId(customer.getUserId())
