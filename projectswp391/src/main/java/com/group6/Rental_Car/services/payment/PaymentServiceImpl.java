@@ -69,11 +69,13 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal total = order.getTotalPrice();
 
         // Validate payment method
-        String method = Optional.ofNullable(dto.getMethod()).orElse("captureWallet");
+        String method = Optional.ofNullable(dto.getMethod()).orElse("momo");
 
-        // Chỉ chấp nhận captureWallet method
-        if (!method.equals("captureWallet")) {
-            throw new BadRequestException("Only MOMO payment method is supported (captureWallet)");
+        // Hạn chế các method hợp lệ
+        List<String> validMethods = List.of("captureWallet", "payWithMethod", "momo");
+
+        if (!validMethods.contains(method)) {
+            throw new BadRequestException("Invalid MOMO method: " + method);
         }
 
         // ============================
