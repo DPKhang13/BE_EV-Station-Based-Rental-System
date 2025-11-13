@@ -28,6 +28,8 @@ public class Vehicle {
 
     private String description;
 
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
     @Column(name = "vehicle_name", length = 100)
     private String vehicleName;
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
