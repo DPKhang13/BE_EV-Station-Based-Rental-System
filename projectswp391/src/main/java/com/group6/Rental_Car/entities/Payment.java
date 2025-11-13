@@ -35,4 +35,5 @@ public class Payment {
     private PaymentStatus status;
     private BigDecimal remainingAmount;
 
+
 }
