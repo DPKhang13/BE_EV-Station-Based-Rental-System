@@ -69,9 +69,11 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal total = order.getTotalPrice();
 
         // Validate payment method
-        String method = Optional.ofNullable(dto.getMethod()).orElse("MOMO");
-        if (!"MOMO".equalsIgnoreCase(method)) {
-            throw new BadRequestException("Only MOMO payment method is supported");
+        String method = Optional.ofNullable(dto.getMethod()).orElse("captureWallet");
+
+        // Chỉ chấp nhận captureWallet method
+        if (!method.equals("captureWallet")) {
+            throw new BadRequestException("Only MOMO payment method is supported (captureWallet)");
         }
 
         // ============================
@@ -195,11 +197,6 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.getAmount(), payment.getRemainingAmount());
 
         // Verify payment method is MOMO
-        if (!"MOMO".equalsIgnoreCase(payment.getMethod())) {
-            log.error("❌ Invalid payment method: {} - Expected: MOMO", payment.getMethod());
-            throw new BadRequestException("Payment method is not MOMO");
-        }
-
         RentalOrder order = payment.getRentalOrder();
 
         // MoMo resultCode: 0 = success
@@ -218,7 +215,6 @@ public class PaymentServiceImpl implements PaymentService {
 
         // Success
         payment.setStatus(PaymentStatus.SUCCESS);
-        payment.setMethod("MOMO"); // Ensure method is set
 
         // SERVICE PAYMENT
         if (payment.getPaymentType() == 5) {
