@@ -104,12 +104,15 @@ public class PaymentServiceImpl implements PaymentService {
         rentalOrderRepository.save(order);
 
         // Ghi chi tiết transaction
-        if (type != 2) { // Không tạo mới khi thanh toán phần còn lại
+        if (type != 2) {
             String typeName = getTypeNameByPayment(type);
 
             boolean exists = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
                     .stream()
-                    .anyMatch(d -> typeName.equalsIgnoreCase(d.getType()));
+                    .anyMatch(d -> {
+                        String t = Optional.ofNullable(d.getType()).orElse("").toUpperCase();
+                        return t.equals("DEPOSITED") || t.equals("RENTAL");
+                    });
 
             if (!exists) {
                 RentalOrderDetail detail = RentalOrderDetail.builder()
