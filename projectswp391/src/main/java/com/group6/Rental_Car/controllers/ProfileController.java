@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,7 +33,14 @@ public class ProfileController {
                 description = "Update the profile and return the updated profile")
     public ResponseEntity<?> updateProfile(@RequestBody ProfileDto profileDto,
                                             @AuthenticationPrincipal JwtUserDetails userDetails){
-    return ResponseEntity.ok().body(profileService.updateProfile(profileDto,userDetails.getUserId()));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null || !(auth.getPrincipal() instanceof JwtUserDetails jwt)){
+            return ResponseEntity.badRequest().body("Invalid authentication");
+        }
+
+        var update = profileService.updateProfile(profileDto, jwt.getUserId());
+    return ResponseEntity.ok(update);
     }
 
 }
