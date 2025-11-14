@@ -24,18 +24,23 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
+        // Xử lý null và swap nếu cần
+        LocalDate fromDate;
+        LocalDate toDate;
+
         if (from == null || to == null) {
-            to = LocalDate.now();
-            from = to.minusDays(29);
-        }
-        if (from.isAfter(to)) {
-            LocalDate tmp = from;
-            from = to;
-            to = tmp;
+            toDate = LocalDate.now();
+            fromDate = toDate.minusDays(29);
+        } else if (from.isAfter(to)) {
+            fromDate = to;
+            toDate = from;
+        } else {
+            fromDate = from;
+            toDate = to;
         }
 
-        LocalDateTime dtFrom = from.atStartOfDay();
-        LocalDateTime dtTo = LocalDateTime.of(to, LocalTime.MAX);
+        LocalDateTime dtFrom = fromDate.atStartOfDay();
+        LocalDateTime dtTo = LocalDateTime.of(toDate, LocalTime.MAX);
 
         // ===== VEHICLE KPIs =====
         long totalVehicles = vehicleRepository.count();
@@ -56,7 +61,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== SERVICE KPIs =====
         double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(dtFrom, dtTo)).orElse(0d);
-        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(from, to);
+        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(fromDate, toDate);
         long totalServices = servicesInRange.size();
 
         Map<String, Long> servicesByType = servicesInRange.stream()
@@ -78,7 +83,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 r -> ((Number) r[1]).longValue()
         ));
         List<AdminDashboardResponse.DayCount> servicesByDay = new ArrayList<>();
-        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+        for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             servicesByDay.add(AdminDashboardResponse.DayCount.builder()
                     .date(d)
                     .count(serviceDayMap.getOrDefault(d, 0L))
@@ -117,7 +122,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 r -> ((Number) r[1]).doubleValue()
         ));
         List<AdminDashboardResponse.DayRevenue> revenueByDay = new ArrayList<>();
-        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+        for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             revenueByDay.add(AdminDashboardResponse.DayRevenue.builder()
                     .date(d)
                     .total(revMap.getOrDefault(d, 0d))
@@ -221,7 +226,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     String stationName = sr.getStationName();
 
                     // Tính doanh thu trung bình mỗi ngày
-                    long dayCount = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+                    long dayCount = java.time.temporal.ChronoUnit.DAYS.between(fromDate, toDate) + 1;
                     Double avgPerDay = sr.getTotalRevenue() / dayCount;
 
                     // Doanh thu hôm nay
