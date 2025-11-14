@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface FeedbackRepository extends JpaRepository<Feedback,Integer> {
     Optional<Feedback> findByOrder(RentalOrder order);
@@ -17,4 +18,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback,Integer> {
 
     @Query("select f.rating as rating, count(f) as total from Feedback f group by f.rating order by f.rating")
     List<Object[]> ratingDistribution();
+
+    @Query("select f from Feedback f where f.order.customer.userId = :userId")
+    List<Feedback> findByUserId(UUID userId);
+
 }

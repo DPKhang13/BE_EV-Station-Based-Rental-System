@@ -9,12 +9,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @Tag(name = "Feedback Api", description ="rating, comments about service")
 @RequestMapping("/api/feedbacks")
 public class FeedbackController {
     private final FeedbackService feedbackService;
+
     public FeedbackController(FeedbackService feedbackService) {
         this.feedbackService = feedbackService;
     }
@@ -44,5 +46,10 @@ public class FeedbackController {
     @GetMapping("/getAllList")
     public ResponseEntity<List<FeedbackResponse>> list() {
         return ResponseEntity.ok(feedbackService.list());
+    }
+
+    @GetMapping("/getFeedbackById/{userId}")
+    public ResponseEntity<?> getFeedbackById(@PathVariable UUID userId) {
+        return ResponseEntity.ok(feedbackService.getFeedbackByUserId(userId));
     }
 }

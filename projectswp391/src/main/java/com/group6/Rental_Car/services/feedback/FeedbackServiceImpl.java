@@ -90,6 +90,14 @@ public class FeedbackServiceImpl implements FeedbackService{
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<FeedbackResponse> getFeedbackByUserId(UUID userId) {
+        return feedbackRepository.findByUserId(userId)
+                .stream().map(feedback -> modelMapper.map(feedback,FeedbackResponse.class))
+                        .toList();
+    }
+
     private FeedbackResponse toResponse(Feedback fb) {
         FeedbackResponse res = modelMapper.map(fb, FeedbackResponse.class);
         if (fb.getOrder() != null) {
