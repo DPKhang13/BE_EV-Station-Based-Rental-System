@@ -21,6 +21,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -213,7 +214,7 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepository.save(payment);
             rentalOrderRepository.save(order);
             log.error("❌ MoMo payment failed - resultCode: {}, message: {}",
-                resultCode, params.get("message"));
+                    resultCode, params.get("message"));
             return buildCallbackResponse(order, payment, false);
         }
 
@@ -485,10 +486,10 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("📨 MoMo Response Code: {}", responseCode);
 
             BufferedReader br = new BufferedReader(
-                new InputStreamReader(
-                    responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
-                    StandardCharsets.UTF_8
-                )
+                    new InputStreamReader(
+                            responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
+                            StandardCharsets.UTF_8
+                    )
             );
 
             StringBuilder response = new StringBuilder();
@@ -695,7 +696,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse processCashPayment(PaymentDto dto, UUID userId) {
         log.info("💵 Processing CASH payment for order: {}, type: {}", dto.getOrderId(), dto.getPaymentType());
 
-        // Verify user exists
+        // Verify user
         userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -708,88 +709,106 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BadRequestException("Invalid payment type");
 
         // ============================
-        // TYPE 5 - SERVICE PAYMENT (CASH)
+        // TYPE 5 - SERVICE PAYMENT
         // ============================
-        if (type == 5)
+        if (type == 5) {
             return processCashServicePayment(order);
+        }
 
-        Vehicle vehicle = getMainVehicle(order);
         BigDecimal total = order.getTotalPrice();
-
-        // ============================
-        // CALC AMOUNT dựa vào type
-        // ============================
         BigDecimal amount;
         BigDecimal remainingAmount;
 
+        // ============================
+        // TYPE 1 — DEPOSIT (50%)
+        // ============================
         if (type == 1) {
-            // Deposit 50%
-            amount = total.divide(BigDecimal.valueOf(2), 2, java.math.RoundingMode.HALF_UP);
+            amount = total.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
             remainingAmount = total.subtract(amount);
-        } else if (type == 2) {
-            // Thanh toán còn lại - lấy từ payment deposit
-            Payment depositPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
-                    .stream()
-                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                    .findFirst()
-                    .orElseThrow(() -> new BadRequestException("Must pay deposit first"));
 
-            amount = depositPayment.getRemainingAmount();
-            remainingAmount = BigDecimal.ZERO;
-        } else if (type == 3) {
-            // Full payment
+            // Create deposit payment (PENDING)
+            Payment depositPayment = paymentRepository.save(
+                    Payment.builder()
+                            .rentalOrder(order)
+                            .amount(amount)
+                            .remainingAmount(remainingAmount)
+                            .method("CASH")
+                            .paymentType((short) 1)
+                            .status(PaymentStatus.PENDING)
+                            .build()
+            );
+
+            // Auto create final payment (PENDING)
+            Payment finalPayment = paymentRepository.save(
+                    Payment.builder()
+                            .rentalOrder(order)
+                            .amount(remainingAmount)
+                            .remainingAmount(BigDecimal.ZERO)
+                            .method("CASH")
+                            .paymentType((short) 2)
+                            .status(PaymentStatus.PENDING)
+                            .build()
+            );
+
+            log.info("🕒 Created CASH DEPOSIT & auto FINAL payments (both PENDING)");
+
+            recordTransaction(order, depositPayment, "DEPOSIT_PENDING");
+            recordTransaction(order, finalPayment, "FINAL_PENDING");
+
+            return PaymentResponse.builder()
+                    .paymentId(depositPayment.getPaymentId())
+                    .orderId(order.getOrderId())
+                    .amount(amount)
+                    .remainingAmount(remainingAmount)
+                    .method("CASH")
+                    .paymentType((short) 1)
+                    .status(PaymentStatus.PENDING)
+                    .message("CASH_DEPOSIT_PENDING_AND_FINAL_CREATED")
+                    .build();
+        }
+
+        // ============================
+        // TYPE 2 — Final payment (Generated only by system)
+        // ============================
+        if (type == 2) {
+            throw new BadRequestException("Final payment is auto-created. Manual payment type=2 is not allowed.");
+        }
+
+        // ============================
+        // TYPE 3 — FULL PAYMENT
+        // ============================
+        if (type == 3) {
             amount = total;
             remainingAmount = BigDecimal.ZERO;
-        } else {
-            amount = BigDecimal.ZERO;
-            remainingAmount = BigDecimal.ZERO;
+
+            Payment fullPayment = paymentRepository.save(
+                    Payment.builder()
+                            .rentalOrder(order)
+                            .amount(amount)
+                            .remainingAmount(BigDecimal.ZERO)
+                            .method("CASH")
+                            .paymentType((short) 3)
+                            .status(PaymentStatus.PENDING)
+                            .build()
+            );
+
+            recordTransaction(order, fullPayment, "FULL_PAYMENT_PENDING");
+
+            return PaymentResponse.builder()
+                    .paymentId(fullPayment.getPaymentId())
+                    .orderId(order.getOrderId())
+                    .amount(amount)
+                    .remainingAmount(BigDecimal.ZERO)
+                    .method("CASH")
+                    .paymentType((short) 3)
+                    .status(PaymentStatus.PENDING)
+                    .message("CASH_FULL_PAYMENT_PENDING")
+                    .build();
         }
 
-        // ============================
-        // CREATE PAYMENT with CASH method and SUCCESS status
-        // ============================
-        Payment payment = paymentRepository.save(
-                Payment.builder()
-                        .rentalOrder(order)
-                        .amount(amount)
-                        .remainingAmount(remainingAmount)
-                        .method("CASH")
-                        .paymentType(type)
-                        .status(PaymentStatus.SUCCESS)
-                        .build()
-        );
-
-        log.info("✅ Created CASH payment {} with amount={}, remaining={}, type={}",
-                payment.getPaymentId(), payment.getAmount(), payment.getRemainingAmount(), type);
-
-        // ============================
-        // UPDATE ORDER STATUS & DETAILS
-        // ============================
-        switch (type) {
-            case 1 -> depositSuccess(order, payment, vehicle);
-            case 2 -> finalSuccess(order, payment);
-            case 3 -> fullSuccess(order, payment, vehicle);
-        }
-
-        paymentRepository.save(payment);
-        rentalOrderRepository.save(order);
-
-        // Record transaction
-        recordTransaction(order, payment, getTypeName(type));
-
-        log.info("✅ CASH payment processed successfully for order: {}", order.getOrderId());
-
-        return PaymentResponse.builder()
-                .paymentId(payment.getPaymentId())
-                .orderId(order.getOrderId())
-                .amount(amount)
-                .remainingAmount(payment.getRemainingAmount())
-                .paymentType(type)
-                .method("CASH")
-                .status(PaymentStatus.SUCCESS)
-                .message("PAYMENT_SUCCESS")
-                .build();
+        throw new BadRequestException("Unsupported cash payment type");
     }
+
 
     // ============================================================
     // CASH SERVICE PAYMENT
@@ -797,6 +816,7 @@ public class PaymentServiceImpl implements PaymentService {
     private PaymentResponse processCashServicePayment(RentalOrder order) {
         log.info("💵 Processing CASH service payment for order: {}", order.getOrderId());
 
+        // Lấy tất cả service chưa thanh toán
         List<OrderService> pending = orderServiceRepository
                 .findByOrder_OrderId(order.getOrderId())
                 .stream()
@@ -806,26 +826,30 @@ public class PaymentServiceImpl implements PaymentService {
         if (pending.isEmpty())
             throw new BadRequestException("No unpaid services found");
 
+        // Tổng tiền service
         BigDecimal amount = pending.stream()
                 .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Create payment with SUCCESS status for CASH
+        // Tạo payment nhưng để PENDING
         Payment payment = paymentRepository.save(
                 Payment.builder()
                         .rentalOrder(order)
                         .amount(amount)
                         .remainingAmount(BigDecimal.ZERO)
-                        .paymentType((short) 5)
+                        .paymentType((short) 5)   // SERVICE PAYMENT
                         .method("CASH")
-                        .status(PaymentStatus.SUCCESS)
+                        .status(PaymentStatus.PENDING)    // 🔥 ĐỂ DUYỆT SAU
                         .build()
         );
 
-        // Process service payment success
-        handleServiceSuccess(order, payment);
+        log.info("🕒 CASH service payment created PENDING for order: {}", order.getOrderId());
 
-        log.info("✅ CASH service payment processed successfully for order: {}", order.getOrderId());
+        // ❌ KHÔNG xử lý service success tại đây
+        // ❌ KHÔNG update order
+        // Việc này staff sẽ xác nhận ở API approve
+
+        recordTransaction(order, payment, "SERVICE_PAYMENT_PENDING");
 
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
@@ -834,8 +858,56 @@ public class PaymentServiceImpl implements PaymentService {
                 .remainingAmount(BigDecimal.ZERO)
                 .paymentType((short) 5)
                 .method("CASH")
-                .status(PaymentStatus.SUCCESS)
-                .message("SERVICE_PAYMENT_SUCCESS")
+                .status(PaymentStatus.PENDING)
+                .message("SERVICE_PAYMENT_PENDING_STAFF_CONFIRM")
                 .build();
     }
+    @Override
+    @Transactional
+    public void approveCashPayment(UUID paymentId) {
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+
+        if (!"CASH".equalsIgnoreCase(payment.getMethod())) {
+            throw new BadRequestException("Only CASH payments can be approved manually");
+        }
+
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            throw new BadRequestException("Payment is already processed");
+        }
+
+        RentalOrder order = payment.getRentalOrder();
+        short type = payment.getPaymentType();
+
+        // ===========================
+        // UPDATE PAYMENT STATUS
+        // ===========================
+        payment.setStatus(PaymentStatus.SUCCESS);
+        paymentRepository.save(payment);
+
+        log.info("💵 Approving CASH paymentId={}, type={}", paymentId, type);
+
+        // ===========================
+        // APPLY ORDER LOGIC
+        // ===========================
+        switch (type) {
+            case 1 -> {
+                Vehicle v = getMainVehicle(order);
+                depositSuccess(order, payment, v);
+            }
+            case 2 -> finalSuccess(order, payment);
+            case 3 -> {
+                Vehicle v = getMainVehicle(order);
+                fullSuccess(order, payment, v);
+            }
+            case 5 -> handleServiceSuccess(order, payment);
+            default -> throw new BadRequestException("Unknown payment type");
+        }
+
+        rentalOrderRepository.save(order);
+
+        log.info("✅ CASH payment approved successfully. paymentId={}", paymentId);
+    }
+
 }

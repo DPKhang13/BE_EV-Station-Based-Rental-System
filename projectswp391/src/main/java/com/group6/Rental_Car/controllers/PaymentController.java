@@ -2,6 +2,12 @@ package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.payment.PaymentDto;
 import com.group6.Rental_Car.dtos.payment.PaymentResponse;
+import com.group6.Rental_Car.entities.Payment;
+import com.group6.Rental_Car.entities.RentalOrder;
+import com.group6.Rental_Car.enums.PaymentStatus;
+import com.group6.Rental_Car.exceptions.BadRequestException;
+import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.PaymentRepository;
 import com.group6.Rental_Car.services.payment.PaymentService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +32,7 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final PaymentRepository paymentRepository;
 
     @PostMapping("/url")
     @Operation(summary = "Create MoMo payment URL")
@@ -45,6 +52,13 @@ public class PaymentController {
 
         PaymentResponse response = paymentService.processCashPayment(paymentDto, jwtUserDetails.getUserId());
         return ResponseEntity.ok(response);
+    }
+    @PutMapping("/cash/approve/{paymentId}")
+    @Operation(summary = "Approve cash payment")
+    public ResponseEntity<?> approveCashPayment(@PathVariable UUID paymentId) {
+
+        paymentService.approveCashPayment(paymentId);
+        return ResponseEntity.ok("CASH payment approved successfully");
     }
 
     @PostMapping("/refund/{orderId}")
