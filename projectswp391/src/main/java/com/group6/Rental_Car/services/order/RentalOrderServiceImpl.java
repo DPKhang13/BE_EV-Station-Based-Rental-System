@@ -62,7 +62,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         // Kiểm tra xem xe có timeline trùng lặp không (xe đã được book trong khoảng thời gian này)
         if (hasOverlappingActiveBooking(vehicle.getVehicleId(), start, end)) {
-            throw new BadRequestException("Xe đã được đặt trong khoảng thời gian này. Vui lòng chọn thời gian khác.");
+            throw new BadRequestException("Xe đã được đặt trong khoảng thời gian này...");
         }
 
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
@@ -163,7 +163,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         // Kiểm tra xe mới có bị trùng lịch không
         if (hasOverlappingActiveBooking(newVehicle.getVehicleId(), mainDetail.getStartTime(), mainDetail.getEndTime())) {
-            throw new BadRequestException("Xe mới đã được đặt trong khoảng thời gian này. Vui lòng chọn xe khác.");
+            throw new BadRequestException("Xe mới đã được đặt trong khoảng thời gian này...");
         }
 
         Vehicle oldVehicle = mainDetail.getVehicle();
