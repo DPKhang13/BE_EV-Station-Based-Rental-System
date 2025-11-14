@@ -30,14 +30,4 @@ public class VehicleResponse {
     private String batteryCapacity;
     private Integer rangeKm;
     private Integer pricingRuleId;
-
-    // ===== Thông tin đơn thuê (nếu có) =====
-    private boolean hasBooking;  // true nếu có đơn thuê
-    private String customerName;
-    private String customerPhone;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime rentalStartDate;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private LocalDateTime rentalEndDate;
-    private String rentalOrderStatus;
 }
