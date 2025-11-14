@@ -18,5 +18,5 @@ public interface PaymentService {
     PaymentResponse refund(UUID orderId);
 
     PaymentResponse processCashPayment(PaymentDto paymentDto, UUID userId);
-    public void approveCashPayment(UUID paymentId);
+    public void approveCashPaymentByOrder(UUID orderId);
 }

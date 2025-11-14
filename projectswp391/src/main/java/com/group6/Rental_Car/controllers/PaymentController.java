@@ -53,11 +53,11 @@ public class PaymentController {
         PaymentResponse response = paymentService.processCashPayment(paymentDto, jwtUserDetails.getUserId());
         return ResponseEntity.ok(response);
     }
-    @PutMapping("/cash/approve/{paymentId}")
-    @Operation(summary = "Approve cash payment")
-    public ResponseEntity<?> approveCashPayment(@PathVariable UUID paymentId) {
+    @PutMapping("/cash/approve/order/{orderId}")
+    @Operation(summary = "Approve cash payment by orderId")
+    public ResponseEntity<?> approveCashPaymentByOrder(@PathVariable UUID orderId) {
 
-        paymentService.approveCashPayment(paymentId);
+        paymentService.approveCashPaymentByOrder(orderId);
         return ResponseEntity.ok("CASH payment approved successfully");
     }
 

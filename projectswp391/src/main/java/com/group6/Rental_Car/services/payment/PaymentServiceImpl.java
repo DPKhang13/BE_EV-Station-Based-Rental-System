@@ -862,35 +862,28 @@ public class PaymentServiceImpl implements PaymentService {
                 .message("SERVICE_PAYMENT_PENDING_STAFF_CONFIRM")
                 .build();
     }
+
     @Override
     @Transactional
-    public void approveCashPayment(UUID paymentId) {
+    public void approveCashPaymentByOrder(UUID orderId) {
 
-        Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        if (!"CASH".equalsIgnoreCase(payment.getMethod())) {
-            throw new BadRequestException("Only CASH payments can be approved manually");
-        }
+        Payment payment = paymentRepository.findByRentalOrder_OrderId(orderId).stream()
+                .filter(p -> "CASH".equalsIgnoreCase(p.getMethod()))
+                .filter(p -> p.getStatus() == PaymentStatus.PENDING)
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("No pending CASH payment for this order"));
 
-        if (payment.getStatus() != PaymentStatus.PENDING) {
-            throw new BadRequestException("Payment is already processed");
-        }
-
-        RentalOrder order = payment.getRentalOrder();
         short type = payment.getPaymentType();
 
-        // ===========================
         // UPDATE PAYMENT STATUS
-        // ===========================
         payment.setStatus(PaymentStatus.SUCCESS);
         paymentRepository.save(payment);
 
-        log.info("💵 Approving CASH paymentId={}, type={}", paymentId, type);
+        log.info("💵 Approving CASH payment for orderId={}, paymentType={}", orderId, type);
 
-        // ===========================
-        // APPLY ORDER LOGIC
-        // ===========================
         switch (type) {
             case 1 -> {
                 Vehicle v = getMainVehicle(order);
@@ -907,7 +900,6 @@ public class PaymentServiceImpl implements PaymentService {
 
         rentalOrderRepository.save(order);
 
-        log.info("✅ CASH payment approved successfully. paymentId={}", paymentId);
+        log.info("✅ CASH payment approved successfully for orderId={}", orderId);
     }
-
 }
