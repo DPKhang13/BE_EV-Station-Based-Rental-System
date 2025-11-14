@@ -247,6 +247,7 @@ public class PaymentServiceImpl implements PaymentService {
     // ============================================================
     private void handleServiceSuccess(RentalOrder order, Payment payment) {
 
+        // 1) Cập nhật OrderService → SUCCESS
         List<OrderService> pending = orderServiceRepository
                 .findByOrder_OrderId(order.getOrderId())
                 .stream()
@@ -259,24 +260,31 @@ public class PaymentServiceImpl implements PaymentService {
             orderServiceRepository.save(s);
         });
 
-        // Nếu order đang chờ thanh toán cuối (sau khi return xe)
+        // 🔥 2) Cập nhật RentalOrderDetail type SERVICE → SUCCESS
+        rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                .stream()
+                .filter(d -> "SERVICE_SERVICE".equalsIgnoreCase(d.getType()))
+                .forEach(d -> {
+                    d.setStatus("SUCCESS");
+                    rentalOrderDetailRepository.save(d);
+                });
+
+        // 3) Cập nhật trạng thái Order
         if ("PENDING_FINAL_PAYMENT".equalsIgnoreCase(order.getStatus())) {
             order.setStatus("COMPLETED");
 
-            // XÓA timeline khi order hoàn thành (không cần giữ nữa)
-            // Timeline chỉ dùng để hiển thị xe đang được book, xe đã trả rồi thì xóa
             Vehicle vehicle = getMainVehicle(order);
             if (vehicle != null) {
                 deleteTimelineForOrder(order.getOrderId(), vehicle.getVehicleId());
             }
         } else {
-            // Các trường hợp khác (thanh toán service bình thường)
             order.setStatus("SERVICE_PAID");
         }
 
         paymentRepository.save(payment);
         rentalOrderRepository.save(order);
 
+        // 4) Lưu lịch sử giao dịch
         recordTransaction(order, payment, "SERVICE");
     }
 

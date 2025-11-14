@@ -11,6 +11,7 @@ import com.group6.Rental_Car.services.coupon.CouponService;
 import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
 import com.group6.Rental_Car.services.vehicle.VehicleModelService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
+import com.group6.Rental_Car.utils.UserDocsGuard;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
@@ -38,7 +39,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final ModelMapper modelMapper;
     private final VehicleTimelineRepository vehicleTimelineRepository;
     private final EmployeeScheduleRepository employeeScheduleRepository;
-
+    private final PhotoRepository photoRepository;
     @Override
     @Transactional
     public OrderResponse createOrder(OrderCreateRequest request) {
@@ -47,6 +48,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         User customer = userRepository.findById(jwt.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
 
+
+        UserDocsGuard.assertHasDocs(
+                customer.getUserId(),
+                (uid, type) -> photoRepository.existsByUser_UserIdAndTypeIgnoreCase(uid, type)
+        );
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
@@ -487,7 +493,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     return s.startsWith("PENDING")
                             || s.equals("PAID")
                             || s.equals("RENTAL")              // đang thuê
-                            || s.equals("DEPOSITED")           // đã đặt cọc
+                            || s.equals("DEPOSITED")
+                            || s.equals("SERVICE_PAID") // đã đặt cọc
                             || s.equals("PENDING_FINAL_PAYMENT"); // chờ thanh toán cuối (services + phí trễ)
                 })
                 //  sort theo createdAt mới nhất
