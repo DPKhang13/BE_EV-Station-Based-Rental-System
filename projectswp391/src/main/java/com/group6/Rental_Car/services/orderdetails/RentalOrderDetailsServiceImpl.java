@@ -2,12 +2,10 @@ package com.group6.Rental_Car.services.orderdetails;
 
 import com.group6.Rental_Car.dtos.orderdetail.OrderDetailCreateRequest;
 import com.group6.Rental_Car.dtos.orderdetail.OrderDetailResponse;
-import com.group6.Rental_Car.entities.OrderService;
 import com.group6.Rental_Car.entities.RentalOrder;
 import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
-import com.group6.Rental_Car.repositories.OrderServiceRepository;
 import com.group6.Rental_Car.repositories.RentalOrderDetailRepository;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -32,7 +30,6 @@ import java.util.stream.Collectors;
         private final RentalOrderRepository rentalOrderRepository;
         private final VehicleRepository vehicleRepository;
         private final ModelMapper modelMapper;
-        private final OrderServiceRepository orderServiceRepository;
 
         // =====================================================
         // CREATE DETAIL (Admin/Staff tạo thủ công)
@@ -155,27 +152,9 @@ import java.util.stream.Collectors;
                     .collect(Collectors.toList());
 
             // =====================================================
-            //  ADD SERVICE ITEMS vào danh sách
+            //  KHÔNG MERGE SERVICE vào details
+            //  Services sẽ được lấy riêng qua API /api/order-services/order/{orderId}
             // =====================================================
-            List<OrderService> services = orderServiceRepository.findByOrder_OrderId(orderId);
-            for (OrderService s : services) {
-
-                OrderDetailResponse dto = new OrderDetailResponse();
-                dto.setDetailId(s.getServiceId());
-                dto.setOrderId(orderId);
-                dto.setVehicleId(s.getVehicle() != null ? s.getVehicle().getVehicleId() : null);
-                dto.setType("SERVICE");
-                dto.setStartTime(s.getOccurredAt());
-                dto.setEndTime(s.getResolvedAt());
-                dto.setPrice(s.getCost());
-                dto.setStatus(s.getStatus());
-                dto.setDescription(
-                        s.getServiceType() +
-                                (s.getDescription() != null ? " - " + s.getDescription() : "")
-                );
-
-                details.add(dto);
-            }
 
             return details.stream()
                     .sorted(Comparator.comparing(OrderDetailResponse::getStartTime))

@@ -150,6 +150,119 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         .build()
         );
 
+        // ===== VEHICLES BY STATION =====
+        var vehicleStationRows = vehicleRepository.countByStation();
+        List<AdminDashboardResponse.StationCount> vehiclesByStation = vehicleStationRows.stream()
+                .map(r -> {
+                    Integer stationId = r[0] != null ? ((Number) r[0]).intValue() : null;
+                    String stationName = (String) r[1];
+                    Long total = ((Number) r[2]).longValue();
+
+                    // Đếm xe đang rental tại station này
+                    Long rented = stationId != null ? vehicleRepository.countByRentalStation_StationIdAndStatus(stationId, "RENTAL") : 0L;
+                    Double utilization = total > 0 ? (rented * 100.0 / total) : 0.0;
+
+                    return AdminDashboardResponse.StationCount.builder()
+                            .stationId(stationId)
+                            .stationName(stationName != null ? stationName : "Unknown Station")
+                            .total(total)
+                            .rented(rented)
+                            .utilization(utilization)
+                            .build();
+                })
+                .toList();
+
+        // ===== ORDER BY HOUR =====
+        var orderHourRows = rentalOrderRepository.countOrdersByHour(dtFrom, dtTo);
+        Map<Integer, Long> orderHourMap = orderHourRows.stream()
+                .collect(Collectors.toMap(
+                        r -> ((Number) r[0]).intValue(),
+                        r -> ((Number) r[1]).longValue()
+                ));
+
+        List<AdminDashboardResponse.HourCount> orderByHour = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            orderByHour.add(AdminDashboardResponse.HourCount.builder()
+                    .hour(h)
+                    .count(orderHourMap.getOrDefault(h, 0L))
+                    .build());
+        }
+
+        // ===== PEAK HOUR WINDOW (3 giờ liên tiếp có nhiều đơn nhất) =====
+        AdminDashboardResponse.PeakHourWindow peakHourWindow = null;
+        if (!orderHourMap.isEmpty()) {
+            int windowSize = 3;
+            int bestStart = 0;
+            long maxTotal = 0;
+
+            for (int start = 0; start <= 24 - windowSize; start++) {
+                long windowTotal = 0;
+                for (int i = 0; i < windowSize; i++) {
+                    windowTotal += orderHourMap.getOrDefault(start + i, 0L);
+                }
+                if (windowTotal > maxTotal) {
+                    maxTotal = windowTotal;
+                    bestStart = start;
+                }
+            }
+
+            peakHourWindow = AdminDashboardResponse.PeakHourWindow.builder()
+                    .startHour(bestStart)
+                    .endHour(bestStart + windowSize - 1)
+                    .windowSize(windowSize)
+                    .total(maxTotal)
+                    .build();
+        }
+
+        // ===== REVENUE BY STATION ANALYSIS =====
+        List<AdminDashboardResponse.StationRevenueAnalysis> revenueByStationAnalysis = revenueByStation.stream()
+                .map(sr -> {
+                    Integer stationId = sr.getStationId();
+                    String stationName = sr.getStationName();
+
+                    // Tính doanh thu trung bình mỗi ngày
+                    long dayCount = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+                    Double avgPerDay = sr.getTotalRevenue() / dayCount;
+
+                    // Doanh thu hôm nay
+                    LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+                    LocalDateTime todayEnd = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+                    Double todayRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, todayStart, todayEnd)
+                    ).orElse(0d);
+
+                    // Doanh thu tuần này
+                    LocalDateTime weekStart = LocalDate.now().minusDays(7).atStartOfDay();
+                    Double weekRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, weekStart, todayEnd)
+                    ).orElse(0d);
+
+                    // Doanh thu tháng này
+                    LocalDateTime monthStart = LocalDate.now().minusDays(30).atStartOfDay();
+                    Double monthRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, monthStart, todayEnd)
+                    ).orElse(0d);
+
+                    // Tính tỷ lệ tăng trưởng (so với tuần/tháng trước)
+                    // Đơn giản hóa: growth = 0 (có thể mở rộng sau)
+                    Double growthDay = 0.0;
+                    Double growthWeek = 0.0;
+                    Double growthMonth = 0.0;
+
+                    return AdminDashboardResponse.StationRevenueAnalysis.builder()
+                            .stationId(stationId)
+                            .stationName(stationName)
+                            .avgPerDay(avgPerDay)
+                            .todayRevenue(todayRevenue)
+                            .weekRevenue(weekRevenue)
+                            .monthRevenue(monthRevenue)
+                            .growthDay(growthDay)
+                            .growthWeek(growthWeek)
+                            .growthMonth(growthMonth)
+                            .build();
+                })
+                .toList();
+
         // ===== BUILD RESPONSE =====
         var kpi = AdminDashboardResponse.Kpi.builder()
                 .totalVehicles(totalVehicles)
@@ -177,8 +290,12 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
                 .vehiclesByStatus(vehiclesByStatus)
+                .vehiclesByStation(vehiclesByStation)
                 .revenueByDay(revenueByDay)
                 .revenueByStation(revenueByStation)
+                .revenueByStationAnalysis(revenueByStationAnalysis)
+                .orderByHour(orderByHour)
+                .peakHourWindow(peakHourWindow)
                 .avgRating(avgRating)
                 .ratingDistribution(ratingDistribution)
                 .servicesByDay(servicesByDay)

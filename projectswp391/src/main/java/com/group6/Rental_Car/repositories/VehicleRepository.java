@@ -38,4 +38,17 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     ORDER BY s.station_id
     """, nativeQuery = true)
     List<Object[]> vehicleUsagePerStation();
+
+    // Đếm xe theo station
+    @Query(value = """
+        SELECT rs.station_id, rs.name, COUNT(v.vehicle_id)
+        FROM rentalstation rs
+        LEFT JOIN vehicle v ON v.station_id = rs.station_id
+        GROUP BY rs.station_id, rs.name
+        ORDER BY COUNT(v.vehicle_id) DESC
+        """, nativeQuery = true)
+    List<Object[]> countByStation();
+
+    // Đếm xe theo station và status
+    long countByRentalStation_StationIdAndStatus(Integer stationId, String status);
 }

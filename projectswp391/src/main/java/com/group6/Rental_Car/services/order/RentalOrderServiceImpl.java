@@ -60,11 +60,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Thời gian thuê không hợp lệ");
         }
 
-        // Kiểm tra xem xe có timeline trùng lặp không (xe đã được book trong khoảng thời gian này)
         if (hasOverlappingActiveBooking(vehicle.getVehicleId(), start, end)) {
             throw new BadRequestException("Xe đã được đặt trong khoảng thời gian này...");
         }
-
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
 
@@ -138,7 +136,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             Coupon coupon = couponService.getCouponByCode(req.getCouponCode().trim());
             order.setCoupon(coupon);
         }
-
         rentalOrderRepository.save(order);
         return mapToResponse(order, getMainDetail(order));
     }
@@ -199,7 +196,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .status("BOOKED")
                 .sourceType("VEHICLE_CHANGED")
                 .note("Xe được đổi thay thế cho đơn thuê #" + order.getOrderId() +
-                      (note != null ? " - " + note : ""))
+                        (note != null ? " - " + note : ""))
                 .updatedAt(LocalDateTime.now())
                 .build();
         vehicleTimelineRepository.save(timeline);
@@ -534,7 +531,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .findFirst()
                     .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
                     .orElse(totalPrice.subtract(totalPaid));
-
             return OrderVerificationResponse.builder()
                     .userId(customer.getUserId())
                     .orderId(order.getOrderId())
@@ -649,8 +645,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             java.time.LocalDate today = java.time.LocalDate.now();
 
             Optional<EmployeeSchedule> scheduleOpt =
-                employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
-                    staffId, today, shiftTime);
+                    employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
+                            staffId, today, shiftTime);
 
             if (scheduleOpt.isPresent()) {
                 EmployeeSchedule schedule = scheduleOpt.get();
@@ -672,8 +668,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             java.time.LocalDate today = java.time.LocalDate.now();
 
             Optional<EmployeeSchedule> scheduleOpt =
-                employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
-                    staffId, today, shiftTime);
+                    employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
+                            staffId, today, shiftTime);
 
             if (scheduleOpt.isPresent()) {
                 EmployeeSchedule schedule = scheduleOpt.get();
