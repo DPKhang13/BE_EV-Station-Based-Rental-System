@@ -41,6 +41,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final VehicleTimelineRepository vehicleTimelineRepository;
     private final EmployeeScheduleRepository employeeScheduleRepository;
     private final PhotoRepository photoRepository;
+    private final PaymentRepository paymentRepository;
     @Override
     @Transactional
     public OrderResponse createOrder(OrderCreateRequest request) {

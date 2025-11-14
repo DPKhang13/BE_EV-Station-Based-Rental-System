@@ -27,4 +27,5 @@ public class OrderDetailResponse {
     private BigDecimal price;
     private String description;
     private String status;
+    private String methodPayment;
 }

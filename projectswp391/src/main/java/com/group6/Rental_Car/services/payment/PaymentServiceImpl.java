@@ -814,7 +814,7 @@ public class PaymentServiceImpl implements PaymentService {
     // CASH SERVICE PAYMENT
     // ============================================================
     private PaymentResponse processCashServicePayment(RentalOrder order) {
-        log.info("💵 Processing CASH service payment for order: {}", order.getOrderId());
+        log.info(" Processing CASH service payment for order: {}", order.getOrderId());
 
         // Lấy tất cả service chưa thanh toán
         List<OrderService> pending = orderServiceRepository
@@ -839,14 +839,14 @@ public class PaymentServiceImpl implements PaymentService {
                         .remainingAmount(BigDecimal.ZERO)
                         .paymentType((short) 5)   // SERVICE PAYMENT
                         .method("CASH")
-                        .status(PaymentStatus.PENDING)    // 🔥 ĐỂ DUYỆT SAU
+                        .status(PaymentStatus.PENDING)    //  ĐỂ DUYỆT SAU
                         .build()
         );
 
         log.info("🕒 CASH service payment created PENDING for order: {}", order.getOrderId());
 
-        // ❌ KHÔNG xử lý service success tại đây
-        // ❌ KHÔNG update order
+        //  KHÔNG xử lý service success tại đây
+        //  KHÔNG update order
         // Việc này staff sẽ xác nhận ở API approve
 
         recordTransaction(order, payment, "SERVICE_PAYMENT_PENDING");
