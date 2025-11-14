@@ -37,6 +37,16 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/cash")
+    @Operation(summary = "Process cash payment")
+    public ResponseEntity<PaymentResponse> processCashPayment(
+            @RequestBody PaymentDto paymentDto,
+            @AuthenticationPrincipal JwtUserDetails jwtUserDetails) {
+
+        PaymentResponse response = paymentService.processCashPayment(paymentDto, jwtUserDetails.getUserId());
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/refund/{orderId}")
     @Operation(summary = "Refund payment")
     public ResponseEntity<PaymentResponse> refund(@PathVariable UUID orderId) {
