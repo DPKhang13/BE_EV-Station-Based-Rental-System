@@ -1,15 +1,18 @@
 package com.group6.Rental_Car.services.vehicle;
 
 import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
+import com.group6.Rental_Car.dtos.vehicle.VehicleDetailResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
+import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.entities.VehicleModel;
 import com.group6.Rental_Car.entities.VehicleTimeline;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ConflictException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.RentalOrderDetailRepository;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
 import com.group6.Rental_Car.repositories.VehicleModelRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -34,6 +37,7 @@ public class VehicleServiceImpl implements VehicleService {
     private final VehicleRepository vehicleRepository;
     private final RentalStationRepository rentalStationRepository;
     private final VehicleTimelineRepository vehicleTimelineRepository;
+    private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
     private final VehicleModelRepository vehicleModelRepository;
@@ -164,6 +168,87 @@ public class VehicleServiceImpl implements VehicleService {
         return vehicleRepository.findAll().stream()
                 .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<VehicleResponse> getVehiclesByStation(Integer stationId) {
+        // Validate stationId
+        if (stationId == null || stationId <= 0) {
+            throw new BadRequestException("stationId phải là số dương");
+        }
+
+        // Kiểm tra station có tồn tại không
+        rentalStationRepository.findById(stationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental Station không tồn tại: " + stationId));
+
+        // Lấy tất cả xe theo station, sắp xếp theo biển số
+        return vehicleRepository.findByRentalStation_StationIdOrderByPlateNumberAsc(stationId).stream()
+                .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public VehicleDetailResponse getVehicleDetailById(Long vehicleId) {
+        // Lấy xe
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle không tồn tại: " + vehicleId));
+
+        // Lấy model của xe
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+
+        // Tạo response cơ bản
+        VehicleDetailResponse response = VehicleDetailResponse.builder()
+                .vehicleId(vehicle.getVehicleId())
+                .plateNumber(vehicle.getPlateNumber())
+                .status(vehicle.getStatus())
+                .vehicleName(vehicle.getVehicleName())
+                .description(vehicle.getDescription())
+                .hasBooking(false)
+                .bookingNote("Chưa có đơn thuê")
+                .build();
+
+        // Thêm thông tin station
+        if (vehicle.getRentalStation() != null) {
+            response.setStationId(vehicle.getRentalStation().getStationId());
+            response.setStationName(vehicle.getRentalStation().getName());
+        }
+
+        // Thêm thông tin model
+        if (model != null) {
+            response.setBrand(model.getBrand());
+            response.setColor(model.getColor());
+            response.setTransmission(model.getTransmission());
+            response.setSeatCount(model.getSeatCount());
+            response.setYear(model.getYear());
+            response.setVariant(model.getVariant());
+            response.setBatteryStatus(model.getBatteryStatus());
+            response.setBatteryCapacity(model.getBatteryCapacity());
+            response.setRangeKm(model.getRangeKm());
+        }
+
+        // Tìm đơn thuê đang diễn ra (status = RENTAL)
+        List<RentalOrderDetail> activeRentals = rentalOrderDetailRepository
+                .findByVehicle_VehicleIdAndStatusIn(vehicleId, List.of("RENTAL", "PENDING"));
+
+        if (!activeRentals.isEmpty()) {
+            // Lấy chi tiết đơn thuê gần đây nhất
+            RentalOrderDetail activeDetail = activeRentals.getFirst();
+
+            if (activeDetail.getOrder() != null && activeDetail.getOrder().getCustomer() != null) {
+                response.setHasBooking(true);
+                response.setCustomerName(activeDetail.getOrder().getCustomer().getFullName());
+                response.setCustomerPhone(activeDetail.getOrder().getCustomer().getPhone());
+                response.setCustomerEmail(activeDetail.getOrder().getCustomer().getEmail());
+                response.setRentalStartDate(activeDetail.getStartTime());
+                response.setRentalEndDate(activeDetail.getEndTime());
+                response.setRentalOrderStatus(activeDetail.getOrder().getStatus());
+                response.setBookingNote("Khách: " + activeDetail.getOrder().getCustomer().getFullName() +
+                        " | Từ: " + activeDetail.getStartTime() +
+                        " | Đến: " + activeDetail.getEndTime());
+            }
+        }
+
+        return response;
     }
 
     @Override
