@@ -2,14 +2,17 @@ package com.group6.Rental_Car.services.transactionhistory;
 
 
 import com.group6.Rental_Car.dtos.transactionhistory.TransactionHistoryResponse;
+import com.group6.Rental_Car.entities.RentalOrder;
 import com.group6.Rental_Car.entities.TransactionHistory;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.TransactionHistoryRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,6 +22,7 @@ public class TransactionHistoryServiceImpl implements TransactionHistoryService 
 
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final UserRepository userRepository;
+    private final RentalOrderRepository rentalOrderRepository;
 
     @Override
     public List<TransactionHistoryResponse> getTransactionsByUser(UUID userId, String sortDirection) {
@@ -69,7 +73,52 @@ public class TransactionHistoryServiceImpl implements TransactionHistoryService 
         List<TransactionHistory> transactions = transactionHistoryRepository.findAllByOrderByCreatedAtDesc();
 
         return transactions.stream()
-                .map(TransactionHistoryResponse::fromEntity)
+                .map(transaction -> {
+                    TransactionHistoryResponse response = TransactionHistoryResponse.fromEntity(transaction);
+
+                    // Thêm thông tin khách hàng
+                    if (transaction.getUser() != null) {
+                        User user = transaction.getUser();
+                        response.setCustomerName(user.getFullName());
+                        response.setCustomerPhone(user.getPhone());
+
+                        // Lấy tất cả đơn hàng của user để tìm thông tin xe, trạm
+                        List<RentalOrder> userOrders = rentalOrderRepository.findByCustomer_UserId(user.getUserId());
+
+                        // Tìm order gần nhất với transaction (based on time)
+                        userOrders.stream()
+                                .filter(order -> order.getCreatedAt().isBefore(transaction.getCreatedAt())
+                                        || order.getCreatedAt().isEqual(transaction.getCreatedAt()))
+                                .max(Comparator.comparing(RentalOrder::getCreatedAt))
+                                .ifPresent(order -> {
+                                    // Lấy RENTAL detail để có thông tin xe và thời gian
+                                    order.getDetails().stream()
+                                            .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
+                                            .findFirst()
+                                            .ifPresent(rentalDetail -> {
+                                                // Thông tin xe
+                                                var vehicle = rentalDetail.getVehicle();
+                                                if (vehicle != null) {
+                                                    response.setVehicleId(vehicle.getVehicleId());
+                                                    response.setVehicleName(vehicle.getVehicleName());
+
+                                                    // Thông tin trạm
+                                                    var station = vehicle.getRentalStation();
+                                                    if (station != null) {
+                                                        response.setStationId(station.getStationId());
+                                                        response.setStationName(station.getName());
+                                                    }
+                                                }
+
+                                                // Thời gian thuê
+                                                response.setRentalStartTime(rentalDetail.getStartTime());
+                                                response.setRentalEndTime(rentalDetail.getEndTime());
+                                            });
+                                });
+                    }
+
+                    return response;
+                })
                 .toList();
     }
 }

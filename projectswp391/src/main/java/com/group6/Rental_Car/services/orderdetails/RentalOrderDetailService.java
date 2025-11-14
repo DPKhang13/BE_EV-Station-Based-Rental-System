@@ -21,4 +21,6 @@ public interface RentalOrderDetailService {
     List<OrderDetailResponse> getActiveDetailsByVehicle(Long vehicleId);
 
     List<OrderDetailResponse> getActiveDetailsByOrder(UUID orderId);
+    List<OrderDetailResponse> getDetailsByOrderStaff(UUID orderId);
+
 }

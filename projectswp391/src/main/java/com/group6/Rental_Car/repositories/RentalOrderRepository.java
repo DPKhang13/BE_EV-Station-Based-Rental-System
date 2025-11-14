@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,7 +40,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         WHERE rod.start_time BETWEEN :from AND :to
           AND UPPER(ro.status) IN ('RENTAL', 'COMPLETED', 'RETURN', 'ACTIVE')
     """, nativeQuery = true)
-    Double revenueBetween(@Param("from") Timestamp from, @Param("to") Timestamp to);
+    Double revenueBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     // Doanh thu theo ngày
     @Query(value = """
@@ -53,7 +53,7 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         GROUP BY day
         ORDER BY day
     """, nativeQuery = true)
-    List<Object[]> revenueByDay(@Param("from") Timestamp from, @Param("to") Timestamp to);
+    List<Object[]> revenueByDay(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     // Doanh thu theo trạm (dựa vào vehicle)
     @Query(value = """
@@ -69,8 +69,8 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         GROUP BY s.station_id, s.name
         ORDER BY total DESC
     """, nativeQuery = true)
-    List<Object[]> revenuePerStation(@Param("from") Timestamp from,
-                                     @Param("to") Timestamp to);
+    List<Object[]> revenuePerStation(@Param("from") LocalDateTime from,
+                                     @Param("to") LocalDateTime to);
 
     // Doanh thu hôm nay
     @Query(value = """
@@ -116,4 +116,30 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
         GROUP BY s.station_id, s.name
     """, nativeQuery = true)
     List<Object[]> revenueThisMonthPerStation();
+
+    // Đếm order theo giờ trong ngày
+    @Query(value = """
+        SELECT EXTRACT(HOUR FROM rod.start_time) AS hour,
+               COUNT(DISTINCT ro.order_id) AS count
+        FROM rentalorder_detail rod
+        JOIN rentalorder ro ON rod.order_id = ro.order_id
+        WHERE rod.start_time BETWEEN :from AND :to
+        GROUP BY hour
+        ORDER BY hour
+    """, nativeQuery = true)
+    List<Object[]> countOrdersByHour(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    // Doanh thu của 1 station trong khoảng thời gian
+    @Query(value = """
+        SELECT COALESCE(SUM(rod.price), 0)
+        FROM rentalorder_detail rod
+        JOIN rentalorder ro ON rod.order_id = ro.order_id
+        JOIN vehicle v ON rod.vehicle_id = v.vehicle_id
+        WHERE v.station_id = :stationId
+          AND rod.start_time BETWEEN :from AND :to
+          AND UPPER(ro.status) IN ('RENTAL', 'COMPLETED', 'RETURN', 'ACTIVE')
+    """, nativeQuery = true)
+    Double revenueByStationBetween(@Param("stationId") Integer stationId,
+                                    @Param("from") LocalDateTime from,
+                                    @Param("to") LocalDateTime to);
 }

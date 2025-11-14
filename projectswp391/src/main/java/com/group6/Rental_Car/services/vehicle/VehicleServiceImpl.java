@@ -6,16 +6,19 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.entities.VehicleModel;
+import com.group6.Rental_Car.entities.VehicleTimeline;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ConflictException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
 import com.group6.Rental_Car.repositories.VehicleModelRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
+import com.group6.Rental_Car.repositories.VehicleTimelineRepository;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -25,11 +28,12 @@ import static com.group6.Rental_Car.utils.ValidationUtil.*;
 @Service
 @RequiredArgsConstructor
 public class VehicleServiceImpl implements VehicleService {
-    private static final Set<String> ALLOWED_STATUS = Set.of("available", "rented", "maintenance");
+    private static final Set<String> ALLOWED_STATUS = Set.of("available", "rented", "maintenance","BOOKED");
     private static final Set<String> ALLOWED_VARIANT = Set.of("air", "pro", "plus");
 
     private final VehicleRepository vehicleRepository;
     private final RentalStationRepository rentalStationRepository;
+    private final VehicleTimelineRepository vehicleTimelineRepository;
     private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
     private final VehicleModelRepository vehicleModelRepository;
@@ -167,12 +171,20 @@ public class VehicleServiceImpl implements VehicleService {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
+        String oldStatus = vehicle.getStatus();
+        String newStatus = null;
+
         if (req.getStatus() != null && !req.getStatus().isBlank()) {
-            String normalized = req.getStatus().trim().toUpperCase();
-            vehicle.setStatus(normalized);
+            newStatus = req.getStatus().trim().toUpperCase();
+            vehicle.setStatus(newStatus);
         }
 
         vehicleRepository.save(vehicle);
+
+        // Xử lý timeline dựa trên status mới
+        if (newStatus != null) {
+            handleTimelineOnStatusChange(vehicle, oldStatus, newStatus);
+        }
 
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         if (model == null) {
@@ -185,5 +197,73 @@ public class VehicleServiceImpl implements VehicleService {
         }
 
         return vehicleModelService.convertToDto(vehicle, model);
+    }
+
+    /**
+     * Xử lý timeline khi staff thay đổi status của xe
+     */
+    private void handleTimelineOnStatusChange(Vehicle vehicle, String oldStatus, String newStatus) {
+        // Nếu chuyển về AVAILABLE → xóa tất cả timeline
+        if ("AVAILABLE".equalsIgnoreCase(newStatus)) {
+            deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+        }
+        // Nếu chuyển sang MAINTENANCE → tạo timeline MAINTENANCE
+        else if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
+            createMaintenanceTimeline(vehicle, "Xe đang bảo trì", null);
+        }
+        // Nếu chuyển sang CHECKING → tạo timeline CHECKING
+        else if ("CHECKING".equalsIgnoreCase(newStatus)) {
+            createCheckingTimeline(vehicle, "Xe đang được kiểm tra");
+        }
+    }
+
+    /**
+     * Xóa tất cả timeline của xe
+     */
+    private void deleteAllTimelinesForVehicle(Long vehicleId) {
+        if (vehicleId == null) return;
+
+        List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+        if (!timelines.isEmpty()) {
+            vehicleTimelineRepository.deleteAll(timelines);
+        }
+    }
+
+    /**
+     * Tạo timeline MAINTENANCE
+     */
+    private void createMaintenanceTimeline(Vehicle vehicle, String note, LocalDateTime endTime) {
+        // Xóa timeline cũ trước
+        deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+
+        LocalDateTime now = LocalDateTime.now();
+        VehicleTimeline timeline = VehicleTimeline.builder()
+                .vehicle(vehicle)
+                .day(now.toLocalDate())
+                .startTime(now)
+                .endTime(endTime != null ? endTime : now.plusDays(7)) // Mặc định 7 ngày
+                .status("MAINTENANCE")
+                .sourceType("VEHICLE_MAINTENANCE")
+                .note(note != null ? note : "Xe đang bảo trì")
+                .updatedAt(now)
+                .build();
+        vehicleTimelineRepository.save(timeline);
+    }
+
+    private void createCheckingTimeline(Vehicle vehicle, String note) {
+        // Xóa timeline cũ trước
+        deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+
+        LocalDateTime now = LocalDateTime.now();
+        VehicleTimeline timeline = VehicleTimeline.builder()
+                .vehicle(vehicle)
+                .day(now.toLocalDate())
+                .startTime(now)
+                .endTime(now.plusDays(1)) // Mặc định 1 ngày
+                .status("CHECKING")
+                .sourceType("VEHICLE_CHECKING")
+                .note(note != null ? note : "Xe đang được kiểm tra")
+                .build();
+        vehicleTimelineRepository.save(timeline);
     }
 }

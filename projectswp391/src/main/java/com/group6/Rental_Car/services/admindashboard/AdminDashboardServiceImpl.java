@@ -6,7 +6,6 @@ import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -25,18 +24,23 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
+        // Xử lý null và swap nếu cần
+        LocalDate fromDate;
+        LocalDate toDate;
+
         if (from == null || to == null) {
-            to = LocalDate.now();
-            from = to.minusDays(29);
-        }
-        if (from.isAfter(to)) {
-            LocalDate tmp = from;
-            from = to;
-            to = tmp;
+            toDate = LocalDate.now();
+            fromDate = toDate.minusDays(29);
+        } else if (from.isAfter(to)) {
+            fromDate = to;
+            toDate = from;
+        } else {
+            fromDate = from;
+            toDate = to;
         }
 
-        Timestamp tsFrom = Timestamp.valueOf(from.atStartOfDay());
-        Timestamp tsTo = Timestamp.valueOf(LocalDateTime.of(to, LocalTime.MAX));
+        LocalDateTime dtFrom = fromDate.atStartOfDay();
+        LocalDateTime dtTo = LocalDateTime.of(toDate, LocalTime.MAX);
 
         // ===== VEHICLE KPIs =====
         long totalVehicles = vehicleRepository.count();
@@ -47,7 +51,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // ===== ORDER KPIs =====
         long totalOrders = rentalOrderRepository.count();
         long completedOrders = rentalOrderRepository.countByStatus("COMPLETED");
-        double revenueInRange = Optional.ofNullable(rentalOrderRepository.revenueBetween(tsFrom, tsTo)).orElse(0d);
+        double revenueInRange = Optional.ofNullable(rentalOrderRepository.revenueBetween(dtFrom, dtTo)).orElse(0d);
 
         // ===== USER KPIs =====
         long totalUsers = userRepository.count();
@@ -56,8 +60,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long customers = userRepository.countByRole(Role.customer);
 
         // ===== SERVICE KPIs =====
-        double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(tsFrom, tsTo)).orElse(0d);
-        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(from, to);
+        double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(dtFrom, dtTo)).orElse(0d);
+        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(fromDate, toDate);
         long totalServices = servicesInRange.size();
 
         Map<String, Long> servicesByType = servicesInRange.stream()
@@ -73,13 +77,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ));
 
         // ===== SERVICES BY DAY =====
-        var serviceDayRows = orderServiceRepository.countByDay(tsFrom, tsTo);
+        var serviceDayRows = orderServiceRepository.countByDay(dtFrom, dtTo);
         Map<LocalDate, Long> serviceDayMap = serviceDayRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
                 r -> ((Number) r[1]).longValue()
         ));
         List<AdminDashboardResponse.DayCount> servicesByDay = new ArrayList<>();
-        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+        for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             servicesByDay.add(AdminDashboardResponse.DayCount.builder()
                     .date(d)
                     .count(serviceDayMap.getOrDefault(d, 0L))
@@ -102,7 +106,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ).toList();
 
         // ===== REVENUE BY STATION =====
-        var revStationRows = rentalOrderRepository.revenuePerStation(tsFrom, tsTo);
+        var revStationRows = rentalOrderRepository.revenuePerStation(dtFrom, dtTo);
         var revenueByStation = revStationRows.stream()
                 .map(r -> AdminDashboardResponse.StationRevenue.builder()
                         .stationId(((Number) r[0]).intValue())
@@ -112,13 +116,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .toList();
 
         // ===== REVENUE BY DAY =====
-        var revRows = rentalOrderRepository.revenueByDay(tsFrom, tsTo);
+        var revRows = rentalOrderRepository.revenueByDay(dtFrom, dtTo);
         Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(
                 r -> ((java.sql.Date) r[0]).toLocalDate(),
                 r -> ((Number) r[1]).doubleValue()
         ));
         List<AdminDashboardResponse.DayRevenue> revenueByDay = new ArrayList<>();
-        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+        for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             revenueByDay.add(AdminDashboardResponse.DayRevenue.builder()
                     .date(d)
                     .total(revMap.getOrDefault(d, 0d))
@@ -135,6 +139,135 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         TreeMap::new
                 ));
 
+        // ===== VEHICLES BY STATUS =====
+        List<AdminDashboardResponse.LabelCount> vehiclesByStatus = Arrays.asList(
+                AdminDashboardResponse.LabelCount.builder()
+                        .label("AVAILABLE")
+                        .count(availableVehicles)
+                        .build(),
+                AdminDashboardResponse.LabelCount.builder()
+                        .label("RENTAL")
+                        .count(rentedVehicles)
+                        .build(),
+                AdminDashboardResponse.LabelCount.builder()
+                        .label("MAINTENANCE")
+                        .count(maintenanceVehicles)
+                        .build()
+        );
+
+        // ===== VEHICLES BY STATION =====
+        var vehicleStationRows = vehicleRepository.countByStation();
+        List<AdminDashboardResponse.StationCount> vehiclesByStation = vehicleStationRows.stream()
+                .map(r -> {
+                    Integer stationId = r[0] != null ? ((Number) r[0]).intValue() : null;
+                    String stationName = (String) r[1];
+                    Long total = ((Number) r[2]).longValue();
+
+                    // Đếm xe đang rental tại station này
+                    Long rented = stationId != null ? vehicleRepository.countByRentalStation_StationIdAndStatus(stationId, "RENTAL") : 0L;
+                    Double utilization = total > 0 ? (rented * 100.0 / total) : 0.0;
+
+                    return AdminDashboardResponse.StationCount.builder()
+                            .stationId(stationId)
+                            .stationName(stationName != null ? stationName : "Unknown Station")
+                            .total(total)
+                            .rented(rented)
+                            .utilization(utilization)
+                            .build();
+                })
+                .toList();
+
+        // ===== ORDER BY HOUR =====
+        var orderHourRows = rentalOrderRepository.countOrdersByHour(dtFrom, dtTo);
+        Map<Integer, Long> orderHourMap = orderHourRows.stream()
+                .collect(Collectors.toMap(
+                        r -> ((Number) r[0]).intValue(),
+                        r -> ((Number) r[1]).longValue()
+                ));
+
+        List<AdminDashboardResponse.HourCount> orderByHour = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            orderByHour.add(AdminDashboardResponse.HourCount.builder()
+                    .hour(h)
+                    .count(orderHourMap.getOrDefault(h, 0L))
+                    .build());
+        }
+
+        // ===== PEAK HOUR WINDOW (3 giờ liên tiếp có nhiều đơn nhất) =====
+        AdminDashboardResponse.PeakHourWindow peakHourWindow = null;
+        if (!orderHourMap.isEmpty()) {
+            int windowSize = 3;
+            int bestStart = 0;
+            long maxTotal = 0;
+
+            for (int start = 0; start <= 24 - windowSize; start++) {
+                long windowTotal = 0;
+                for (int i = 0; i < windowSize; i++) {
+                    windowTotal += orderHourMap.getOrDefault(start + i, 0L);
+                }
+                if (windowTotal > maxTotal) {
+                    maxTotal = windowTotal;
+                    bestStart = start;
+                }
+            }
+
+            peakHourWindow = AdminDashboardResponse.PeakHourWindow.builder()
+                    .startHour(bestStart)
+                    .endHour(bestStart + windowSize - 1)
+                    .windowSize(windowSize)
+                    .total(maxTotal)
+                    .build();
+        }
+
+        // ===== REVENUE BY STATION ANALYSIS =====
+        List<AdminDashboardResponse.StationRevenueAnalysis> revenueByStationAnalysis = revenueByStation.stream()
+                .map(sr -> {
+                    Integer stationId = sr.getStationId();
+                    String stationName = sr.getStationName();
+
+                    // Tính doanh thu trung bình mỗi ngày
+                    long dayCount = java.time.temporal.ChronoUnit.DAYS.between(fromDate, toDate) + 1;
+                    Double avgPerDay = sr.getTotalRevenue() / dayCount;
+
+                    // Doanh thu hôm nay
+                    LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+                    LocalDateTime todayEnd = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+                    Double todayRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, todayStart, todayEnd)
+                    ).orElse(0d);
+
+                    // Doanh thu tuần này
+                    LocalDateTime weekStart = LocalDate.now().minusDays(7).atStartOfDay();
+                    Double weekRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, weekStart, todayEnd)
+                    ).orElse(0d);
+
+                    // Doanh thu tháng này
+                    LocalDateTime monthStart = LocalDate.now().minusDays(30).atStartOfDay();
+                    Double monthRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, monthStart, todayEnd)
+                    ).orElse(0d);
+
+                    // Tính tỷ lệ tăng trưởng (so với tuần/tháng trước)
+                    // Đơn giản hóa: growth = 0 (có thể mở rộng sau)
+                    Double growthDay = 0.0;
+                    Double growthWeek = 0.0;
+                    Double growthMonth = 0.0;
+
+                    return AdminDashboardResponse.StationRevenueAnalysis.builder()
+                            .stationId(stationId)
+                            .stationName(stationName)
+                            .avgPerDay(avgPerDay)
+                            .todayRevenue(todayRevenue)
+                            .weekRevenue(weekRevenue)
+                            .monthRevenue(monthRevenue)
+                            .growthDay(growthDay)
+                            .growthWeek(growthWeek)
+                            .growthMonth(growthMonth)
+                            .build();
+                })
+                .toList();
+
         // ===== BUILD RESPONSE =====
         var kpi = AdminDashboardResponse.Kpi.builder()
                 .totalVehicles(totalVehicles)
@@ -148,6 +281,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .admins(admins)
                 .staffs(staffs)
                 .customers(customers)
+                .totalServiceCost(totalServiceCost)
+                .totalServices(totalServices)
                 .build();
 
         var serviceKpi = AdminDashboardResponse.ServiceKpi.builder()
@@ -159,8 +294,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         return AdminDashboardResponse.builder()
                 .kpi(kpi)
+                .vehiclesByStatus(vehiclesByStatus)
+                .vehiclesByStation(vehiclesByStation)
                 .revenueByDay(revenueByDay)
                 .revenueByStation(revenueByStation)
+                .revenueByStationAnalysis(revenueByStationAnalysis)
+                .orderByHour(orderByHour)
+                .peakHourWindow(peakHourWindow)
                 .avgRating(avgRating)
                 .ratingDistribution(ratingDistribution)
                 .servicesByDay(servicesByDay)

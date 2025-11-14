@@ -1,16 +1,21 @@
 package com.group6.Rental_Car.services.orderservice;
 
-import com.group6.Rental_Car.dtos.orderservice.OrderServiceRequest;
+import com.group6.Rental_Car.dtos.orderservice.OrderServiceCreateRequest;
 import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
 import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.*;
+import com.group6.Rental_Car.utils.JwtUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -25,68 +30,103 @@ public class OrderServiceServiceImpl implements OrderServiceService {
     private final UserRepository userRepository;
     private final RentalStationRepository stationRepository;
     private final ModelMapper modelMapper;
+    private final PaymentRepository paymentRepository;
 
+    // ===============================
+    //  TẠO DỊCH VỤ LIÊN QUAN ĐẾN ORDER
+    // ===============================
     @Override
-    public OrderServiceResponse createService(OrderServiceRequest request) {
+    @Transactional
+    public OrderServiceResponse createService(OrderServiceCreateRequest request) {
+        // 1⃣ Lấy đơn thuê
         RentalOrder order = rentalOrderRepository.findById(request.getOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe"));
+        //  Lấy xe
+        Vehicle vehicle = order.getDetails().stream()
+                .map(RentalOrderDetail::getVehicle)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe trong đơn"));
 
-        RentalOrderDetail detail = null;
-        if (request.getDetailId() != null) {
-            detail = rentalOrderDetailRepository.findById(request.getDetailId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chi tiết đơn thuê"));
+        //  Lấy trạm
+        RentalStation station = vehicle.getRentalStation();
+
+        //  Lấy nhân viên đăng nhập (nếu có)
+        User performedBy = null;
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof JwtUserDetails jwt) {
+            performedBy = userRepository.findById(jwt.getUserId()).orElse(null);
         }
 
-        User staff = null;
-        if (request.getPerformedById() != null) {
-            staff = userRepository.findById(request.getPerformedById())
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhân viên thực hiện"));
-        }
-
-        RentalStation station = null;
-        if (request.getStationId() != null) {
-            station = stationRepository.findById(request.getStationId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạm"));
-        }
-
+        //  1. LƯU VÀO BẢNG ORDERSERVICE (bảng chính để quản lý service)
         OrderService service = OrderService.builder()
                 .order(order)
                 .vehicle(vehicle)
-                .detail(detail)
-                .serviceType(request.getServiceType())
-                .description(request.getDescription())
-                .cost(request.getCost())
-                .performedBy(staff)
                 .station(station)
-                .occurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : java.time.LocalDateTime.now())
-                .resolvedAt(request.getResolvedAt())
-                .status(request.getStatus() != null ? request.getStatus() : "pending")
-                .note(request.getNote())
+                .performedBy(performedBy)
+                .serviceType(request.getServiceType().toUpperCase())
+                .description(Optional.ofNullable(request.getDescription())
+                        .orElse("Phí dịch vụ " + request.getServiceType()))
+                .cost(request.getCost())
+                .status("PENDING")
+                .occurredAt(LocalDateTime.now())
                 .build();
+        OrderService savedService = orderServiceRepository.save(service);
 
-        OrderService saved = orderServiceRepository.save(service);
-        return toResponse(saved);
+        //  2. LƯU VÀO BẢNG RENTAL_ORDER_DETAIL (để getDetailsByOrder và payment có thể lấy được)
+        RentalOrderDetail serviceDetail = RentalOrderDetail.builder()
+                .order(order)
+                .vehicle(vehicle)
+                .type("SERVICE_" + request.getServiceType().toUpperCase())
+                .startTime(LocalDateTime.now())
+                .endTime(LocalDateTime.now())
+                .price(request.getCost())
+                .status("PENDING")
+                .description(Optional.ofNullable(request.getDescription())
+                        .orElse("Phí dịch vụ " + request.getServiceType()))
+                .build();
+        rentalOrderDetailRepository.save(serviceDetail);
+
+        //  3. Cập nhật tổng tiền đơn thuê
+        order.setTotalPrice(order.getTotalPrice().add(request.getCost()));
+        rentalOrderRepository.save(order);
+
+        //  4. Tạo response từ OrderService (bảng chính)
+        OrderServiceResponse response = new OrderServiceResponse();
+        response.setServiceId(savedService.getServiceId());
+        response.setOrderId(order.getOrderId());
+        response.setDetailId(serviceDetail.getDetailId());
+        response.setVehicleId(vehicle.getVehicleId());
+        response.setServiceType(request.getServiceType());
+        response.setDescription(savedService.getDescription());
+        response.setCost(request.getCost());
+        response.setStatus("PENDING");
+        response.setOccurredAt(savedService.getOccurredAt());
+        response.setResolvedAt(savedService.getResolvedAt());
+        response.setStationName(station != null ? station.getName() : null);
+        response.setPerformedByName(performedBy != null ? performedBy.getFullName() : null);
+        response.setNote(null);
+
+        return response;
     }
 
     @Override
-    public OrderServiceResponse updateService(Long serviceId, OrderServiceRequest request) {
+    public OrderServiceResponse updateService(Long serviceId, OrderServiceCreateRequest request) {
         OrderService existing = orderServiceRepository.findById(serviceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dịch vụ với ID: " + serviceId));
 
         existing.setServiceType(request.getServiceType());
         existing.setDescription(request.getDescription());
         existing.setCost(request.getCost());
-        existing.setResolvedAt(request.getResolvedAt());
-        existing.setStatus(request.getStatus());
-        existing.setNote(request.getNote());
 
         OrderService updated = orderServiceRepository.save(existing);
         return toResponse(updated);
     }
 
+    // ===============================
+    // 🗑️ XÓA DỊCH VỤ
+    // ===============================
     @Override
     public void deleteService(Long serviceId) {
         if (!orderServiceRepository.existsById(serviceId)) {
@@ -95,6 +135,9 @@ public class OrderServiceServiceImpl implements OrderServiceService {
         orderServiceRepository.deleteById(serviceId);
     }
 
+    // ===============================
+    // 📜 LẤY DANH SÁCH DỊCH VỤ THEO ORDER
+    // ===============================
     @Override
     public List<OrderServiceResponse> getServicesByOrder(UUID orderId) {
         return orderServiceRepository.findByOrder_OrderId(orderId)
@@ -127,6 +170,9 @@ public class OrderServiceServiceImpl implements OrderServiceService {
                 .toList();
     }
 
+    // ===============================
+    // 🔁 HELPER
+    // ===============================
     private OrderServiceResponse toResponse(OrderService entity) {
         OrderServiceResponse dto = modelMapper.map(entity, OrderServiceResponse.class);
 

@@ -142,5 +142,10 @@
             }).collect(Collectors.toList());
         }
 
+        @Override
+        public StaffScheduleResponse getStaffById(Integer id) {
+            return null;
+        }
+
 
     }

@@ -84,4 +84,10 @@ public class RentalOrderDetailController {
         List<OrderDetailResponse> responseList = rentalOrderDetailService.getActiveDetailsByOrder(orderId);
         return ResponseEntity.ok(responseList);
     }
+    @GetMapping("/order/staff/{orderId}")
+    public ResponseEntity<List<OrderDetailResponse>> getOrderDetails(
+            @PathVariable UUID orderId
+    ) {
+        return ResponseEntity.ok(rentalOrderDetailService.getDetailsByOrder(orderId));
+    }
 }

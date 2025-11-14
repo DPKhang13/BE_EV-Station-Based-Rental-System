@@ -20,6 +20,24 @@ public class TransactionHistoryResponse {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 
+    // Thông tin khách hàng
+    private String customerName;
+    private String customerPhone;
+
+    // Thông tin xe
+    private Long vehicleId;
+    private String vehicleName;
+
+    // Thông tin trạm
+    private Integer stationId;
+    private String stationName;
+
+    // Thời gian thuê
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime rentalStartTime;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime rentalEndTime;
+
     public static TransactionHistoryResponse fromEntity(TransactionHistory entity) {
         return TransactionHistoryResponse.builder()
                 .transactionId(entity.getTransactionId())

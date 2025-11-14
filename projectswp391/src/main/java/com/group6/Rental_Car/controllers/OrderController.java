@@ -1,13 +1,11 @@
 package com.group6.Rental_Car.controllers;
 
-import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
-import com.group6.Rental_Car.dtos.order.OrderResponse;
-import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
-import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
+import com.group6.Rental_Car.dtos.order.*;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 import com.group6.Rental_Car.services.order.RentalOrderService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -50,6 +48,19 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{orderId}/change-vehicle")
+    public ResponseEntity<OrderResponse> changeVehicle(
+            @PathVariable UUID orderId,
+            @Valid @RequestBody ChangeVehicleRequest request
+    ) {
+        OrderResponse response = rentalOrderService.changeVehicle(
+                orderId,
+                request.getNewVehicleId(),
+                request.getNote()
+        );
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/delete/{orderId}")
     public ResponseEntity<String> delete(@PathVariable UUID orderId) {
         rentalOrderService.deleteOrder(orderId);
@@ -63,9 +74,11 @@ public class OrderController {
     }
 
     @PostMapping("/{orderId}/return")
-    public ResponseEntity<OrderResponse> confirmReturn(@PathVariable UUID orderId) {
+    public ResponseEntity<OrderResponse> confirmReturn(
+            @PathVariable UUID orderId,
+            @RequestBody(required = false) OrderReturnRequest request) {
 
-        OrderResponse response = rentalOrderService.confirmReturn(orderId, null);
+        OrderResponse response = rentalOrderService.confirmReturn(orderId, request);
         return ResponseEntity.ok(response);
     }
     @GetMapping("/{orderId}/preview-return")

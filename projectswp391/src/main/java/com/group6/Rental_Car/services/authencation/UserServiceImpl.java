@@ -257,4 +257,11 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public AccountDtoResponse getUserById(UUID userId) {
+        return userRepository.findById(userId)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy userId: " + userId));
+    }
+
 }

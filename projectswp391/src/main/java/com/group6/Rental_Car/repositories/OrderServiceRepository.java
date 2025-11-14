@@ -6,8 +6,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,7 +37,7 @@ public interface OrderServiceRepository extends JpaRepository<OrderService, Long
         FROM OrderService s
         WHERE s.occurredAt BETWEEN :from AND :to
     """)
-    Double totalCostBetween(@Param("from") Timestamp from, @Param("to") Timestamp to);
+    Double totalCostBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     //  Lấy tất cả dịch vụ phát sinh trong khoảng ngày (dùng cho dashboard)
     @Query("""
@@ -51,15 +51,15 @@ public interface OrderServiceRepository extends JpaRepository<OrderService, Long
     //  Lấy top 10 service gần nhất (cho recent list)
     List<OrderService> findTop10ByOrderByOccurredAtDesc();
     @Query(value = """
-    SELECT DATE_TRUNC('day', s.occurredAt)::date AS day,
+    SELECT DATE_TRUNC('day', s.occurred_at)::date AS day,
            COUNT(*) AS total
     FROM orderservice s
-    WHERE s.occurredAt BETWEEN :from AND :to
+    WHERE s.occurred_at BETWEEN :from AND :to
     GROUP BY day
     ORDER BY day
 """, nativeQuery = true)
-    List<Object[]> countByDay(@Param("from") java.sql.Timestamp from,
-                              @Param("to") java.sql.Timestamp to);
+    List<Object[]> countByDay(@Param("from") LocalDateTime from,
+                              @Param("to") LocalDateTime to);
 
 }
 
