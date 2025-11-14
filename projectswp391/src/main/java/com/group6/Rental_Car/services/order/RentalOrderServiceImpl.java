@@ -249,7 +249,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
-    public List<OrderResponse> findByCustomer_UserId(UUID customerId) {
+    public List<OrderResponse> findByCustomer_UserIdOrderByCreatedAtDesc(UUID customerId) {
         return rentalOrderRepository.findByCustomer_UserId(customerId).stream()
                 .map(order -> {
                     OrderResponse res = modelMapper.map(order, OrderResponse.class);
