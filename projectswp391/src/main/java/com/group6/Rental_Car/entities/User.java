@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -55,5 +56,6 @@ public class User {
 
     @OneToMany(mappedBy = "staff", fetch = FetchType.LAZY)
     private List<EmployeeSchedule> employeeSchedules;
+
 
 }

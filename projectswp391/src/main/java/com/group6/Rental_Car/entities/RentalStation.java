@@ -31,4 +31,5 @@ public class RentalStation {
 
     @OneToMany(mappedBy = "rentalStation", fetch = FetchType.LAZY)
     private List<User> users;
+
 }
