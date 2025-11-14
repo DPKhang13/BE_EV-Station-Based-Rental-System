@@ -366,9 +366,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .build();
         vehicleTimelineRepository.save(timeline);
 
-        // Tăng pickup_count cho staff hiện tại
-        JwtUserDetails currentStaff = currentUser();
-        incrementPickupCount(currentStaff.getUserId());
+        // Tăng pickup_count cho staff hiện tại (nếu có)
+        UUID staffId = getCurrentStaffId();
+        if (staffId != null) {
+            incrementPickupCount(staffId);
+        }
 
         return mapToResponse(order, mainDetail);
     }
@@ -431,7 +433,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         // Nếu KHÔNG có service nào → hoàn tất đơn luôn
         if (pendingServices.isEmpty()) {
-            vehicle.setStatus("AVAILABLE");
+            vehicle.setStatus("CHECKING");
             order.setStatus("COMPLETED");
 
             // Xóa timeline khi order hoàn thành (xe đã trả, không cần track nữa)
@@ -449,9 +451,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setTotalPrice(total);
         rentalOrderRepository.save(order);
 
-        // Tăng return_count cho staff hiện tại
-        JwtUserDetails currentStaff = currentUser();
-        incrementReturnCount(currentStaff.getUserId());
+        // Tăng return_count cho staff hiện tại (nếu có)
+        UUID staffId = getCurrentStaffId();
+        if (staffId != null) {
+            incrementReturnCount(staffId);
+        }
 
         return mapToResponse(order, mainDetail);
     }
@@ -630,6 +634,22 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return jwt;
     }
 
+    /**
+     * Lấy userId của staff hiện tại từ JWT token (nếu có)
+     * Return null nếu không có authentication
+     */
+    private UUID getCurrentStaffId() {
+        try {
+            var auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof JwtUserDetails jwt) {
+                return jwt.getUserId();
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Không thể lấy userId từ JWT: " + e.getMessage());
+        }
+        return null;
+    }
+
 
     private String getCurrentShiftTime() {
         int hour = LocalDateTime.now().getHour();
@@ -657,12 +677,37 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
             if (scheduleOpt.isPresent()) {
                 EmployeeSchedule schedule = scheduleOpt.get();
-                schedule.setPickupCount(schedule.getPickupCount() + 1);
+                int oldCount = schedule.getPickupCount();
+                schedule.setPickupCount(oldCount + 1);
                 employeeScheduleRepository.save(schedule);
+                System.out.println("✅ Đã cập nhật pickup_count: " + oldCount + " → " + (oldCount + 1) +
+                                   " cho staff " + staffId + " vào ca " + shiftTime);
+            } else {
+                // Nếu không tìm thấy schedule, tự động tạo mới
+                System.out.println("⚠️ Không tìm thấy schedule cho staff " + staffId +
+                                   " vào ngày " + today + " ca " + shiftTime);
+
+                // Lấy thông tin staff để lấy station
+                User staff = userRepository.findById(staffId).orElse(null);
+                if (staff != null && staff.getRentalStation() != null) {
+                    EmployeeSchedule newSchedule = EmployeeSchedule.builder()
+                            .staff(staff)
+                            .station(staff.getRentalStation())
+                            .shiftDate(today)
+                            .shiftTime(shiftTime)
+                            .pickupCount(1)
+                            .returnCount(0)
+                            .build();
+                    employeeScheduleRepository.save(newSchedule);
+                    System.out.println("✅ Đã tự động tạo schedule mới và cập nhật pickup_count = 1");
+                } else {
+                    System.err.println("❌ Không thể tạo schedule: Staff không có station");
+                }
             }
         } catch (Exception e) {
             // Log error nhưng không throw exception để không ảnh hưởng flow chính
-            System.err.println("Failed to increment pickup count: " + e.getMessage());
+            System.err.println("❌ Failed to increment pickup count: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -680,12 +725,37 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
             if (scheduleOpt.isPresent()) {
                 EmployeeSchedule schedule = scheduleOpt.get();
-                schedule.setReturnCount(schedule.getReturnCount() + 1);
+                int oldCount = schedule.getReturnCount();
+                schedule.setReturnCount(oldCount + 1);
                 employeeScheduleRepository.save(schedule);
+                System.out.println("✅ Đã cập nhật return_count: " + oldCount + " → " + (oldCount + 1) +
+                                   " cho staff " + staffId + " vào ca " + shiftTime);
+            } else {
+                // Nếu không tìm thấy schedule, tự động tạo mới
+                System.out.println("⚠️ Không tìm thấy schedule cho staff " + staffId +
+                                   " vào ngày " + today + " ca " + shiftTime);
+
+                // Lấy thông tin staff để lấy station
+                User staff = userRepository.findById(staffId).orElse(null);
+                if (staff != null && staff.getRentalStation() != null) {
+                    EmployeeSchedule newSchedule = EmployeeSchedule.builder()
+                            .staff(staff)
+                            .station(staff.getRentalStation())
+                            .shiftDate(today)
+                            .shiftTime(shiftTime)
+                            .pickupCount(0)
+                            .returnCount(1)
+                            .build();
+                    employeeScheduleRepository.save(newSchedule);
+                    System.out.println("✅ Đã tự động tạo schedule mới và cập nhật return_count = 1");
+                } else {
+                    System.err.println("❌ Không thể tạo schedule: Staff không có station");
+                }
             }
         } catch (Exception e) {
             // Log error nhưng không throw exception để không ảnh hưởng flow chính
-            System.err.println("Failed to increment return count: " + e.getMessage());
+            System.err.println("❌ Failed to increment return count: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
