@@ -288,9 +288,12 @@ public class VehicleServiceImpl implements VehicleService {
      * Xử lý timeline khi staff thay đổi status của xe
      */
     private void handleTimelineOnStatusChange(Vehicle vehicle, String oldStatus, String newStatus) {
-        // Nếu chuyển về AVAILABLE → xóa tất cả timeline
+        // Nếu chuyển về AVAILABLE → chỉ xóa timeline MAINTENANCE/CHECKING (giữ lại timeline booking)
         if ("AVAILABLE".equalsIgnoreCase(newStatus)) {
-            deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+            deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
+
+            // ✅ Kiểm tra xem xe có booking trong tương lai không
+            checkAndSetBookedStatus(vehicle);
         }
         // Nếu chuyển sang MAINTENANCE → tạo timeline MAINTENANCE
         else if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
@@ -303,14 +306,43 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     /**
-     * Xóa tất cả timeline của xe
+     * Kiểm tra và tự động set status BOOKED nếu xe có booking trong tương lai
      */
-    private void deleteAllTimelinesForVehicle(Long vehicleId) {
+    private void checkAndSetBookedStatus(Vehicle vehicle) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Tìm timeline BOOKED trong tương lai
+        List<VehicleTimeline> futureBookings = vehicleTimelineRepository.findByVehicle_VehicleId(vehicle.getVehicleId())
+                .stream()
+                .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus())
+                        && (t.getStartTime() == null || t.getStartTime().isAfter(now) || t.getStartTime().isEqual(now))
+                        && ("ORDER_RENTAL".equals(t.getSourceType()) || "ORDER_PICKUP".equals(t.getSourceType())))
+                .collect(Collectors.toList());
+
+        if (!futureBookings.isEmpty()) {
+            // Có booking trong tương lai → set xe thành BOOKED
+            vehicle.setStatus("BOOKED");
+            vehicleRepository.save(vehicle);
+            System.out.println("✅ Xe " + vehicle.getVehicleId() + " có booking trong tương lai → Tự động set status = BOOKED");
+        }
+    }
+
+    /**
+     * Xóa chỉ timeline MAINTENANCE và CHECKING (giữ lại timeline booking)
+     */
+    private void deleteMaintenanceAndCheckingTimelines(Long vehicleId) {
         if (vehicleId == null) return;
 
         List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
-        if (!timelines.isEmpty()) {
-            vehicleTimelineRepository.deleteAll(timelines);
+
+        // Chỉ xóa timeline có sourceType là VEHICLE_MAINTENANCE hoặc VEHICLE_CHECKING
+        List<VehicleTimeline> toDelete = timelines.stream()
+                .filter(t -> "VEHICLE_MAINTENANCE".equals(t.getSourceType())
+                        || "VEHICLE_CHECKING".equals(t.getSourceType()))
+                .collect(Collectors.toList());
+
+        if (!toDelete.isEmpty()) {
+            vehicleTimelineRepository.deleteAll(toDelete);
         }
     }
 
@@ -318,8 +350,8 @@ public class VehicleServiceImpl implements VehicleService {
      * Tạo timeline MAINTENANCE
      */
     private void createMaintenanceTimeline(Vehicle vehicle, String note, LocalDateTime endTime) {
-        // Xóa timeline cũ trước
-        deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+        // Xóa chỉ timeline MAINTENANCE/CHECKING cũ (giữ lại booking)
+        deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
 
         LocalDateTime now = LocalDateTime.now();
         VehicleTimeline timeline = VehicleTimeline.builder()
@@ -330,14 +362,16 @@ public class VehicleServiceImpl implements VehicleService {
                 .status("MAINTENANCE")
                 .sourceType("VEHICLE_MAINTENANCE")
                 .note(note != null ? note : "Xe đang bảo trì")
-                .updatedAt(now)
                 .build();
         vehicleTimelineRepository.save(timeline);
     }
 
+    /**
+     * Tạo timeline CHECKING
+     */
     private void createCheckingTimeline(Vehicle vehicle, String note) {
-        // Xóa timeline cũ trước
-        deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+        // Xóa chỉ timeline MAINTENANCE/CHECKING cũ (giữ lại booking)
+        deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
 
         LocalDateTime now = LocalDateTime.now();
         VehicleTimeline timeline = VehicleTimeline.builder()
