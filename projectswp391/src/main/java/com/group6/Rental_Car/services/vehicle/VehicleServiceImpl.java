@@ -1,15 +1,18 @@
 package com.group6.Rental_Car.services.vehicle;
 
 import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
+import com.group6.Rental_Car.dtos.vehicle.VehicleDetailResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
+import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.entities.VehicleModel;
 import com.group6.Rental_Car.entities.VehicleTimeline;
 import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ConflictException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.RentalOrderDetailRepository;
 import com.group6.Rental_Car.repositories.RentalStationRepository;
 import com.group6.Rental_Car.repositories.VehicleModelRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -34,6 +37,7 @@ public class VehicleServiceImpl implements VehicleService {
     private final VehicleRepository vehicleRepository;
     private final RentalStationRepository rentalStationRepository;
     private final VehicleTimelineRepository vehicleTimelineRepository;
+    private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
     private final VehicleModelRepository vehicleModelRepository;
@@ -167,6 +171,87 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    public List<VehicleResponse> getVehiclesByStation(Integer stationId) {
+        // Validate stationId
+        if (stationId == null || stationId <= 0) {
+            throw new BadRequestException("stationId phải là số dương");
+        }
+
+        // Kiểm tra station có tồn tại không
+        rentalStationRepository.findById(stationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental Station không tồn tại: " + stationId));
+
+        // Lấy tất cả xe theo station, sắp xếp theo biển số
+        return vehicleRepository.findByRentalStation_StationIdOrderByPlateNumberAsc(stationId).stream()
+                .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public VehicleDetailResponse getVehicleDetailById(Long vehicleId) {
+        // Lấy xe
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle không tồn tại: " + vehicleId));
+
+        // Lấy model của xe
+        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+
+        // Tạo response cơ bản
+        VehicleDetailResponse response = VehicleDetailResponse.builder()
+                .vehicleId(vehicle.getVehicleId())
+                .plateNumber(vehicle.getPlateNumber())
+                .status(vehicle.getStatus())
+                .vehicleName(vehicle.getVehicleName())
+                .description(vehicle.getDescription())
+                .hasBooking(false)
+                .bookingNote("Chưa có đơn thuê")
+                .build();
+
+        // Thêm thông tin station
+        if (vehicle.getRentalStation() != null) {
+            response.setStationId(vehicle.getRentalStation().getStationId());
+            response.setStationName(vehicle.getRentalStation().getName());
+        }
+
+        // Thêm thông tin model
+        if (model != null) {
+            response.setBrand(model.getBrand());
+            response.setColor(model.getColor());
+            response.setTransmission(model.getTransmission());
+            response.setSeatCount(model.getSeatCount());
+            response.setYear(model.getYear());
+            response.setVariant(model.getVariant());
+            response.setBatteryStatus(model.getBatteryStatus());
+            response.setBatteryCapacity(model.getBatteryCapacity());
+            response.setRangeKm(model.getRangeKm());
+        }
+
+        // Tìm đơn thuê đang diễn ra (status = RENTAL)
+        List<RentalOrderDetail> activeRentals = rentalOrderDetailRepository
+                .findByVehicle_VehicleIdAndStatusIn(vehicleId, List.of("RENTAL", "PENDING"));
+
+        if (!activeRentals.isEmpty()) {
+            // Lấy chi tiết đơn thuê gần đây nhất
+            RentalOrderDetail activeDetail = activeRentals.getFirst();
+
+            if (activeDetail.getOrder() != null && activeDetail.getOrder().getCustomer() != null) {
+                response.setHasBooking(true);
+                response.setCustomerName(activeDetail.getOrder().getCustomer().getFullName());
+                response.setCustomerPhone(activeDetail.getOrder().getCustomer().getPhone());
+                response.setCustomerEmail(activeDetail.getOrder().getCustomer().getEmail());
+                response.setRentalStartDate(activeDetail.getStartTime());
+                response.setRentalEndDate(activeDetail.getEndTime());
+                response.setRentalOrderStatus(activeDetail.getOrder().getStatus());
+                response.setBookingNote("Khách: " + activeDetail.getOrder().getCustomer().getFullName() +
+                        " | Từ: " + activeDetail.getStartTime() +
+                        " | Đến: " + activeDetail.getEndTime());
+            }
+        }
+
+        return response;
+    }
+
+    @Override
     public VehicleResponse updateStatusVehicle(Long vehicleId, VehicleUpdateStatusRequest req) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
@@ -203,9 +288,12 @@ public class VehicleServiceImpl implements VehicleService {
      * Xử lý timeline khi staff thay đổi status của xe
      */
     private void handleTimelineOnStatusChange(Vehicle vehicle, String oldStatus, String newStatus) {
-        // Nếu chuyển về AVAILABLE → xóa tất cả timeline
+        // Nếu chuyển về AVAILABLE → chỉ xóa timeline MAINTENANCE/CHECKING (giữ lại timeline booking)
         if ("AVAILABLE".equalsIgnoreCase(newStatus)) {
-            deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+            deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
+
+            //  Kiểm tra xem xe có booking trong tương lai không
+            checkAndSetBookedStatus(vehicle);
         }
         // Nếu chuyển sang MAINTENANCE → tạo timeline MAINTENANCE
         else if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
@@ -218,14 +306,43 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     /**
-     * Xóa tất cả timeline của xe
+     * Kiểm tra và tự động set status BOOKED nếu xe có booking trong tương lai
      */
-    private void deleteAllTimelinesForVehicle(Long vehicleId) {
+    private void checkAndSetBookedStatus(Vehicle vehicle) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Tìm timeline BOOKED trong tương lai
+        List<VehicleTimeline> futureBookings = vehicleTimelineRepository.findByVehicle_VehicleId(vehicle.getVehicleId())
+                .stream()
+                .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus())
+                        && (t.getStartTime() == null || t.getStartTime().isAfter(now) || t.getStartTime().isEqual(now))
+                        && ("ORDER_RENTAL".equals(t.getSourceType()) || "ORDER_PICKUP".equals(t.getSourceType())))
+                .collect(Collectors.toList());
+
+        if (!futureBookings.isEmpty()) {
+            // Có booking trong tương lai → set xe thành BOOKED
+            vehicle.setStatus("BOOKED");
+            vehicleRepository.save(vehicle);
+            System.out.println("✅ Xe " + vehicle.getVehicleId() + " có booking trong tương lai → Tự động set status = BOOKED");
+        }
+    }
+
+    /**
+     * Xóa chỉ timeline MAINTENANCE và CHECKING (giữ lại timeline booking)
+     */
+    private void deleteMaintenanceAndCheckingTimelines(Long vehicleId) {
         if (vehicleId == null) return;
 
         List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
-        if (!timelines.isEmpty()) {
-            vehicleTimelineRepository.deleteAll(timelines);
+
+        // Chỉ xóa timeline có sourceType là VEHICLE_MAINTENANCE hoặc VEHICLE_CHECKING
+        List<VehicleTimeline> toDelete = timelines.stream()
+                .filter(t -> "VEHICLE_MAINTENANCE".equals(t.getSourceType())
+                        || "VEHICLE_CHECKING".equals(t.getSourceType()))
+                .collect(Collectors.toList());
+
+        if (!toDelete.isEmpty()) {
+            vehicleTimelineRepository.deleteAll(toDelete);
         }
     }
 
@@ -233,8 +350,8 @@ public class VehicleServiceImpl implements VehicleService {
      * Tạo timeline MAINTENANCE
      */
     private void createMaintenanceTimeline(Vehicle vehicle, String note, LocalDateTime endTime) {
-        // Xóa timeline cũ trước
-        deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+        // Xóa chỉ timeline MAINTENANCE/CHECKING cũ (giữ lại booking)
+        deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
 
         LocalDateTime now = LocalDateTime.now();
         VehicleTimeline timeline = VehicleTimeline.builder()
@@ -245,14 +362,16 @@ public class VehicleServiceImpl implements VehicleService {
                 .status("MAINTENANCE")
                 .sourceType("VEHICLE_MAINTENANCE")
                 .note(note != null ? note : "Xe đang bảo trì")
-                .updatedAt(now)
                 .build();
         vehicleTimelineRepository.save(timeline);
     }
 
+    /**
+     * Tạo timeline CHECKING
+     */
     private void createCheckingTimeline(Vehicle vehicle, String note) {
-        // Xóa timeline cũ trước
-        deleteAllTimelinesForVehicle(vehicle.getVehicleId());
+        // Xóa chỉ timeline MAINTENANCE/CHECKING cũ (giữ lại booking)
+        deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
 
         LocalDateTime now = LocalDateTime.now();
         VehicleTimeline timeline = VehicleTimeline.builder()

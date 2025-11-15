@@ -2,10 +2,12 @@ package com.group6.Rental_Car.services.orderdetails;
 
 import com.group6.Rental_Car.dtos.orderdetail.OrderDetailCreateRequest;
 import com.group6.Rental_Car.dtos.orderdetail.OrderDetailResponse;
+import com.group6.Rental_Car.entities.Payment;
 import com.group6.Rental_Car.entities.RentalOrder;
 import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
+import com.group6.Rental_Car.repositories.PaymentRepository;
 import com.group6.Rental_Car.repositories.RentalOrderDetailRepository;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
         private final RentalOrderRepository rentalOrderRepository;
         private final VehicleRepository vehicleRepository;
         private final ModelMapper modelMapper;
+        private final PaymentRepository paymentRepository;
 
         // =====================================================
         // CREATE DETAIL (Admin/Staff tạo thủ công)
@@ -127,7 +130,13 @@ import java.util.stream.Collectors;
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
             String status = order.getStatus().toUpperCase();
-
+            String methodPayment = paymentRepository
+                    .findByRentalOrder_OrderId(order.getOrderId()).stream()
+                    .sorted(Comparator.comparing(Payment::getPaymentId))
+                    .map(Payment::getMethod)
+                    .map(mth -> mth.equalsIgnoreCase("CASH") ? "CASH" : "captureWallet")
+                    .findFirst()
+                    .orElse("captureWallet");
             // Show RENTAL khi: PENDING (chưa thanh toán), CREATED, BOOKED
             boolean showOnlyRental =
                     status.equals("PENDING") ||
@@ -140,15 +149,14 @@ import java.util.stream.Collectors;
                     .filter(d -> {
                         String type = safeType(d);
 
-                        // Case 1: chỉ hiển thị RENTAL
-                        if (showOnlyRental) {
-                            return type.equals("RENTAL");
-                        }
-
-                        // Case 2: ẩn RENTAL khi đã có thanh toán
+                        if (showOnlyRental) return type.equals("RENTAL");
                         return !type.equals("RENTAL");
                     })
-                    .map(this::toResponse)
+                    .map(d -> {
+                        OrderDetailResponse dto = toResponse(d);  // keep original
+                        dto.setMethodPayment(methodPayment);       // 🔥 add here
+                        return dto;
+                    })
                     .collect(Collectors.toList());
 
             // =====================================================

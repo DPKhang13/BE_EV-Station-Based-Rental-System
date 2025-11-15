@@ -2,6 +2,7 @@ package com.group6.Rental_Car.dtos.vehicle;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -10,7 +11,9 @@ import java.time.LocalDateTime;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class VehicleResponse {
+@Builder
+public class VehicleDetailResponse {
+    // ===== Thông tin xe =====
     private Long vehicleId;
     private Integer stationId;
     private String stationName;
@@ -29,5 +32,17 @@ public class VehicleResponse {
     private String batteryStatus;
     private String batteryCapacity;
     private Integer rangeKm;
-    private Integer pricingRuleId;
+
+    // ===== Thông tin đơn thuê (nếu có) =====
+    private boolean hasBooking;  // true nếu có đơn thuê đang diễn ra
+    private String customerName;
+    private String customerPhone;
+    private String customerEmail;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime rentalStartDate;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime rentalEndDate;
+    private String rentalOrderStatus;
+    private String bookingNote; // "Chưa có đơn thuê" hoặc thông tin đơn thuê
 }
+

@@ -51,4 +51,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 
     // Đếm xe theo station và status
     long countByRentalStation_StationIdAndStatus(Integer stationId, String status);
+
+    // Lấy tất cả xe theo stationId (bao gồm MAINTENANCE), sắp xếp theo biển số
+    List<Vehicle> findByRentalStation_StationIdOrderByPlateNumberAsc(Integer stationId);
 }
