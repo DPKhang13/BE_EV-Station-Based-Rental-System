@@ -902,4 +902,29 @@ public class PaymentServiceImpl implements PaymentService {
 
         log.info("✅ CASH payment approved successfully for orderId={}", orderId);
     }
+
+    @Override
+    public List<PaymentResponse> getPaymentsByOrderId(UUID orderId) {
+        log.info("📋 Getting payments for order: {}", orderId);
+        
+        // Verify order exists
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // Get all payments for this order
+        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(orderId);
+        
+        // Convert to PaymentResponse list
+        return payments.stream()
+                .map(payment -> PaymentResponse.builder()
+                        .paymentId(payment.getPaymentId())
+                        .orderId(order.getOrderId())
+                        .amount(payment.getAmount())
+                        .remainingAmount(payment.getRemainingAmount())
+                        .paymentType(payment.getPaymentType())
+                        .method(payment.getMethod())
+                        .status(payment.getStatus())
+                        .build())
+                .toList();
+    }
 }
