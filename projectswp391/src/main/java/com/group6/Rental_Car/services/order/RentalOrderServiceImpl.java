@@ -672,6 +672,85 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 })
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<OrderDetailCompactResponse> getCompactDetailsByVehicle(Long vehicleId) {
+
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe"));
+
+        return rentalOrderRepository.findOrdersByVehicleId(vehicleId)
+                .stream()
+                .map(order -> {
+
+                    OrderDetailCompactResponse dto = new OrderDetailCompactResponse();
+
+                    dto.setOrderId(order.getOrderId());
+                    dto.setPrice(order.getTotalPrice());
+                    dto.setStatus(order.getStatus());
+                    dto.setCreatedAt(order.getCreatedAt());
+
+                    // customer
+                    User customer = order.getCustomer();
+                    dto.setCustomerName(customer.getFullName());
+                    dto.setCustomerPhone(customer.getPhone());
+
+                    // station
+                    if (vehicle.getRentalStation() != null) {
+                        dto.setStationName(vehicle.getRentalStation().getName());
+                    }
+
+                    return dto;
+                })
+                .toList();
+    }
+
+    @Override
+    public OrderDetailCompactResponse updateCompactOrder(Long vehicleId, UUID orderId, CompactOrderUpdateRequest req) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // Ensure vehicle match
+        RentalOrderDetail detail = rentalOrderDetailRepository
+                .findByOrder_OrderId(orderId)
+                .stream()
+                .filter(d -> d.getVehicle().getVehicleId().equals(vehicleId))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException("Order does not belong to this vehicle"));
+
+        // Update fields
+        if (req.getStatus() != null) {
+            order.setStatus(req.getStatus());
+        }
+
+        if (req.getPrice() != null) {
+            detail.setPrice(req.getPrice());
+        }
+
+        if (req.getStationName() != null) {
+            Vehicle v = detail.getVehicle();
+            if (v.getRentalStation() != null) {
+                v.getRentalStation().setName(req.getStationName());
+            }
+        }
+
+        rentalOrderRepository.save(order);
+        rentalOrderDetailRepository.save(detail);
+
+        // Return updated compact
+        OrderDetailCompactResponse res = new OrderDetailCompactResponse();
+        res.setOrderId(orderId);
+        res.setPrice(detail.getPrice());
+        res.setStatus(order.getStatus());
+        res.setCreatedAt(order.getCreatedAt());
+        res.setCustomerName(order.getCustomer().getFullName());
+        res.setCustomerPhone(order.getCustomer().getPhone());
+        res.setStationName(detail.getVehicle().getRentalStation().getName());
+
+        return res;
+    }
+
+
     // ========================
     //  PRIVATE HELPERS
     // ========================

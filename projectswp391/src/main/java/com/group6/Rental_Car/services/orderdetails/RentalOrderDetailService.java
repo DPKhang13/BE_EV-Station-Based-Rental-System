@@ -22,5 +22,4 @@ public interface RentalOrderDetailService {
 
     List<OrderDetailResponse> getActiveDetailsByOrder(UUID orderId);
     List<OrderDetailResponse> getDetailsByOrderStaff(UUID orderId);
-
 }
