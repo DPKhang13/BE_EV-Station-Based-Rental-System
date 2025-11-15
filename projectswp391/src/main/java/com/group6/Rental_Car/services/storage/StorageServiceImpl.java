@@ -41,7 +41,6 @@ public class StorageServiceImpl implements StorageService {
                         .key(key)
                         .contentType(contentType)
                         .contentLength(file.getSize())
-                        // .acl(ObjectCannedACL.PUBLIC_READ) // thử bỏ nếu Long Vân không bật ACL
                         .build(),
                 RequestBody.fromInputStream(file.getInputStream(), file.getSize())
         );
