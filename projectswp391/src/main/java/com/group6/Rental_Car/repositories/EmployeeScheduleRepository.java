@@ -29,6 +29,6 @@ public interface EmployeeScheduleRepository extends JpaRepository<EmployeeSchedu
     // Có phân trang (tùy service kết hợp điều kiện lọc)
     Page<EmployeeSchedule> findAll(Pageable pageable);
 
-
+    void deleteByStaff_UserId(UUID userId);
     Optional<EmployeeSchedule> findByScheduleId(Integer scheduleId);
 }

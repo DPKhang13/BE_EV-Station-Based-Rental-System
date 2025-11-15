@@ -4,6 +4,9 @@ import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
+import com.group6.Rental_Car.dtos.stafflist.StaffCreateRequest;
+
+import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.UserStatus;
@@ -31,6 +34,12 @@ public interface UserService  {
      public List<UserVerificationResponse> getPendingVerificationUsers();
      public List<AccountDtoResponse> getAllCustomer();
      public AccountDtoResponse getUserById(UUID userId);
+
+    User createStaff(StaffCreateRequest request);
+
+    StaffResponse updateStaffByEmail(String email,
+                                     com.group6.Rental_Car.dtos.staffList.StaffUpdateRequest request);
+    void deleteByEmail(String email);
 
 
 }

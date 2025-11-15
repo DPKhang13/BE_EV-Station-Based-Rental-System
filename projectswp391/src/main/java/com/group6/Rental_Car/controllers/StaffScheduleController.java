@@ -1,9 +1,11 @@
 package com.group6.Rental_Car.controllers;
 
+import com.group6.Rental_Car.dtos.stafflist.StaffCreateRequest;
 import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleCreateRequest;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleResponse;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleUpdateRequest;
+import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.services.staffschedule.StaffScheduleService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -62,4 +64,24 @@ public class    StaffScheduleController {
         staffScheduleService.toggleStaffStatus(staffId);
         return ResponseEntity.ok("Staff status updated");
     }
+
+    @PostMapping("/createStaff")
+    public ResponseEntity<?> createStaff(@RequestBody @Valid StaffCreateRequest request) {
+        User user = userService.createStaff(request);
+        return ResponseEntity.ok("Tạo staff thành công với id: " + user.getUserId());
+    }
+
+    @PutMapping("/staff/update/{email}")
+    public ResponseEntity<?> updateStaff(@PathVariable String email,
+                                         @RequestBody com.group6.Rental_Car.dtos.staffList.StaffUpdateRequest request) {
+        return ResponseEntity.ok(userService.updateStaffByEmail(email, request));
+    }
+
+    @DeleteMapping("/deleteUser/by-email")
+    public ResponseEntity<?> deleteUserByEmail(@RequestParam String email) {
+
+        userService.deleteByEmail(email);
+        return ResponseEntity.ok("User deleted successfully");
+    }
+
 }

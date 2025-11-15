@@ -111,6 +111,7 @@
             dto.setShiftTime(e.getShiftTime());
             return dto;
         }
+
         @Override
         public List<StaffResponse> getStaffList() {
 
@@ -131,16 +132,17 @@
                         .mapToLong(EmployeeSchedule::getReturnCount)
                         .sum();
 
-                return new StaffResponse(
-                        u.getUserId().toString(),
-                        u.getFullName(),
-                        u.getEmail(),
-                        u.getRole().name(),
-                        u.getRentalStation() != null ? u.getRentalStation().getName() : null,
-                        pickupCount,
-                        returnCount,
-                        u.getStatus().toString()
-                );
+                return StaffResponse.builder()
+                        .staffId(u.getUserId().toString())
+                        .staffName(u.getFullName())
+                        .staffEmail(u.getEmail())
+                        .staffPhone(u.getPhone())
+                        .role(u.getRole().name())
+                        .stationName(u.getRentalStation() != null ? u.getRentalStation().getName() : null)
+                        .pickupCount(pickupCount)
+                        .returnCount(returnCount)
+                        .status(u.getStatus().toString())
+                        .build();
             }).collect(Collectors.toList());
         }
 
