@@ -1,6 +1,7 @@
 package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.transactionhistory.TransactionHistoryResponse;
+import com.group6.Rental_Car.dtos.transactionhistory.TransactionResponse;
 import com.group6.Rental_Car.services.transactionhistory.TransactionHistoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -29,11 +30,11 @@ public class TransactionHistoryController {
         return transactionHistoryService.getTransactionsByUserId(userId);
     }
     @GetMapping("/user/{phone}")
-    public ResponseEntity<List<TransactionHistoryResponse>> getAllTransactionsByPhone(@PathVariable String phone) {
+    public ResponseEntity<List<TransactionResponse>> getAllTransactionsByPhone(@PathVariable String phone) {
         return ResponseEntity.ok(transactionHistoryService.getAllTransactions(phone));
     }
     @GetMapping("/all")
-    public ResponseEntity<List<TransactionHistoryResponse>> getAllTransactionsSorted() {
+    public ResponseEntity<List<TransactionResponse>> getAllTransactionsSorted() {
         return ResponseEntity.ok(transactionHistoryService.getAllTransactionCreatedAtDesc());
     }
 }
