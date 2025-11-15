@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.controllers;
 
+import com.group6.Rental_Car.dtos.pricingrule.PricingRuleCreateRequest;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
 import com.group6.Rental_Car.services.pricingrule.PricingRuleService;
@@ -33,5 +34,25 @@ public class PricingRuleController {
     ) {
         PricingRuleResponse updated = pricingRuleService.updatePricingRule(seatCount, variant, request);
         return ResponseEntity.ok(updated);
+    }
+
+    @GetMapping("/getById/{id}")
+    public ResponseEntity<PricingRuleResponse> getPricingRuleById(@PathVariable Integer id) {
+        return ResponseEntity.ok(pricingRuleService.getPricingRuleById(id));
+    }
+
+    @PostMapping("/create")
+    public ResponseEntity<PricingRuleResponse> createPricingRule(
+            @Valid @RequestBody PricingRuleCreateRequest request
+    ){
+        return ResponseEntity.ok(pricingRuleService.createPricingRule(request));
+    }
+
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<PricingRuleResponse> deletePricingRule(
+            @PathVariable Integer id
+    ){
+        pricingRuleService.deletePricingRule(id);
+        return ResponseEntity.noContent().build();
     }
 }

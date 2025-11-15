@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.services.pricingrule;
 
+import com.group6.Rental_Car.dtos.pricingrule.PricingRuleCreateRequest;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
 import com.group6.Rental_Car.entities.Coupon;
@@ -17,6 +18,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.modelmapper.ModelMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -116,6 +118,39 @@ public class PricingRuleServiceImpl implements PricingRuleService {
 
         PricingRule updated = pricingRuleRepository.save(rule);
         return modelMapper.map(updated, PricingRuleResponse.class);
+    }
+
+    @Override
+    public PricingRuleResponse createPricingRule(PricingRuleCreateRequest request) {
+        pricingRuleRepository.findBySeatCountAndVariantIgnoreCase(request.getSeatCount(), request.getVariant())
+                .ifPresent(pricingRule -> {
+                    throw new BadRequestException("Quy tắc giá đã tồn tại cho seatCount="
+                            + request.getSeatCount() + " và variant=" + request.getVariant());
+                });
+        PricingRule rule = PricingRule.builder()
+                .pricingRuleId(request.getPricingRuleId())
+                .seatCount(request.getSeatCount())
+                .variant(request.getVariant())
+                .dailyPrice(request.getDailyPrice())
+                .holidayPrice(request.getHolidayPrice())
+                .lateFeePerDay(request.getLateFreePerDayPrice())
+                .build();
+        PricingRule saved = pricingRuleRepository.save(rule);
+        return modelMapper.map(saved, PricingRuleResponse.class);
+    }
+
+    @Override
+    public void deletePricingRule(Integer pricingRuleId) {
+        PricingRule rule = pricingRuleRepository.findById(pricingRuleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy pricing rule ID = " + pricingRuleId));
+        pricingRuleRepository.delete(rule);
+    }
+
+    @Override
+    public PricingRuleResponse getPricingRuleById(Integer pricingRuleId) {
+        PricingRule rule = pricingRuleRepository.findById(pricingRuleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy pricing rule ID = " + pricingRuleId));
+        return modelMapper.map(rule, PricingRuleResponse.class);
     }
 
     private void validateCoupon(Coupon coupon) {
