@@ -4,6 +4,7 @@ import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleCreateRequest;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleResponse;
 import com.group6.Rental_Car.dtos.staffschedule.StaffScheduleUpdateRequest;
+import com.group6.Rental_Car.services.authencation.UserService;
 import com.group6.Rental_Car.services.staffschedule.StaffScheduleService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class    StaffScheduleController {
 
     private final StaffScheduleService staffScheduleService;
+    private final UserService userService;
 
     @PostMapping("/create")
     public ResponseEntity<StaffScheduleResponse> create(@Valid @RequestBody StaffScheduleCreateRequest req) {
@@ -53,5 +55,11 @@ public class    StaffScheduleController {
     @GetMapping("getlist/staff")
     public ResponseEntity<List<StaffResponse>> getStaffList(){
         return ResponseEntity.ok(staffScheduleService.getStaffList());
+    }
+
+    @PutMapping("/staff/{staffId}/toggle")
+    public ResponseEntity<String> toggleStaffStatus(@PathVariable UUID staffId) {
+        staffScheduleService.toggleStaffStatus(staffId);
+        return ResponseEntity.ok("Staff status updated");
     }
 }

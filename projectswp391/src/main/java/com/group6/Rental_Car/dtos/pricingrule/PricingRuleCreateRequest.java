@@ -16,8 +16,6 @@ import java.math.BigDecimal;
 public class PricingRuleCreateRequest {
 
     @NotNull
-    private Integer pricingRuleId;
-    @NotNull
     private Integer seatCount;
 
     @NotBlank

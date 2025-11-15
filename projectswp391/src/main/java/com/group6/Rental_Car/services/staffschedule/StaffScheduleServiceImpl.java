@@ -8,6 +8,8 @@
     import com.group6.Rental_Car.entities.RentalStation;
     import com.group6.Rental_Car.entities.User;
     import com.group6.Rental_Car.enums.Role;
+    import com.group6.Rental_Car.enums.UserStatus;
+    import com.group6.Rental_Car.exceptions.BadRequestException;
     import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
     import com.group6.Rental_Car.repositories.RentalStationRepository;
     import com.group6.Rental_Car.repositories.UserRepository;
@@ -145,6 +147,24 @@
         @Override
         public StaffScheduleResponse getStaffById(Integer id) {
             return null;
+        }
+
+        @Override
+        public void toggleStaffStatus(UUID staffId) {
+
+            User user = userRepository.findById(staffId)
+                    .orElseThrow(() -> new RuntimeException("Staff not found"));
+
+            if (user.getRole() != Role.staff) {
+                throw new BadRequestException("User này không phải STAFF");
+            }
+
+            user.setStatus(
+                    user.getStatus() == UserStatus.ACTIVE
+                            ? UserStatus.INACTIVE
+                            : UserStatus.ACTIVE
+            );
+            userRepository.save(user);
         }
 
 

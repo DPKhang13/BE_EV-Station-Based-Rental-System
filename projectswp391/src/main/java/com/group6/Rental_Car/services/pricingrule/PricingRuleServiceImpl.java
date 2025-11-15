@@ -128,12 +128,15 @@ public class PricingRuleServiceImpl implements PricingRuleService {
                             + request.getSeatCount() + " và variant=" + request.getVariant());
                 });
         PricingRule rule = PricingRule.builder()
-                .pricingRuleId(request.getPricingRuleId())
                 .seatCount(request.getSeatCount())
                 .variant(request.getVariant())
                 .dailyPrice(request.getDailyPrice())
                 .holidayPrice(request.getHolidayPrice())
-                .lateFeePerDay(request.getLateFreePerDayPrice())
+                .lateFeePerDay(
+                        request.getLateFreePerDayPrice() == null
+                                ? BigDecimal.ZERO
+                                : request.getLateFreePerDayPrice()
+                )
                 .build();
         PricingRule saved = pricingRuleRepository.save(rule);
         return modelMapper.map(saved, PricingRuleResponse.class);
