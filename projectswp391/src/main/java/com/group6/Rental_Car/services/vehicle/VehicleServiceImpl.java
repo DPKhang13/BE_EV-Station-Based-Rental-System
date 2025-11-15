@@ -292,7 +292,7 @@ public class VehicleServiceImpl implements VehicleService {
         if ("AVAILABLE".equalsIgnoreCase(newStatus)) {
             deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
 
-            // ✅ Kiểm tra xem xe có booking trong tương lai không
+            //  Kiểm tra xem xe có booking trong tương lai không
             checkAndSetBookedStatus(vehicle);
         }
         // Nếu chuyển sang MAINTENANCE → tạo timeline MAINTENANCE

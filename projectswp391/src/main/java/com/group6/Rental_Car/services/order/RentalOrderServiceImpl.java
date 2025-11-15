@@ -41,6 +41,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final VehicleTimelineRepository vehicleTimelineRepository;
     private final EmployeeScheduleRepository employeeScheduleRepository;
     private final PhotoRepository photoRepository;
+    private final PaymentRepository paymentRepository;
     @Override
     @Transactional
     public OrderResponse createOrder(OrderCreateRequest request) {
@@ -57,10 +58,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
-        // Cho phép multiple bookings - không cần kiểm tra status, chỉ kiểm tra overlap
-        // if (!"AVAILABLE".equalsIgnoreCase(vehicle.getStatus())) {
-        //     throw new BadRequestException("Xe hiện không sẵn sàng để thuê (" + vehicle.getStatus() + ")");
-        // }
 
         LocalDateTime start = request.getStartTime();
         LocalDateTime end = request.getEndTime();
@@ -73,7 +70,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Xe đã được đặt trong khoảng thời gian này...");
         }
 
-        System.out.println("✅ [createOrder] Xe " + vehicle.getVehicleId() + " có thể đặt từ " + start + " đến " + end);
+        System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " có thể đặt từ " + start + " đến " + end);
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
 
@@ -124,9 +121,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (existingBookings.isEmpty()) {
             vehicle.setStatus("BOOKED");
             vehicleRepository.save(vehicle);
-            System.out.println("✅ [createOrder] Lần đầu tiên đặt xe " + vehicle.getVehicleId() + " → Set status = BOOKED");
+            System.out.println(" [createOrder] Lần đầu tiên đặt xe " + vehicle.getVehicleId() + " → Set status = BOOKED");
         } else {
-            System.out.println("📅 [createOrder] Xe " + vehicle.getVehicleId() + " đã có booking, giữ status hiện tại");
+            System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " đã có booking, giữ status hiện tại");
         }
 
         // ====== GHI VEHICLE TIMELINE ======
@@ -187,8 +184,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Xe mới đã được đặt trong khoảng thời gian này...");
         }
 
-        System.out.println("✅ [changeVehicle] Có thể thay đổi từ xe " + mainDetail.getVehicle().getVehicleId() +
-                " sang xe " + newVehicle.getVehicleId());
+        System.out.println("[changeVehicle] Có thể thay đổi từ xe " + mainDetail.getVehicle().getVehicleId() +
+                         " sang xe " + newVehicle.getVehicleId());
 
         Vehicle oldVehicle = mainDetail.getVehicle();
         Long oldVehicleId = oldVehicle.getVehicleId();
@@ -219,9 +216,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (existingBookings.isEmpty()) {
             newVehicle.setStatus("BOOKED");
             vehicleRepository.save(newVehicle);
-            System.out.println("✅ [changeVehicle] Lần đầu tiên đặt xe " + newVehicle.getVehicleId() + " → Set status = BOOKED");
+            System.out.println(" [changeVehicle] Lần đầu tiên đặt xe " + newVehicle.getVehicleId() + " → Set status = BOOKED");
         } else {
-            System.out.println("📅 [changeVehicle] Xe " + newVehicle.getVehicleId() + " đã có booking, giữ status hiện tại");
+            System.out.println(" [changeVehicle] Xe " + newVehicle.getVehicleId() + " đã có booking, giữ status hiện tại");
         }
 
         // ====== TẠO TIMELINE MỚI ======
@@ -843,7 +840,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
      */
     private boolean hasOverlappingActiveBooking(Long vehicleId, LocalDateTime requestStart, LocalDateTime requestEnd) {
         System.out.println("🔍 [hasOverlappingActiveBooking] Kiểm tra xe " + vehicleId +
-                " cho thời gian: [" + requestStart + " - " + requestEnd + "]");
+                         " cho thời gian: [" + requestStart + " - " + requestEnd + "]");
 
         // Lấy tất cả chi tiết đơn đang ACTIVE (pending, confirmed, active - không including done/cancelled)
         List<RentalOrderDetail> activeDetails = rentalOrderDetailRepository
@@ -865,7 +862,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 boolean overlaps = requestStart.isBefore(existingEnd) && requestEnd.isAfter(existingStart);
                 if (overlaps) {
                     System.out.println("⚠️ ❌ Có booking trùng lặp: [" + existingStart + " - " + existingEnd +
-                            "] với request [" + requestStart + " - " + requestEnd + "]");
+                                     "] với request [" + requestStart + " - " + requestEnd + "]");
                     return true; // Có overlap với booking đang active
                 } else {
                     System.out.println("✅ Không trùng lặp");
@@ -1012,7 +1009,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             LocalDateTime nextEnd = nextBooking.getEndTime();
 
             System.out.println("📅 Booking tiếp theo: [" + nextStart + " - " + nextEnd +
-                    "] Status: " + nextBooking.getStatus());
+                             "] Status: " + nextBooking.getStatus());
 
             // 🔄 Tự động set xe = BOOKED luôn (xe đang AVAILABLE và có booking trong hàng chờ)
             System.out.println("⏰ Xe AVAILABLE → Chuyển sang BOOKED cho booking tiếp theo");
