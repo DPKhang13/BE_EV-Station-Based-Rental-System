@@ -31,7 +31,7 @@ public class VehicleDetailResponse {
     private String variant;
     private String batteryStatus;
     private String batteryCapacity;
-    private Integer rangeKm;
+    private String carmodel;
 
     // ===== Thông tin đơn thuê (nếu có) =====
     private boolean hasBooking;  // true nếu có đơn thuê đang diễn ra

@@ -54,4 +54,8 @@ public class RentalOrder {
     private List<VehicleTimeline> timelines;
 
 
+    public RentalStation getStation() {
+        return this.customer.getRentalStation();
+    }
+
 }

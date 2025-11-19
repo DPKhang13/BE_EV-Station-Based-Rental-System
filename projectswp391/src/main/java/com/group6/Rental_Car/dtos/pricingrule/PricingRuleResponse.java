@@ -13,8 +13,7 @@ import java.math.BigDecimal;
 @Builder
 public class PricingRuleResponse {
     private Integer pricingRuleId;
-    private Integer seatCount;
-    private String variant;
+    private String carmodel;
 
     private BigDecimal dailyPrice;
     private BigDecimal lateFeePerDay;

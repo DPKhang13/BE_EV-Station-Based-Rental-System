@@ -25,6 +25,6 @@ public class VehicleCreateRequest {
     private String variant;
     private String batteryStatus;
     private String batteryCapacity;
-    private Integer rangeKm;
+    private String carmodel;
 }
 

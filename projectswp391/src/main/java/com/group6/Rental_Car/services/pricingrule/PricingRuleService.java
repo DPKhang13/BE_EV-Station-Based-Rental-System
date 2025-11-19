@@ -1,6 +1,5 @@
 package com.group6.Rental_Car.services.pricingrule;
 
-import com.group6.Rental_Car.dtos.pricingrule.PricingRuleCreateRequest;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleResponse;
 import com.group6.Rental_Car.dtos.pricingrule.PricingRuleUpdateRequest;
 import com.group6.Rental_Car.entities.Coupon;
@@ -11,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface PricingRuleService {
-    PricingRule getPricingRuleBySeatAndVariant(Integer seatCount, String variant);
+    PricingRule getPricingRuleByCarmodel(String carmodel);
 
     BigDecimal calculateRentalPrice(PricingRule pricingRule, LocalDate startDate, LocalDate endDate);
 
@@ -21,11 +20,5 @@ public interface PricingRuleService {
 
     List<PricingRuleResponse> getAllPricingRules();
 
-    PricingRuleResponse updatePricingRule(Integer seatCount, String variant, PricingRuleUpdateRequest req);
-
-    PricingRuleResponse createPricingRule(PricingRuleCreateRequest request);
-
-    void deletePricingRule(Integer pricingRuleId);
-
-    PricingRuleResponse getPricingRuleById(Integer pricingRuleId);
+    PricingRuleResponse updatePricingRule(String carmodel, PricingRuleUpdateRequest req);
 }

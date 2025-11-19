@@ -1,10 +1,6 @@
 package com.group6.Rental_Car.services.order;
 
-import com.group6.Rental_Car.dtos.order.OrderCreateRequest;
-import com.group6.Rental_Car.dtos.order.OrderResponse;
-import com.group6.Rental_Car.dtos.order.OrderReturnRequest;
-import com.group6.Rental_Car.dtos.order.OrderUpdateRequest;
-import com.group6.Rental_Car.dtos.order.VehicleOrderHistoryResponse;
+import com.group6.Rental_Car.dtos.order.*;
 import com.group6.Rental_Car.dtos.verifyfile.OrderVerificationResponse;
 
 import java.util.List;
@@ -23,4 +19,6 @@ public interface RentalOrderService {
     List<OrderVerificationResponse> getPendingVerificationOrders();
     OrderResponse previewReturn(UUID orderId, Integer actualDays);
     List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId);
+    List<OrderDetailCompactResponse> getCompactDetailsByVehicle(Long vehicleId);
+    public OrderDetailCompactResponse updateCompactOrder(Long vehicleId, UUID orderId, CompactOrderUpdateRequest req);
 }

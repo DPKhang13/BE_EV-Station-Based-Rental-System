@@ -21,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -119,6 +120,14 @@ public class PaymentController {
                             .message("PAYMENT_FAILED")
                             .build());
         }
+    }
+
+    @GetMapping("/order/{orderId}")
+    @Operation(summary = "Get all payments for an order")
+    public ResponseEntity<List<PaymentResponse>> getPaymentsByOrderId(@PathVariable UUID orderId) {
+        log.info("📋 Getting payments for order: {}", orderId);
+        List<PaymentResponse> payments = paymentService.getPaymentsByOrderId(orderId);
+        return ResponseEntity.ok(payments);
     }
 }
 

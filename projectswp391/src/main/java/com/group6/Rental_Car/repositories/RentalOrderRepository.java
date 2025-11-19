@@ -16,7 +16,13 @@ public interface RentalOrderRepository extends JpaRepository<RentalOrder, UUID> 
 
     // Lấy danh sách đơn hàng của khách hàng
     List<RentalOrder> findByCustomer_UserId(UUID customerId);
-
+    @Query("""
+    SELECT DISTINCT o
+    FROM RentalOrder o
+    JOIN o.details d
+    WHERE d.vehicle.vehicleId = :vehicleId
+""")
+    List<RentalOrder> findOrdersByVehicleId(Long vehicleId);
     // Lấy theo trạng thái
     @EntityGraph(attributePaths = {"customer"})
     List<RentalOrder> findByStatus(String status);

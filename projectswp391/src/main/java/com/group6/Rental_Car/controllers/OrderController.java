@@ -101,4 +101,18 @@ public class OrderController {
     public ResponseEntity<List<VehicleOrderHistoryResponse>> getCustomerOrderHistory(@PathVariable UUID customerId) {
         return ResponseEntity.ok(rentalOrderService.getOrderHistoryByCustomer(customerId));
     }
+    @GetMapping("/vehicle/{vehicleId}/compact")
+    public ResponseEntity<List<OrderDetailCompactResponse>> getCompactByVehicle(
+            @PathVariable Long vehicleId
+    ) {
+        return ResponseEntity.ok(rentalOrderService.getCompactDetailsByVehicle(vehicleId));
+    }
+    @PutMapping("/vehicle/{vehicleId}/{orderId}/compact")
+    public ResponseEntity<?> updateCompactOrder(
+            @PathVariable Long vehicleId,
+            @PathVariable UUID orderId,
+            @RequestBody CompactOrderUpdateRequest req
+    ) {
+        return ResponseEntity.ok(rentalOrderService.updateCompactOrder(vehicleId, orderId, req));
+    }
 }

@@ -31,6 +31,7 @@ public class VehicleModel {
 
     private String transmission;
 
+    @Column(name = "seat_count")
     private Integer seatCount;
 
     @Column(name = "year")
@@ -44,6 +45,6 @@ public class VehicleModel {
     @Column(name = "battery_capacity", length = 50)
     private String batteryCapacity;
 
-    @Column(name = "range_km")
-    private Integer rangeKm;
+    @Column(name = "carmodel", length = 50)
+    private String carmodel;
 }

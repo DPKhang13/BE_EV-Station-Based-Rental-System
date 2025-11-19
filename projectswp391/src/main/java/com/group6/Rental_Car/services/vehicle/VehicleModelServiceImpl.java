@@ -40,10 +40,8 @@ public class VehicleModelServiceImpl implements VehicleModelService {
         attr.setVariant(req.getVariant());
         attr.setBatteryStatus(req.getBatteryStatus());
         attr.setBatteryCapacity(req.getBatteryCapacity());
-        attr.setRangeKm(req.getRangeKm());
-        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(
-                req.getSeatCount(), req.getVariant()
-        );
+        attr.setCarmodel(req.getCarmodel());
+        PricingRule rule = pricingRuleService.getPricingRuleByCarmodel(req.getCarmodel());
         attr.setPricingRule(rule);
         return vehicleModelRepository.save(attr);
     }
@@ -87,7 +85,7 @@ public class VehicleModelServiceImpl implements VehicleModelService {
             dto.setVariant(attr.getVariant());
             dto.setBatteryStatus(attr.getBatteryStatus());
             dto.setBatteryCapacity(attr.getBatteryCapacity());
-            dto.setRangeKm(attr.getRangeKm());
+            dto.setCarmodel(attr.getCarmodel());
             dto.setPricingRuleId(
                     attr.getPricingRule() != null ? attr.getPricingRule().getPricingRuleId() : null
             );
