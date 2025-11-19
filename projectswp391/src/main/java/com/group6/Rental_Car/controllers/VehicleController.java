@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -74,6 +75,14 @@ public class VehicleController {
     public ResponseEntity<List<VehicleResponse>> getVehiclesByCarmodel(
             @PathVariable String carmodel) {
         List<VehicleResponse> vehicles = vehicleService.getVehiclesByCarmodel(carmodel);
+        return ResponseEntity.ok(vehicles);
+    }
+
+    @GetMapping("/available")
+    public ResponseEntity<List<VehicleResponse>> getAvailableVehicles(
+            @RequestParam LocalDateTime startTime,
+            @RequestParam LocalDateTime endTime) {
+        List<VehicleResponse> vehicles = vehicleService.getAvailableVehicles(startTime, endTime);
         return ResponseEntity.ok(vehicles);
     }
 

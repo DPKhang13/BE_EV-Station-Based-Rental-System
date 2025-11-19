@@ -6,6 +6,7 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 
@@ -19,6 +20,7 @@ public interface VehicleService {
     VehicleResponse updateStatusVehicle(Long vehicleId, VehicleUpdateStatusRequest req);
     List<VehicleResponse> getVehiclesByStation(Integer stationId);
     List<VehicleResponse> getVehiclesByCarmodel(String carmodel);
+    List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime);
 }
 
 

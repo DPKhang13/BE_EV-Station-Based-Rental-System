@@ -200,6 +200,49 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    public List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime) {
+        if (startTime == null || endTime == null) {
+            throw new BadRequestException("startTime và endTime không được để trống");
+        }
+        if (!endTime.isAfter(startTime)) {
+            throw new BadRequestException("endTime phải sau startTime");
+        }
+
+        // Lấy tất cả xe
+        List<Vehicle> allVehicles = vehicleRepository.findAll();
+
+        // Lọc những xe không có booking overlap trong khoảng thời gian
+        return allVehicles.stream()
+                .filter(vehicle -> {
+                    // Kiểm tra timeline BOOKED/RENTAL có overlap không
+                    List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicle.getVehicleId());
+                    
+                    boolean hasOverlap = timelines.stream()
+                            .anyMatch(timeline -> {
+                                String status = timeline.getStatus();
+                                // Chỉ kiểm tra các status BOOKED, RENTAL
+                                if (!"BOOKED".equalsIgnoreCase(status) && !"RENTAL".equalsIgnoreCase(status)) {
+                                    return false;
+                                }
+                                
+                                LocalDateTime timelineStart = timeline.getStartTime();
+                                LocalDateTime timelineEnd = timeline.getEndTime();
+                                
+                                if (timelineStart == null || timelineEnd == null) {
+                                    return false;
+                                }
+                                
+                                // Kiểm tra overlap: (start1 < end2) AND (end1 > start2)
+                                return startTime.isBefore(timelineEnd) && endTime.isAfter(timelineStart);
+                            });
+                    
+                    return !hasOverlap;
+                })
+                .map(vehicle -> vehicleModelService.convertToDto(vehicle, vehicleModelService.findByVehicle(vehicle)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public VehicleDetailResponse getVehicleDetailById(Long vehicleId) {
         // Lấy xe
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
