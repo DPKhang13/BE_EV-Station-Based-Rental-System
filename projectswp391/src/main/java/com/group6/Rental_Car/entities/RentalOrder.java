@@ -48,8 +48,6 @@ public class RentalOrder {
     @OneToMany(mappedBy = "rentalOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Payment> payments;
 
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderService> services;
     @OneToMany(mappedBy = "order", fetch = FetchType.LAZY)
     private List<VehicleTimeline> timelines;
 

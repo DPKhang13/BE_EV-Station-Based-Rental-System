@@ -5,10 +5,7 @@ import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
 import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.*;
-import com.group6.Rental_Car.utils.JwtUserDetails;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +23,6 @@ public class OrderServiceServiceImpl implements OrderServiceService {
     private final OrderServiceRepository orderServiceRepository;
     private final RentalOrderRepository rentalOrderRepository;
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
-    private final VehicleRepository vehicleRepository;
-    private final UserRepository userRepository;
-    private final RentalStationRepository stationRepository;
-    private final ModelMapper modelMapper;
-    private final PaymentRepository paymentRepository;
 
     // ===============================
     //  TẠO DỊCH VỤ LIÊN QUAN ĐẾN ORDER
@@ -49,28 +41,12 @@ public class OrderServiceServiceImpl implements OrderServiceService {
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe trong đơn"));
 
-        //  Lấy trạm
-        RentalStation station = vehicle.getRentalStation();
-
-        //  Lấy nhân viên đăng nhập (nếu có)
-        User performedBy = null;
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof JwtUserDetails jwt) {
-            performedBy = userRepository.findById(jwt.getUserId()).orElse(null);
-        }
-
         //  1. LƯU VÀO BẢNG ORDERSERVICE (bảng chính để quản lý service)
         OrderService service = OrderService.builder()
-                .order(order)
-                .vehicle(vehicle)
-                .station(station)
-                .performedBy(performedBy)
                 .serviceType(request.getServiceType().toUpperCase())
                 .description(Optional.ofNullable(request.getDescription())
                         .orElse("Phí dịch vụ " + request.getServiceType()))
                 .cost(request.getCost())
-                .status("PENDING")
-                .occurredAt(LocalDateTime.now())
                 .build();
         OrderService savedService = orderServiceRepository.save(service);
 
@@ -95,18 +71,9 @@ public class OrderServiceServiceImpl implements OrderServiceService {
         //  4. Tạo response từ OrderService (bảng chính)
         OrderServiceResponse response = new OrderServiceResponse();
         response.setServiceId(savedService.getServiceId());
-        response.setOrderId(order.getOrderId());
-        response.setDetailId(serviceDetail.getDetailId());
-        response.setVehicleId(vehicle.getVehicleId());
         response.setServiceType(request.getServiceType());
         response.setDescription(savedService.getDescription());
         response.setCost(request.getCost());
-        response.setStatus("PENDING");
-        response.setOccurredAt(savedService.getOccurredAt());
-        response.setResolvedAt(savedService.getResolvedAt());
-        response.setStationName(station != null ? station.getName() : null);
-        response.setPerformedByName(performedBy != null ? performedBy.getFullName() : null);
-        response.setNote(null);
 
         return response;
     }
@@ -140,7 +107,7 @@ public class OrderServiceServiceImpl implements OrderServiceService {
     // ===============================
     @Override
     public List<OrderServiceResponse> getServicesByOrder(UUID orderId) {
-        return orderServiceRepository.findByOrder_OrderId(orderId)
+        return orderServiceRepository.findAll()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -148,7 +115,7 @@ public class OrderServiceServiceImpl implements OrderServiceService {
 
     @Override
     public List<OrderServiceResponse> getServicesByVehicle(Long vehicleId) {
-        return orderServiceRepository.findByVehicle_VehicleId(vehicleId)
+        return orderServiceRepository.findAll()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -156,7 +123,7 @@ public class OrderServiceServiceImpl implements OrderServiceService {
 
     @Override
     public List<OrderServiceResponse> getServicesByStation(Integer stationId) {
-        return orderServiceRepository.findByStation_StationId(stationId)
+        return orderServiceRepository.findAll()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -164,7 +131,7 @@ public class OrderServiceServiceImpl implements OrderServiceService {
 
     @Override
     public List<OrderServiceResponse> getServicesByStatus(String status) {
-        return orderServiceRepository.findByStatusIgnoreCase(status)
+        return orderServiceRepository.findAll()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -174,14 +141,11 @@ public class OrderServiceServiceImpl implements OrderServiceService {
     // 🔁 HELPER
     // ===============================
     private OrderServiceResponse toResponse(OrderService entity) {
-        OrderServiceResponse dto = modelMapper.map(entity, OrderServiceResponse.class);
-
-        dto.setOrderId(entity.getOrder() != null ? entity.getOrder().getOrderId() : null);
-        dto.setVehicleId(entity.getVehicle() != null ? entity.getVehicle().getVehicleId() : null);
-        dto.setDetailId(entity.getDetail() != null ? entity.getDetail().getDetailId() : null);
-        dto.setPerformedByName(entity.getPerformedBy() != null ? entity.getPerformedBy().getFullName() : null);
-        dto.setStationName(entity.getStation() != null ? entity.getStation().getName() : null);
-
+        OrderServiceResponse dto = new OrderServiceResponse();
+        dto.setServiceId(entity.getServiceId());
+        dto.setServiceType(entity.getServiceType());
+        dto.setDescription(entity.getDescription());
+        dto.setCost(entity.getCost());
         return dto;
     }
 }

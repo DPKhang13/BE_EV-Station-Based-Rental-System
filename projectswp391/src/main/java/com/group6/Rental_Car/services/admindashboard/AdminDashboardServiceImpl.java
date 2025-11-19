@@ -60,48 +60,40 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long customers = userRepository.countByRole(Role.customer);
 
         // ===== SERVICE KPIs =====
-        double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(dtFrom, dtTo)).orElse(0d);
-        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(fromDate, toDate);
-        long totalServices = servicesInRange.size();
+        List<OrderService> allServices = orderServiceRepository.findAll();
+        double totalServiceCost = allServices.stream()
+                .mapToDouble(s -> s.getCost() != null ? s.getCost().doubleValue() : 0d)
+                .sum();
+        long totalServices = allServices.size();
 
-        Map<String, Long> servicesByType = servicesInRange.stream()
+        Map<String, Long> servicesByType = allServices.stream()
                 .collect(Collectors.groupingBy(
                         s -> Optional.ofNullable(s.getServiceType()).orElse("UNKNOWN"),
                         Collectors.counting()
                 ));
 
-        Map<String, Long> servicesByStatus = servicesInRange.stream()
-                .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getStatus()).orElse("UNKNOWN"),
-                        Collectors.counting()
-                ));
-
         // ===== SERVICES BY DAY =====
-        var serviceDayRows = orderServiceRepository.countByDay(dtFrom, dtTo);
-        Map<LocalDate, Long> serviceDayMap = serviceDayRows.stream().collect(Collectors.toMap(
-                r -> ((java.sql.Date) r[0]).toLocalDate(),
-                r -> ((Number) r[1]).longValue()
-        ));
         List<AdminDashboardResponse.DayCount> servicesByDay = new ArrayList<>();
         for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             servicesByDay.add(AdminDashboardResponse.DayCount.builder()
                     .date(d)
-                    .count(serviceDayMap.getOrDefault(d, 0L))
+                    .count(0L)
                     .build());
         }
 
         // ===== RECENT SERVICES =====
-        var recentServices = orderServiceRepository.findTop10ByOrderByOccurredAtDesc().stream()
+        var recentServices = orderServiceRepository.findAll().stream()
+                .limit(10)
                 .map(s -> AdminDashboardResponse.RecentService.builder()
                         .serviceId(s.getServiceId())
-                        .vehicleId(s.getVehicle().getVehicleId())
-                        .vehicleName(s.getVehicle().getVehicleName())
+                        .vehicleId(null)
+                        .vehicleName(null)
                         .serviceType(s.getServiceType())
                         .description(s.getDescription())
-                        .status(s.getStatus())
+                        .status(null)
                         .cost(s.getCost() != null ? s.getCost().doubleValue() : 0d)
-                        .occurredAt(s.getOccurredAt())
-                        .resolvedAt(s.getResolvedAt())
+                        .occurredAt(null)
+                        .resolvedAt(null)
                         .build()
                 ).toList();
 
@@ -289,7 +281,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .totalServices(totalServices)
                 .totalCost(totalServiceCost)
                 .servicesByType(servicesByType)
-                .servicesByStatus(servicesByStatus)
+                .servicesByStatus(new HashMap<>())
                 .build();
 
         return AdminDashboardResponse.builder()

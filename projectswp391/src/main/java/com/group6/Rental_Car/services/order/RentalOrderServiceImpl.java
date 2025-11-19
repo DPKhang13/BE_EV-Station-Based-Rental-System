@@ -32,7 +32,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private final RentalOrderRepository rentalOrderRepository;
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
     private final VehicleRepository vehicleRepository;
-    private final OrderServiceRepository orderServiceRepository;
     private final VehicleModelService vehicleModelService;
     private final PricingRuleService pricingRuleService;
     private final CouponService couponService;
@@ -464,53 +463,20 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (actualDays > expectedDays) {
             long lateDays = actualDays - expectedDays;
             BigDecimal lateFee = rule.getLateFeePerDay().multiply(BigDecimal.valueOf(lateDays));
-
-            // Tạo OrderService cho phí trễ
-            OrderService lateService = OrderService.builder()
-                    .order(order)
-                    .vehicle(vehicle)
-                    .serviceType("LATE_FEE")
-                    .description("Trả xe trễ " + lateDays + " ngày")
-                    .cost(lateFee)
-                    .status("PENDING")
-                    .occurredAt(actualReturnTime)
-                    .build();
-            orderServiceRepository.save(lateService);
-
             System.out.println("Khách trả xe trễ " + lateDays + " ngày, phí trễ: " + lateFee);
         } else if (actualDays < expectedDays) {
             System.out.println("Khách trả xe sớm " + (expectedDays - actualDays) + " ngày");
         }
 
-        // KHÔNG thay đổi mainDetail.price - giữ nguyên giá đã tính từ lúc đặt xe
-        // mainDetail.setPrice() - KHÔNG cần update
-        // rentalOrderDetailRepository.save(mainDetail) - KHÔNG cần save
+        // Hoàn tất đơn luôn
+        vehicle.setStatus("CHECKING");
+        order.setStatus("COMPLETED");
 
-        // Kiểm tra xem có service nào cần thanh toán không
-        List<OrderService> pendingServices = orderServiceRepository
-                .findByOrder_OrderId(orderId)
-                .stream()
-                .filter(s -> "PENDING".equalsIgnoreCase(s.getStatus()))
-                .toList();
+        // Xóa timeline khi order hoàn thành (xe đã trả, không cần track nữa)
+        deleteTimelineForOrder(orderId, vehicle.getVehicleId());
 
-        // Nếu KHÔNG có service nào → hoàn tất đơn luôn
-        if (pendingServices.isEmpty()) {
-            vehicle.setStatus("CHECKING");
-            order.setStatus("COMPLETED");
-
-            // Xóa timeline khi order hoàn thành (xe đã trả, không cần track nữa)
-            deleteTimelineForOrder(orderId, vehicle.getVehicleId());
-
-            // KIỂM TRA XE AVAILABLE: Nếu xe available, kiểm tra có timeline đầu tiên thì chuyển sang BOOKED
-            checkAndTransitionToNextBooking(vehicle.getVehicleId());
-        } else {
-            // Nếu CÓ service → chờ thanh toán
-            vehicle.setStatus("CHECKING");
-            order.setStatus("PENDING_FINAL_PAYMENT"); // Chờ thanh toán type 5 (services + phí trễ)
-
-            // Tạo timeline CHECKING để track xe đang được kiểm tra
-            createCheckingTimeline(vehicle, order, "Xe đang được kiểm tra sau khi trả");
-        }
+        // KIỂM TRA XE AVAILABLE: Nếu xe available, kiểm tra có timeline đầu tiên thì chuyển sang BOOKED
+        checkAndTransitionToNextBooking(vehicle.getVehicleId());
 
         vehicleRepository.save(vehicle);
         // GIỮ NGUYÊN order.totalPrice - không thay đổi giá đã thanh toán
@@ -594,14 +560,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             RentalStation station = vehicle != null ? vehicle.getRentalStation() : null;
 
             // Tổng phí dịch vụ phát sinh
-            BigDecimal totalServiceCost = Optional.ofNullable(order.getServices())
-                    .orElse(List.of()).stream()
-                    .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal totalServiceCost = BigDecimal.ZERO;
 
-            // Tổng tiền = order.totalPrice (giá thuê) + service cost
-            BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO)
-                    .add(totalServiceCost);
+            // Tổng tiền = order.totalPrice (giá thuê)
+            BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO);
 
             // Tổng đã thanh toán
             BigDecimal totalPaid = Optional.ofNullable(order.getPayments())
@@ -772,6 +734,23 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         res.setEndTime(detail.getEndTime());
         res.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
         res.setTotalPrice(order.getTotalPrice());
+
+        // Tính tiền chưa thanh toán
+        BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO);
+        BigDecimal totalPaid = Optional.ofNullable(order.getPayments())
+                .orElse(List.of()).stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                .map(p -> Optional.ofNullable(p.getAmount()).orElse(BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
+                .orElse(List.of()).stream()
+                .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst()
+                .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
+                .orElse(totalPrice.subtract(totalPaid));
+        
+        res.setRemainingAmount(remainingAmount);
 
         if (v != null && v.getRentalStation() != null) {
             res.setStationId(v.getRentalStation().getStationId());

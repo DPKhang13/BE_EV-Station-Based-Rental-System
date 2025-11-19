@@ -26,6 +26,7 @@ public class OrderResponse {
     private LocalDateTime createdAt;
 
     private BigDecimal totalPrice;
+    private BigDecimal remainingAmount; // Tiền chưa thanh toán
     private String status;
     private String couponCode;
 

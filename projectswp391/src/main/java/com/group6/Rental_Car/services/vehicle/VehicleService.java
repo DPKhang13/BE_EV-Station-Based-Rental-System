@@ -18,6 +18,7 @@ public interface VehicleService {
     List<VehicleResponse> getAllVehicles();
     VehicleResponse updateStatusVehicle(Long vehicleId, VehicleUpdateStatusRequest req);
     List<VehicleResponse> getVehiclesByStation(Integer stationId);
+    List<VehicleResponse> getVehiclesByCarmodel(String carmodel);
 }
 
 

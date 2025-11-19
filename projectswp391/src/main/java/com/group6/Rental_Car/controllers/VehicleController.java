@@ -70,4 +70,11 @@ public class VehicleController {
         return ResponseEntity.ok(vehicles);
     }
 
+    @GetMapping("/carmodel/{carmodel}")
+    public ResponseEntity<List<VehicleResponse>> getVehiclesByCarmodel(
+            @PathVariable String carmodel) {
+        List<VehicleResponse> vehicles = vehicleService.getVehiclesByCarmodel(carmodel);
+        return ResponseEntity.ok(vehicles);
+    }
+
 }

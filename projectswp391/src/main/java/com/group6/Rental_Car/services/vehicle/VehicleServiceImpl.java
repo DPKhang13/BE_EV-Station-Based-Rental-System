@@ -188,6 +188,18 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    public List<VehicleResponse> getVehiclesByCarmodel(String carmodel) {
+        if (carmodel == null || carmodel.isBlank()) {
+            throw new BadRequestException("carmodel không được để trống");
+        }
+
+        List<VehicleModel> models = vehicleModelRepository.findByCarmodelIgnoreCase(carmodel.trim());
+        return models.stream()
+                .map(model -> vehicleModelService.convertToDto(model.getVehicle(), model))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public VehicleDetailResponse getVehicleDetailById(Long vehicleId) {
         // Lấy xe
         Vehicle vehicle = vehicleRepository.findById(vehicleId)

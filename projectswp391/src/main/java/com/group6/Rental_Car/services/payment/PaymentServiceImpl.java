@@ -141,35 +141,7 @@ public class PaymentServiceImpl implements PaymentService {
     // TYPE 5 — SERVICE PAYMENT
     // ============================================================
     private PaymentResponse createServicePayment(RentalOrder order) {
-
-        List<OrderService> pending = orderServiceRepository
-                .findByOrder_OrderId(order.getOrderId())
-                .stream()
-                .filter(s -> !"SUCCESS".equalsIgnoreCase(s.getStatus()))
-                .toList();
-
-        if (pending.isEmpty())
-            throw new BadRequestException("No unpaid services found");
-
-        BigDecimal amount = pending.stream()
-                .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        Payment payment = paymentRepository.save(
-                Payment.builder()
-                        .rentalOrder(order)
-                        .amount(amount)
-                        .remainingAmount(BigDecimal.ZERO)
-                        .paymentType((short) 5)
-                        .method("MOMO")
-                        .status(PaymentStatus.PENDING)
-                        .build()
-        );
-
-        order.setStatus("PENDING_SERVICE_PAYMENT");
-        rentalOrderRepository.save(order);
-
-        return buildMoMoPaymentUrl(order, payment, amount);
+        throw new BadRequestException("Service payment is not supported");
     }
 
     // ============================================================
@@ -247,19 +219,7 @@ public class PaymentServiceImpl implements PaymentService {
     // SERVICE SUCCESS
     // ============================================================
     private void handleServiceSuccess(RentalOrder order, Payment payment) {
-
-        // 1) Cập nhật OrderService → SUCCESS
-        List<OrderService> pending = orderServiceRepository
-                .findByOrder_OrderId(order.getOrderId())
-                .stream()
-                .filter(s -> !"SUCCESS".equalsIgnoreCase(s.getStatus()))
-                .toList();
-
-        pending.forEach(s -> {
-            s.setStatus("SUCCESS");
-            s.setResolvedAt(LocalDateTime.now());
-            orderServiceRepository.save(s);
-        });
+        // Service payment is not supported
 
         // 🔥 2) Cập nhật RentalOrderDetail type SERVICE → SUCCESS
         rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
@@ -814,53 +774,7 @@ public class PaymentServiceImpl implements PaymentService {
     // CASH SERVICE PAYMENT
     // ============================================================
     private PaymentResponse processCashServicePayment(RentalOrder order) {
-        log.info(" Processing CASH service payment for order: {}", order.getOrderId());
-
-        // Lấy tất cả service chưa thanh toán
-        List<OrderService> pending = orderServiceRepository
-                .findByOrder_OrderId(order.getOrderId())
-                .stream()
-                .filter(s -> !"SUCCESS".equalsIgnoreCase(s.getStatus()))
-                .toList();
-
-        if (pending.isEmpty())
-            throw new BadRequestException("No unpaid services found");
-
-        // Tổng tiền service
-        BigDecimal amount = pending.stream()
-                .map(s -> Optional.ofNullable(s.getCost()).orElse(BigDecimal.ZERO))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Tạo payment nhưng để PENDING
-        Payment payment = paymentRepository.save(
-                Payment.builder()
-                        .rentalOrder(order)
-                        .amount(amount)
-                        .remainingAmount(BigDecimal.ZERO)
-                        .paymentType((short) 5)   // SERVICE PAYMENT
-                        .method("CASH")
-                        .status(PaymentStatus.PENDING)    //  ĐỂ DUYỆT SAU
-                        .build()
-        );
-
-        log.info("🕒 CASH service payment created PENDING for order: {}", order.getOrderId());
-
-        //  KHÔNG xử lý service success tại đây
-        //  KHÔNG update order
-        // Việc này staff sẽ xác nhận ở API approve
-
-        recordTransaction(order, payment, "SERVICE_PAYMENT_PENDING");
-
-        return PaymentResponse.builder()
-                .paymentId(payment.getPaymentId())
-                .orderId(order.getOrderId())
-                .amount(amount)
-                .remainingAmount(BigDecimal.ZERO)
-                .paymentType((short) 5)
-                .method("CASH")
-                .status(PaymentStatus.PENDING)
-                .message("SERVICE_PAYMENT_PENDING_STAFF_CONFIRM")
-                .build();
+        throw new BadRequestException("Service payment is not supported");
     }
 
     @Override
