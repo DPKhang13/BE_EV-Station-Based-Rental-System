@@ -55,6 +55,24 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 customer.getUserId(),
                 (uid, type) -> photoRepository.existsByUser_UserIdAndTypeIgnoreCase(uid, type)
         );
+
+        // Kiểm tra khách hàng đã có đơn đang xử lý chưa
+        List<RentalOrder> existingOrders = rentalOrderRepository.findByCustomer_UserId(customer.getUserId());
+        boolean hasActiveOrder = existingOrders.stream()
+                .anyMatch(order -> {
+                    String status = order.getStatus();
+                    if (status == null) return false;
+                    String upperStatus = status.toUpperCase();
+                    return upperStatus.equals("DEPOSITED") 
+                            || upperStatus.equals("PENDING")
+                            || upperStatus.equals("RENTAL")
+                            || upperStatus.startsWith("PENDING");
+                });
+        
+        if (hasActiveOrder) {
+            throw new BadRequestException("Bạn đã có đơn đang xử lý hoặc đang thuê. Vui lòng hoàn tất đơn hiện tại trước khi đặt xe mới.");
+        }
+
         Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found"));
 
