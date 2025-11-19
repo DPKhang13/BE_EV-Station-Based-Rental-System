@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface PricingRuleService {
-    PricingRule getPricingRuleBySeatAndVariant(Integer seatCount, String variant);
+    PricingRule getPricingRuleByCarmodel(String carmodel);
 
     BigDecimal calculateRentalPrice(PricingRule pricingRule, LocalDate startDate, LocalDate endDate);
 
@@ -20,5 +20,5 @@ public interface PricingRuleService {
 
     List<PricingRuleResponse> getAllPricingRules();
 
-    PricingRuleResponse updatePricingRule(Integer seatCount, String variant, PricingRuleUpdateRequest req);
+    PricingRuleResponse updatePricingRule(String carmodel, PricingRuleUpdateRequest req);
 }

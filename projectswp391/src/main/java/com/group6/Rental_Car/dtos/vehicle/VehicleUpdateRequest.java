@@ -20,5 +20,5 @@ public class VehicleUpdateRequest {
     private String variant;
     private String batteryStatus;
     private String batteryCapacity;
-    private Integer rangeKm;
+    private String carmodel;
 }

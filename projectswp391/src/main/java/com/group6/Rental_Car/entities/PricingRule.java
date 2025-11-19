@@ -19,9 +19,8 @@ public class PricingRule {
     @Column(name = "pricingrule_id")
     private Integer pricingRuleId;
 
-    private Integer seatCount;
-
-    private String variant;
+    @Column(name = "carmodel", length = 50)
+    private String carmodel;
 
 
     @Column(nullable = false)

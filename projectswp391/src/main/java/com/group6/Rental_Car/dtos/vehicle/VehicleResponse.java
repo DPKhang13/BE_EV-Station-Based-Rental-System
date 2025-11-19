@@ -28,6 +28,6 @@ public class VehicleResponse {
     private String variant;
     private String batteryStatus;
     private String batteryCapacity;
-    private Integer rangeKm;
+    private String carmodel;
     private Integer pricingRuleId;
 }

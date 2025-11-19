@@ -32,7 +32,7 @@ public class OrderService {
     private Vehicle vehicle;
 
     @Column(name = "service_type", nullable = false, length = 100)
-    private String serviceType; // MAINTENANCE | CLEANING | REPAIR | INCIDENT | OTHER
+    private String serviceType; // TRAFFIC_FEE | CLEANING | MAINTENANCE | REPAIR | OTHER
 
     @Column(columnDefinition = "TEXT")
     private String description;

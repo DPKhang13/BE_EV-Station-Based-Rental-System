@@ -27,10 +27,10 @@ public class PricingRuleServiceImpl implements PricingRuleService {
     private final ModelMapper modelMapper;
 
     @Override
-    public PricingRule getPricingRuleBySeatAndVariant(Integer seatCount, String variant) {
-        return pricingRuleRepository.findBySeatCountAndVariantIgnoreCase(seatCount, variant)
+    public PricingRule getPricingRuleByCarmodel(String carmodel) {
+        return pricingRuleRepository.findByCarmodelIgnoreCase(carmodel)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy quy tắc giá cho seatCount = " + seatCount + " và variant = " + variant
+                        "Không tìm thấy quy tắc giá cho carmodel = " + carmodel
                 ));
     }
 
@@ -104,10 +104,10 @@ public class PricingRuleServiceImpl implements PricingRuleService {
     }
 
     @Override
-    public PricingRuleResponse updatePricingRule(Integer seatCount, String variant, PricingRuleUpdateRequest req) {
-        PricingRule rule = pricingRuleRepository.findBySeatCountAndVariantIgnoreCase(seatCount, variant)
+    public PricingRuleResponse updatePricingRule(String carmodel, PricingRuleUpdateRequest req) {
+        PricingRule rule = pricingRuleRepository.findByCarmodelIgnoreCase(carmodel)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy quy tắc giá cho seatCount = " + seatCount + " và variant = " + variant
+                        "Không tìm thấy quy tắc giá cho carmodel = " + carmodel
                 ));
 
         rule.setDailyPrice(req.getDailyPrice());

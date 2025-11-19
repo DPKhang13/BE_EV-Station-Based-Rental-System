@@ -78,7 +78,7 @@ public class VehicleServiceImpl implements VehicleService {
         attrReq.setVariant(normalizedVariant);// << dùng biến đã validate/normalize
         attrReq.setBatteryStatus(req.getBatteryStatus());
         attrReq.setBatteryCapacity(req.getBatteryCapacity());
-        attrReq.setRangeKm(req.getRangeKm());
+        attrReq.setCarmodel(req.getCarmodel());
 
         VehicleModel attr = vehicleModelService.createModel(vehicle, attrReq);
 
@@ -136,7 +136,7 @@ public class VehicleServiceImpl implements VehicleService {
         attrReq.setColor(req.getColor());
         attrReq.setBatteryStatus(req.getBatteryStatus());
         attrReq.setBatteryCapacity(req.getBatteryCapacity());
-        attrReq.setRangeKm(req.getRangeKm());
+        attrReq.setCarmodel(req.getCarmodel());
 
         vehicleRepository.save(vehicle);
 
@@ -223,7 +223,7 @@ public class VehicleServiceImpl implements VehicleService {
             response.setVariant(model.getVariant());
             response.setBatteryStatus(model.getBatteryStatus());
             response.setBatteryCapacity(model.getBatteryCapacity());
-            response.setRangeKm(model.getRangeKm());
+            response.setCarmodel(model.getCarmodel());
         }
 
         // Tìm đơn thuê đang diễn ra (status = RENTAL)

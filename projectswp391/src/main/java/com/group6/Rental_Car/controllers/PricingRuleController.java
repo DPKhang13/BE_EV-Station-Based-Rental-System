@@ -14,7 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/pricing-rules")
 @RequiredArgsConstructor
-@Tag(name = "Pricing Rule API", description = "API quản lý bảng giá thuê xe theo số chỗ và loại xe")
+@Tag(name = "Pricing Rule API", description = "API quản lý bảng giá thuê xe theo carmodel")
 public class PricingRuleController {
 
     private final PricingRuleService pricingRuleService;
@@ -25,13 +25,12 @@ public class PricingRuleController {
         return ResponseEntity.ok(rules);
     }
 
-    @PutMapping("/{seatCount}/{variant}")
+    @PutMapping("/{carmodel}")
     public ResponseEntity<PricingRuleResponse> updatePricingRule(
-            @PathVariable Integer seatCount,
-            @PathVariable String variant,
+            @PathVariable String carmodel,
             @Valid @RequestBody PricingRuleUpdateRequest request
     ) {
-        PricingRuleResponse updated = pricingRuleService.updatePricingRule(seatCount, variant, request);
+        PricingRuleResponse updated = pricingRuleService.updatePricingRule(carmodel, request);
         return ResponseEntity.ok(updated);
     }
 }

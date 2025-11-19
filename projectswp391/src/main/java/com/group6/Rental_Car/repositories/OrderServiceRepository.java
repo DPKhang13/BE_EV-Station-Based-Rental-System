@@ -29,7 +29,7 @@ public interface OrderServiceRepository extends JpaRepository<OrderService, Long
     //  Lọc theo trạng thái (pending | processing | done | cancelled)
     List<OrderService> findByStatusIgnoreCase(String status);
 
-    //  Lọc theo loại dịch vụ (MAINTENANCE | CLEANING | REPAIR | INCIDENT | OTHER)
+    //  Lọc theo loại dịch vụ (TRAFFIC_FEE | CLEANING | MAINTENANCE | REPAIR | OTHER)
     List<OrderService> findByServiceTypeIgnoreCase(String serviceType);
 
     @Query("""

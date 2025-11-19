@@ -73,7 +73,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " có thể đặt từ " + start + " đến " + end);
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
-        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
+        PricingRule rule = pricingRuleService.getPricingRuleByCarmodel(model.getCarmodel());
 
         Coupon coupon = null;
         if (request.getCouponCode() != null && !request.getCouponCode().isBlank()) {
@@ -444,7 +444,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrderDetail mainDetail = getMainDetail(order);
         Vehicle vehicle = mainDetail.getVehicle();
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
-        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
+        PricingRule rule = pricingRuleService.getPricingRuleByCarmodel(model.getCarmodel());
 
         // Lấy actualReturnTime từ request, nếu null thì dùng endTime từ detail
         LocalDateTime actualReturnTime;
@@ -537,7 +537,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrderDetail mainDetail = getMainDetail(order);
         Vehicle vehicle = mainDetail.getVehicle();
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
-        PricingRule rule = pricingRuleService.getPricingRuleBySeatAndVariant(model.getSeatCount(), model.getVariant());
+        PricingRule rule = pricingRuleService.getPricingRuleByCarmodel(model.getCarmodel());
 
         long actualDaysCount = actualDays != null
                 ? actualDays
