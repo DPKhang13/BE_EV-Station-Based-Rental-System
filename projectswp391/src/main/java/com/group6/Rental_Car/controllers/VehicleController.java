@@ -38,6 +38,12 @@ public class VehicleController {
         return ResponseEntity.ok(vehicles);
     }
 
+    @GetMapping("/{vehicleId}")
+    public ResponseEntity<VehicleResponse> getVehicleById(@PathVariable Long vehicleId) {
+        VehicleResponse vehicle = vehicleService.getVehicleById(vehicleId);
+        return ResponseEntity.ok(vehicle);
+    }
+
     @GetMapping("/{vehicleId}/detail")
     public ResponseEntity<VehicleDetailResponse> getVehicleDetail(@PathVariable Long vehicleId) {
         VehicleDetailResponse detail = vehicleService.getVehicleDetailById(vehicleId);
