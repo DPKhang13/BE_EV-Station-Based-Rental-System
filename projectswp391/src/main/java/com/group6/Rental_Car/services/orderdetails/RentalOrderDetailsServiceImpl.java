@@ -6,16 +6,20 @@ import com.group6.Rental_Car.entities.Payment;
 import com.group6.Rental_Car.entities.RentalOrder;
 import com.group6.Rental_Car.entities.RentalOrderDetail;
 import com.group6.Rental_Car.entities.Vehicle;
+import com.group6.Rental_Car.entities.VehicleModel;
+import com.group6.Rental_Car.enums.PaymentStatus;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.PaymentRepository;
 import com.group6.Rental_Car.repositories.RentalOrderDetailRepository;
 import com.group6.Rental_Car.repositories.RentalOrderRepository;
 import com.group6.Rental_Car.repositories.VehicleRepository;
+import com.group6.Rental_Car.services.vehicle.VehicleModelService;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +37,7 @@ import java.util.stream.Collectors;
         private final VehicleRepository vehicleRepository;
         private final ModelMapper modelMapper;
         private final PaymentRepository paymentRepository;
+        private final VehicleModelService vehicleModelService;
 
         // =====================================================
         // CREATE DETAIL (Admin/Staff tạo thủ công)
@@ -145,6 +150,14 @@ import java.util.stream.Collectors;
 
             List<RentalOrderDetail> raw = rentalOrderDetailRepository.findByOrder_OrderId(orderId);
 
+            // Lấy số tiền còn lại chưa thanh toán từ Payment
+            BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
+                    .orElse(List.of()).stream()
+                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst()
+                    .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
+                    .orElse(BigDecimal.ZERO);
+
             List<OrderDetailResponse> details = raw.stream()
                     .filter(d -> {
                         String type = safeType(d);
@@ -153,8 +166,9 @@ import java.util.stream.Collectors;
                         return !type.equals("RENTAL");
                     })
                     .map(d -> {
-                        OrderDetailResponse dto = toResponse(d);  // keep original
-                        dto.setMethodPayment(methodPayment);       // 🔥 add here
+                        OrderDetailResponse dto = toResponse(d, order);
+                        dto.setMethodPayment(methodPayment);
+                        dto.setRemainingAmount(remainingAmount);
                         return dto;
                     })
                     .collect(Collectors.toList());
@@ -218,9 +232,35 @@ import java.util.stream.Collectors;
         }
 
         private OrderDetailResponse toResponse(RentalOrderDetail detail) {
+            return toResponse(detail, detail.getOrder());
+        }
+
+        private OrderDetailResponse toResponse(RentalOrderDetail detail, RentalOrder order) {
             OrderDetailResponse dto = modelMapper.map(detail, OrderDetailResponse.class);
-            dto.setOrderId(detail.getOrder().getOrderId());
+            dto.setOrderId(order.getOrderId());
             dto.setVehicleId(detail.getVehicle().getVehicleId());
+            
+            // Thông tin khách hàng
+            if (order.getCustomer() != null) {
+                dto.setCustomerName(order.getCustomer().getFullName());
+                dto.setPhone(order.getCustomer().getPhone());
+                dto.setEmail(order.getCustomer().getEmail());
+            }
+            
+            // Thông tin xe
+            Vehicle vehicle = detail.getVehicle();
+            if (vehicle != null) {
+                dto.setVehicleName(vehicle.getVehicleName());
+                dto.setPlateNumber(vehicle.getPlateNumber());
+                
+                // Lấy thông tin từ VehicleModel
+                VehicleModel model = vehicleModelService.findByVehicle(vehicle);
+                if (model != null) {
+                    dto.setColor(model.getColor());
+                    dto.setCarmodel(model.getCarmodel());
+                }
+            }
+            
             return dto;
         }
     }

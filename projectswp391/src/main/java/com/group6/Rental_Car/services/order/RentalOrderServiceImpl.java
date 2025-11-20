@@ -320,15 +320,34 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                         res.setStartTime(mainDetail.getStartTime());
                         res.setEndTime(mainDetail.getEndTime());
 
-                        if (v != null && v.getRentalStation() != null) {
-                            res.setStationId(v.getRentalStation().getStationId());
-                            res.setStationName(v.getRentalStation().getName());
+                        if (v != null) {
+                            res.setPlateNumber(v.getPlateNumber());
+                            if (v.getRentalStation() != null) {
+                                res.setStationId(v.getRentalStation().getStationId());
+                                res.setStationName(v.getRentalStation().getName());
+                            }
+                            
+                            // Lấy thông tin từ VehicleModel
+                            VehicleModel model = vehicleModelService.findByVehicle(v);
+                            if (model != null) {
+                                res.setBrand(model.getBrand());
+                                res.setCarmodel(model.getCarmodel());
+                            }
                         }
                     }
 
                     res.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
                     res.setTotalPrice(order.getTotalPrice());
                     res.setStatus(order.getStatus());
+                    
+                    // Lấy số tiền còn lại chưa thanh toán từ Payment
+                    BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
+                            .orElse(List.of()).stream()
+                            .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                            .findFirst()
+                            .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
+                            .orElse(BigDecimal.ZERO);
+                    res.setRemainingAmount(remainingAmount);
 
                     return res;
                 })
@@ -583,20 +602,13 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             // Tổng tiền = order.totalPrice (giá thuê)
             BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO);
 
-            // Tổng đã thanh toán
-            BigDecimal totalPaid = Optional.ofNullable(order.getPayments())
-                    .orElse(List.of()).stream()
-                    .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
-                    .map(p -> Optional.ofNullable(p.getAmount()).orElse(BigDecimal.ZERO))
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            // Còn lại = Lấy từ payment deposit nếu c��, không thì tính = total - paid
+            // Lấy số tiền còn lại chưa thanh toán từ Payment
             BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
                     .orElse(List.of()).stream()
                     .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
                     .findFirst()
                     .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
-                    .orElse(totalPrice.subtract(totalPaid));
+                    .orElse(BigDecimal.ZERO);
             return OrderVerificationResponse.builder()
                     .userId(customer.getUserId())
                     .orderId(order.getOrderId())
@@ -753,26 +765,29 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         res.setCouponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null);
         res.setTotalPrice(order.getTotalPrice());
 
-        // Tính tiền chưa thanh toán
-        BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO);
-        BigDecimal totalPaid = Optional.ofNullable(order.getPayments())
-                .orElse(List.of()).stream()
-                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
-                .map(p -> Optional.ofNullable(p.getAmount()).orElse(BigDecimal.ZERO))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        
+        // Lấy số tiền còn lại chưa thanh toán từ Payment
         BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
                 .orElse(List.of()).stream()
                 .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
                 .findFirst()
                 .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
-                .orElse(totalPrice.subtract(totalPaid));
+                .orElse(BigDecimal.ZERO);
         
         res.setRemainingAmount(remainingAmount);
 
-        if (v != null && v.getRentalStation() != null) {
-            res.setStationId(v.getRentalStation().getStationId());
-            res.setStationName(v.getRentalStation().getName());
+        if (v != null) {
+            res.setPlateNumber(v.getPlateNumber());
+            if (v.getRentalStation() != null) {
+                res.setStationId(v.getRentalStation().getStationId());
+                res.setStationName(v.getRentalStation().getName());
+            }
+            
+            // Lấy thông tin từ VehicleModel
+            VehicleModel model = vehicleModelService.findByVehicle(v);
+            if (model != null) {
+                res.setBrand(model.getBrand());
+                res.setCarmodel(model.getCarmodel());
+            }
         }
 
         return res;
@@ -970,85 +985,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             vehicleTimelineRepository.deleteAll(toDelete);
         }
     }
-
-    /**
-     * Xóa tất cả timeline của xe (khi staff chuyển xe về AVAILABLE)
-     */
-    private void deleteAllTimelinesForVehicle(Long vehicleId) {
-        if (vehicleId == null) return;
-
-        List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
-        if (!timelines.isEmpty()) {
-            vehicleTimelineRepository.deleteAll(timelines);
-        }
-    }
-
-    /**
-     * Tạo timeline CHECKING khi xe cần kiểm tra sau khi trả
-     */
-    private void createCheckingTimeline(Vehicle vehicle, RentalOrder order, String note) {
-        // Xóa timeline cũ của order này trước
-        deleteTimelineForOrder(order.getOrderId(), vehicle.getVehicleId());
-
-        LocalDateTime now = LocalDateTime.now();
-        VehicleTimeline timeline = VehicleTimeline.builder()
-                .vehicle(vehicle)
-                .order(order)
-                .day(now.toLocalDate())
-                .startTime(now)
-                .endTime(now.plusDays(1)) // Dự kiến kiểm tra trong 1 ngày
-                .status("CHECKING")
-                .sourceType("VEHICLE_CHECKING")
-                .note(note)
-                .updatedAt(now)
-                .build();
-        vehicleTimelineRepository.save(timeline);
-    }
-
-    /**
-     * Tạo timeline MAINTENANCE khi xe cần bảo trì
-     */
-    private void createMaintenanceTimeline(Vehicle vehicle, String note, LocalDateTime endTime) {
-        // Chỉ xóa timeline MAINTENANCE/CHECKING cũ, giữ lại booking timeline
-        deleteMaintenanceAndCheckingTimelines(vehicle.getVehicleId());
-
-        LocalDateTime now = LocalDateTime.now();
-        VehicleTimeline timeline = VehicleTimeline.builder()
-                .vehicle(vehicle)
-                .day(now.toLocalDate())
-                .startTime(now)
-                .endTime(endTime != null ? endTime : now.plusDays(3)) // Mặc định bảo trì 3 ngày
-                .status("MAINTENANCE")
-                .sourceType("VEHICLE_MAINTENANCE")
-                .note(note != null ? note : "Xe đang bảo trì")
-                .updatedAt(now)
-                .build();
-        vehicleTimelineRepository.save(timeline);
-    }
-
-    /**
-     * Xóa chỉ timeline MAINTENANCE và CHECKING (giữ lại timeline booking)
-     */
-    private void deleteMaintenanceAndCheckingTimelines(Long vehicleId) {
-        if (vehicleId == null) return;
-
-        List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
-
-        // Chỉ xóa timeline có sourceType là VEHICLE_MAINTENANCE hoặc VEHICLE_CHECKING
-        List<VehicleTimeline> toDelete = timelines.stream()
-                .filter(t -> "VEHICLE_MAINTENANCE".equals(t.getSourceType())
-                        || "VEHICLE_CHECKING".equals(t.getSourceType()))
-                .collect(Collectors.toList());
-
-        if (!toDelete.isEmpty()) {
-            vehicleTimelineRepository.deleteAll(toDelete);
-        }
-    }
-
-    /**
-     * Kiểm tra timeline tiếp theo của xe và tự động chuyển trạng thái
-     * Nếu có booking pending/confirmed tiếp theo → set xe thành BOOKED
-     */
 
     private void checkAndTransitionToNextBooking(Long vehicleId) {
         System.out.println("[checkAndTransitionToNextBooking] Kiểm tra xe " + vehicleId);
