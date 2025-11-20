@@ -12,4 +12,6 @@ import java.util.Optional;
 public interface VehicleModelRepository extends JpaRepository<VehicleModel, Long> {
     Optional<VehicleModel> findByVehicle(Vehicle vehicle);
     List<VehicleModel> findByCarmodelIgnoreCase(String carmodel);
+    List<VehicleModel> findByColorIgnoreCaseAndCarmodelIgnoreCaseAndVariantIgnoreCase(
+            String color, String carmodel, String variant);
 }

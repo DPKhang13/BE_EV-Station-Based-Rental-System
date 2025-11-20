@@ -255,6 +255,58 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    public List<VehicleResponse> getSimilarAvailableVehicles(Long vehicleId) {
+        // Lấy xe hiện tại
+        Vehicle currentVehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle không tồn tại: " + vehicleId));
+
+        // Lấy station ID của xe hiện tại
+        final Integer currentStationId = (currentVehicle.getRentalStation() != null) 
+                ? currentVehicle.getRentalStation().getStationId() 
+                : null;
+
+        // Lấy thông tin model của xe hiện tại
+        VehicleModel currentModel = vehicleModelService.findByVehicle(currentVehicle);
+        if (currentModel == null) {
+            throw new ResourceNotFoundException("VehicleModel không tồn tại cho vehicleId: " + vehicleId);
+        }
+
+        String color = currentModel.getColor();
+        String carmodel = currentModel.getCarmodel();
+        String variant = currentModel.getVariant();
+
+        if (color == null || carmodel == null || variant == null) {
+            throw new BadRequestException("Xe không có đủ thông tin (color, carmodel, variant)");
+        }
+
+        // Tìm các xe có cùng color, carmodel, variant (loại trừ xe hiện tại)
+        List<VehicleModel> similarModels = vehicleModelRepository
+                .findByColorIgnoreCaseAndCarmodelIgnoreCaseAndVariantIgnoreCase(color, carmodel, variant);
+
+        // Lọc các xe:
+        // 1. Không phải xe hiện tại
+        // 2. Status = "available"
+        // 3. Cùng trạm với xe hiện tại
+        List<VehicleResponse> similarAvailable = similarModels.stream()
+                .map(VehicleModel::getVehicle)
+                .filter(vehicle -> !vehicle.getVehicleId().equals(vehicleId)) // Loại trừ xe hiện tại
+                .filter(vehicle -> "available".equalsIgnoreCase(vehicle.getStatus())) // Chỉ lấy xe available
+                .filter(vehicle -> {
+                    // Lọc theo cùng trạm
+                    if (currentStationId == null) {
+                        return vehicle.getRentalStation() == null;
+                    }
+                    return vehicle.getRentalStation() != null && 
+                           vehicle.getRentalStation().getStationId().equals(currentStationId);
+                })
+                .limit(2) // Chỉ lấy tối đa 2 xe
+                .map(vehicle -> vehicleModelService.convertToDto(vehicle, vehicleModelService.findByVehicle(vehicle)))
+                .collect(Collectors.toList());
+
+        return similarAvailable;
+    }
+
+    @Override
     public VehicleDetailResponse getVehicleDetailById(Long vehicleId) {
         // Lấy xe
         Vehicle vehicle = vehicleRepository.findById(vehicleId)

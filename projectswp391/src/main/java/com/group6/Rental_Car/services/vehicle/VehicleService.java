@@ -21,6 +21,7 @@ public interface VehicleService {
     List<VehicleResponse> getVehiclesByStation(Integer stationId);
     List<VehicleResponse> getVehiclesByCarmodel(String carmodel);
     List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime, Integer stationId);
+    List<VehicleResponse> getSimilarAvailableVehicles(Long vehicleId);
 }
 
 

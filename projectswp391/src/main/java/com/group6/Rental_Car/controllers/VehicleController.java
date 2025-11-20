@@ -93,4 +93,11 @@ public class VehicleController {
         return ResponseEntity.ok(vehicles);
     }
 
+    @GetMapping("/{vehicleId}/similar")
+    public ResponseEntity<List<VehicleResponse>> getSimilarAvailableVehicles(
+            @PathVariable Long vehicleId) {
+        List<VehicleResponse> vehicles = vehicleService.getSimilarAvailableVehicles(vehicleId);
+        return ResponseEntity.ok(vehicles);
+    }
+
 }
