@@ -87,8 +87,9 @@ public class VehicleController {
     @GetMapping("/available")
     public ResponseEntity<List<VehicleResponse>> getAvailableVehicles(
             @RequestParam LocalDateTime startTime,
-            @RequestParam LocalDateTime endTime) {
-        List<VehicleResponse> vehicles = vehicleService.getAvailableVehicles(startTime, endTime);
+            @RequestParam LocalDateTime endTime,
+            @RequestParam(required = false) Integer stationId) {
+        List<VehicleResponse> vehicles = vehicleService.getAvailableVehicles(startTime, endTime, stationId);
         return ResponseEntity.ok(vehicles);
     }
 

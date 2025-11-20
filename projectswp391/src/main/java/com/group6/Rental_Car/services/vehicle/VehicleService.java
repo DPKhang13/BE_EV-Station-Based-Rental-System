@@ -20,7 +20,7 @@ public interface VehicleService {
     VehicleResponse updateStatusVehicle(Long vehicleId, VehicleUpdateStatusRequest req);
     List<VehicleResponse> getVehiclesByStation(Integer stationId);
     List<VehicleResponse> getVehiclesByCarmodel(String carmodel);
-    List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime);
+    List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime, Integer stationId);
 }
 
 

@@ -200,7 +200,7 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
-    public List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime) {
+    public List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime, Integer stationId) {
         if (startTime == null || endTime == null) {
             throw new BadRequestException("startTime và endTime không được để trống");
         }
@@ -208,8 +208,20 @@ public class VehicleServiceImpl implements VehicleService {
             throw new BadRequestException("endTime phải sau startTime");
         }
 
-        // Lấy tất cả xe
-        List<Vehicle> allVehicles = vehicleRepository.findAll();
+        // Lấy xe theo stationId nếu có, nếu không thì lấy tất cả
+        List<Vehicle> allVehicles;
+        if (stationId != null) {
+            // Validate stationId
+            if (stationId <= 0) {
+                throw new BadRequestException("stationId phải là số dương");
+            }
+            // Kiểm tra station có tồn tại không
+            rentalStationRepository.findById(stationId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station không tồn tại: " + stationId));
+            allVehicles = vehicleRepository.findByRentalStation_StationIdOrderByPlateNumberAsc(stationId);
+        } else {
+            allVehicles = vehicleRepository.findAll();
+        }
 
         // Lọc những xe không có booking overlap trong khoảng thời gian
         return allVehicles.stream()
