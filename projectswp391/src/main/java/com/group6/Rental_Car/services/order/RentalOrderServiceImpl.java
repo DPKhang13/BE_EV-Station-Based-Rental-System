@@ -261,6 +261,54 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     @Transactional
+    public OrderResponse cancelOrder(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        // Kiểm tra đơn hàng đã hoàn thành hoặc đã hủy chưa
+        String currentStatus = order.getStatus();
+        if (currentStatus != null) {
+            String upperStatus = currentStatus.toUpperCase();
+            if (upperStatus.equals("COMPLETED") || upperStatus.equals("FAILED")) {
+                throw new BadRequestException("Không thể hủy đơn hàng đã hoàn thành hoặc đã hủy");
+            }
+        }
+
+        // Lấy chi tiết chính
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        if (mainDetail == null) {
+            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
+        }
+
+        // Cập nhật status của detail thành FAILED
+        mainDetail.setStatus("FAILED");
+        rentalOrderDetailRepository.save(mainDetail);
+
+        // Cập nhật status của order thành FAILED
+        order.setStatus("FAILED");
+        rentalOrderRepository.save(order);
+
+        // Giải phóng xe
+        Vehicle vehicle = mainDetail.getVehicle();
+        if (vehicle != null) {
+            Long vehicleId = vehicle.getVehicleId();
+
+            vehicle.setStatus("AVAILABLE");
+            vehicleRepository.save(vehicle);
+
+            // Xóa timeline khi hủy order (không cần track nữa)
+            deleteTimelineForOrder(orderId, vehicleId);
+
+            // KIỂM TRA XE AVAILABLE: Nếu xe available, kiểm tra có booking tiếp theo thì chuyển sang BOOKED
+            System.out.println("[cancelOrder] Đơn " + orderId + " bị hủy, kiểm tra nếu xe available và có hàng chờ cho xe " + vehicleId);
+            checkAndTransitionToNextBooking(vehicleId);
+        }
+
+        return mapToResponse(order, mainDetail);
+    }
+
+    @Override
+    @Transactional
     public void deleteOrder(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));

@@ -61,6 +61,12 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/cancel/{orderId}")
+    public ResponseEntity<OrderResponse> cancel(@PathVariable UUID orderId) {
+        OrderResponse response = rentalOrderService.cancelOrder(orderId);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/delete/{orderId}")
     public ResponseEntity<String> delete(@PathVariable UUID orderId) {
         rentalOrderService.deleteOrder(orderId);

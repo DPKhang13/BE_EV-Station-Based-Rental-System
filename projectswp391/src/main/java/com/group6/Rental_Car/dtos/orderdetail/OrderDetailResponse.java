@@ -40,6 +40,9 @@ public class OrderDetailResponse {
     private String color;
     private String carmodel;
     
+    // Thông tin trạm
+    private String stationName;
+    
     // Tiền còn lại chưa thanh toán
     private BigDecimal remainingAmount;
 }

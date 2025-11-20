@@ -54,7 +54,7 @@ public class OrderServiceServiceImpl implements OrderServiceService {
         RentalOrderDetail serviceDetail = RentalOrderDetail.builder()
                 .order(order)
                 .vehicle(vehicle)
-                .type("SERVICE_" + request.getServiceType().toUpperCase())
+                .type("SERVICE")
                 .startTime(LocalDateTime.now())
                 .endTime(LocalDateTime.now())
                 .price(request.getCost())

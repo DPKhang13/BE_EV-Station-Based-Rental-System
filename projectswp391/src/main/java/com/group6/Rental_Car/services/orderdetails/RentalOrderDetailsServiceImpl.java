@@ -253,6 +253,11 @@ import java.util.stream.Collectors;
                 dto.setVehicleName(vehicle.getVehicleName());
                 dto.setPlateNumber(vehicle.getPlateNumber());
                 
+                // Thông tin trạm
+                if (vehicle.getRentalStation() != null) {
+                    dto.setStationName(vehicle.getRentalStation().getName());
+                }
+                
                 // Lấy thông tin từ VehicleModel
                 VehicleModel model = vehicleModelService.findByVehicle(vehicle);
                 if (model != null) {
