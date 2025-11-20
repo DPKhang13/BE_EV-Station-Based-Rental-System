@@ -271,17 +271,15 @@ public class VehicleServiceImpl implements VehicleService {
             throw new ResourceNotFoundException("VehicleModel không tồn tại cho vehicleId: " + vehicleId);
         }
 
-        String color = currentModel.getColor();
         String carmodel = currentModel.getCarmodel();
-        String variant = currentModel.getVariant();
 
-        if (color == null || carmodel == null || variant == null) {
-            throw new BadRequestException("Xe không có đủ thông tin (color, carmodel, variant)");
+        if (carmodel == null || carmodel.isBlank()) {
+            throw new BadRequestException("Xe không có thông tin carmodel");
         }
 
-        // Tìm các xe có cùng color, carmodel, variant (loại trừ xe hiện tại)
+        // Tìm các xe có cùng carmodel (cùng model xe)
         List<VehicleModel> similarModels = vehicleModelRepository
-                .findByColorIgnoreCaseAndCarmodelIgnoreCaseAndVariantIgnoreCase(color, carmodel, variant);
+                .findByCarmodelIgnoreCase(carmodel);
 
         // Lọc các xe:
         // 1. Không phải xe hiện tại
