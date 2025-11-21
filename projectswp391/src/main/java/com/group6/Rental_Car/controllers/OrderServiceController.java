@@ -57,4 +57,9 @@ public class OrderServiceController {
     public ResponseEntity<List<OrderServiceResponse>> getByStatus(@PathVariable String status) {
         return ResponseEntity.ok(orderServiceService.getServicesByStatus(status));
     }
+
+    @GetMapping("/price-list")
+    public ResponseEntity<List<OrderServiceResponse>> getPriceList() {
+        return ResponseEntity.ok(orderServiceService.getPriceList());
+    }
 }

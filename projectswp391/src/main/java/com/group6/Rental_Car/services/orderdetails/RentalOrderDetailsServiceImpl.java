@@ -135,40 +135,102 @@ import java.util.stream.Collectors;
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
             String status = order.getStatus().toUpperCase();
-            String methodPayment = paymentRepository
-                    .findByRentalOrder_OrderId(order.getOrderId()).stream()
-                    .sorted(Comparator.comparing(Payment::getPaymentId))
-                    .map(Payment::getMethod)
-                    .map(mth -> mth.equalsIgnoreCase("CASH") ? "CASH" : "captureWallet")
-                    .findFirst()
-                    .orElse("captureWallet");
+            // Lấy danh sách payments để map với từng detail type
+            List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
+            
             // Show RENTAL khi: PENDING (chưa thanh toán), CREATED, BOOKED
+            // Show TẤT CẢ khi: FAILED (để hiển thị đầy đủ thông tin đơn đã hủy)
             boolean showOnlyRental =
                     status.equals("PENDING") ||
                     status.equals("CREATED") ||
                     status.equals("BOOKED");
+            boolean showAll = status.equals("FAILED");
 
             List<RentalOrderDetail> raw = rentalOrderDetailRepository.findByOrder_OrderId(orderId);
 
             // Lấy số tiền còn lại chưa thanh toán từ Payment
-            BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
-                    .orElse(List.of()).stream()
-                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                    .findFirst()
-                    .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
-                    .orElse(BigDecimal.ZERO);
+            // Logic: Kiểm tra FULL_PAYMENT SUCCESS trước (có thể có remainingAmount > 0 nếu thêm dịch vụ)
+            // Sau đó mới kiểm tra DEPOSIT SUCCESS
+            BigDecimal remainingAmount;
+            
+            // Kiểm tra FULL_PAYMENT (type 3) SUCCESS
+            Optional<Payment> fullPayment = payments.stream()
+                    .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst();
+            
+            if (fullPayment.isPresent()) {
+                BigDecimal remaining = fullPayment.get().getRemainingAmount();
+                remainingAmount = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
+                        ? remaining 
+                        : BigDecimal.ZERO;
+            } else {
+                // Kiểm tra FINAL_PAYMENT (type 2) SUCCESS → đã thanh toán hết
+                boolean hasFinalPaymentSuccess = payments.stream()
+                        .anyMatch(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.SUCCESS);
+                if (hasFinalPaymentSuccess) {
+                    remainingAmount = BigDecimal.ZERO;
+                } else {
+                    // Kiểm tra DEPOSIT (type 1) SUCCESS
+                    Optional<Payment> depositPayment = payments.stream()
+                            .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                            .findFirst();
+                    
+                    if (depositPayment.isPresent()) {
+                        BigDecimal remaining = depositPayment.get().getRemainingAmount();
+                        remainingAmount = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
+                                ? remaining 
+                                : BigDecimal.ZERO;
+                    } else {
+                        // Chưa thanh toán gì → trả về totalPrice
+                        remainingAmount = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+                    }
+                }
+            }
 
             List<OrderDetailResponse> details = raw.stream()
                     .filter(d -> {
+                        // Nếu FAILED, show tất cả detail
+                        if (showAll) return true;
+                        
                         String type = safeType(d);
-
                         if (showOnlyRental) return type.equals("RENTAL");
                         return !type.equals("RENTAL");
                     })
                     .map(d -> {
                         OrderDetailResponse dto = toResponse(d, order);
+                        
+                        // Chỉ set payment method cho các detail có payment tương ứng
+                        // SERVICE detail không có payment riêng → không set method
+                        String detailType = safeType(d);
+                        String methodPayment = null;
+                        
+                        if (!"SERVICE".equals(detailType)) {
+                            // Tìm payment method tương ứng với detail type
+                            methodPayment = payments.stream()
+                                    .sorted(Comparator.comparing(Payment::getPaymentId))
+                                    .filter(p -> {
+                                        // Map detail type với payment type
+                                        if ("DEPOSIT".equals(detailType) && p.getPaymentType() == 1) return true;
+                                        if ("PICKUP".equals(detailType) && p.getPaymentType() == 2) return true;
+                                        if ("FULL_PAYMENT".equals(detailType) && p.getPaymentType() == 3) return true;
+                                        return false;
+                                    })
+                                    .map(Payment::getMethod)
+                                    .map(mth -> mth != null && mth.equalsIgnoreCase("CASH") ? "CASH" : mth)
+                                    .findFirst()
+                                    .orElse(null);
+                        }
+                        
                         dto.setMethodPayment(methodPayment);
-                        dto.setRemainingAmount(remainingAmount);
+                        
+                        // Chỉ hiển thị remainingAmount cho các detail thanh toán
+                        boolean isPaymentDetail = detailType.equals("DEPOSIT")
+                                || detailType.equals("PICKUP")
+                                || detailType.equals("FULL_PAYMENT")
+                                || detailType.equals("REFUND");
+                        boolean isPendingRental = detailType.equals("RENTAL") && showOnlyRental;
+
+                        dto.setRemainingAmount((isPaymentDetail || isPendingRental) ? remainingAmount : null);
                         return dto;
                     })
                     .collect(Collectors.toList());
@@ -252,6 +314,7 @@ import java.util.stream.Collectors;
             if (vehicle != null) {
                 dto.setVehicleName(vehicle.getVehicleName());
                 dto.setPlateNumber(vehicle.getPlateNumber());
+                dto.setVehicleStatus(vehicle.getStatus());
                 
                 // Thông tin trạm
                 if (vehicle.getRentalStation() != null) {

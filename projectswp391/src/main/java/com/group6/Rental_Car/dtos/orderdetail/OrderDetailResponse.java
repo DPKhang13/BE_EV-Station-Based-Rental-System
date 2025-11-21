@@ -39,6 +39,7 @@ public class OrderDetailResponse {
     private String plateNumber;
     private String color;
     private String carmodel;
+    private String vehicleStatus;
     
     // Thông tin trạm
     private String stationName;

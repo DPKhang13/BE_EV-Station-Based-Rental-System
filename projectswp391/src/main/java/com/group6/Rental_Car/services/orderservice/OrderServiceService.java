@@ -14,4 +14,5 @@ public interface OrderServiceService {
     List<OrderServiceResponse> getServicesByVehicle(Long vehicleId);
     List<OrderServiceResponse> getServicesByStation(Integer stationId);
     List<OrderServiceResponse> getServicesByStatus(String status);
+    List<OrderServiceResponse> getPriceList(); // Bảng giá dịch vụ
 }

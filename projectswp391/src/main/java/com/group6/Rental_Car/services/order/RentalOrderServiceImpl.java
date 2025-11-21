@@ -129,19 +129,17 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         rentalOrderDetailRepository.save(detail);
 
         // ====== CẬP NHẬT XE ======
-        // Kiểm tra xem xe này đã có booking nào chưa (bằng cách check timeline BOOKED)
-        List<VehicleTimeline> existingBookings = vehicleTimelineRepository.findByVehicle_VehicleId(vehicle.getVehicleId())
-                .stream()
-                .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus()))
-                .toList();
-
-        // Nếu đây là lần đầu tiên đặt xe (không có timeline BOOKED nào) → set status = BOOKED ngay
-        if (existingBookings.isEmpty()) {
+        // Khi tạo order mới, luôn set xe thành BOOKED (đã kiểm tra overlap ở trên rồi)
+        // Chỉ set BOOKED nếu xe không đang ở trạng thái RENTAL hoặc CHECKING
+        String currentVehicleStatus = vehicle.getStatus();
+        if (currentVehicleStatus == null || 
+            (!"RENTAL".equalsIgnoreCase(currentVehicleStatus) && 
+             !"CHECKING".equalsIgnoreCase(currentVehicleStatus))) {
             vehicle.setStatus("BOOKED");
             vehicleRepository.save(vehicle);
-            System.out.println(" [createOrder] Lần đầu tiên đặt xe " + vehicle.getVehicleId() + " → Set status = BOOKED");
+            System.out.println(" [createOrder] Đã set xe " + vehicle.getVehicleId() + " → BOOKED cho đơn mới");
         } else {
-            System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " đã có booking, giữ status hiện tại");
+            System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " đang ở trạng thái " + currentVehicleStatus + ", giữ nguyên");
         }
 
         // ====== GHI VEHICLE TIMELINE ======
@@ -261,7 +259,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     @Transactional
-    public OrderResponse cancelOrder(UUID orderId) {
+    public OrderResponse cancelOrder(UUID orderId, String cancellationReason) {
+        // Tìm đơn hàng
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
@@ -280,28 +279,43 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
         }
 
-        // Cập nhật status của detail thành FAILED
-        mainDetail.setStatus("FAILED");
-        rentalOrderDetailRepository.save(mainDetail);
-
+        // Cập nhật TẤT CẢ các detail của order thành FAILED
+        List<RentalOrderDetail> allDetails = order.getDetails();
+        if (allDetails != null && !allDetails.isEmpty()) {
+            for (RentalOrderDetail detail : allDetails) {
+                detail.setStatus("FAILED");
+            }
+            rentalOrderDetailRepository.saveAll(allDetails);
+        }
+        
         // Cập nhật status của order thành FAILED
         order.setStatus("FAILED");
         rentalOrderRepository.save(order);
 
-        // Giải phóng xe
+        // Giải phóng xe về AVAILABLE
         Vehicle vehicle = mainDetail.getVehicle();
         if (vehicle != null) {
-            Long vehicleId = vehicle.getVehicleId();
-
             vehicle.setStatus("AVAILABLE");
             vehicleRepository.save(vehicle);
+            
+            // Xóa timeline của đơn hàng đã hủy
+            deleteTimelineForOrder(orderId, vehicle.getVehicleId());
+        }
 
-            // Xóa timeline khi hủy order (không cần track nữa)
-            deleteTimelineForOrder(orderId, vehicleId);
-
-            // KIỂM TRA XE AVAILABLE: Nếu xe available, kiểm tra có booking tiếp theo thì chuyển sang BOOKED
-            System.out.println("[cancelOrder] Đơn " + orderId + " bị hủy, kiểm tra nếu xe available và có hàng chờ cho xe " + vehicleId);
-            checkAndTransitionToNextBooking(vehicleId);
+        // Gửi thông báo cho khách hàng
+        User customer = order.getCustomer();
+        if (customer != null) {
+            String message = "Đơn hàng #" + orderId + " đã bị hủy";
+            if (cancellationReason != null && !cancellationReason.trim().isEmpty()) {
+                message += ". Lý do: " + cancellationReason;
+            }
+            
+            Notification notification = Notification.builder()
+                    .user(customer)
+                    .message(message)
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            notificationRepository.save(notification);
         }
 
         return mapToResponse(order, mainDetail);
@@ -389,12 +403,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     res.setStatus(order.getStatus());
                     
                     // Lấy số tiền còn lại chưa thanh toán từ Payment
-                    BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
-                            .orElse(List.of()).stream()
-                            .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                            .findFirst()
-                            .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
-                            .orElse(BigDecimal.ZERO);
+                    BigDecimal remainingAmount = calculateRemainingAmount(order);
                     res.setRemainingAmount(remainingAmount);
 
                     return res;
@@ -651,12 +660,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             BigDecimal totalPrice = Optional.ofNullable(order.getTotalPrice()).orElse(BigDecimal.ZERO);
 
             // Lấy số tiền còn lại chưa thanh toán từ Payment
-            BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
-                    .orElse(List.of()).stream()
-                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                    .findFirst()
-                    .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
-                    .orElse(BigDecimal.ZERO);
+            BigDecimal remainingAmount = calculateRemainingAmount(order);
             return OrderVerificationResponse.builder()
                     .userId(customer.getUserId())
                     .orderId(order.getOrderId())
@@ -801,6 +805,67 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .orElse(null);
     }
 
+    /**
+     * Tính số tiền còn lại chưa thanh toán
+     * Logic:
+     * - Nếu có FULL_PAYMENT (type 3) SUCCESS → đã thanh toán hết → 0
+     * - Nếu có FINAL_PAYMENT (type 2) SUCCESS → đã thanh toán hết → 0
+     * - Nếu có DEPOSIT (type 1) SUCCESS → lấy remainingAmount từ payment
+     * - Nếu không có payment nào thành công → trả về totalPrice (chưa thanh toán gì)
+     */
+    private BigDecimal calculateRemainingAmount(RentalOrder order) {
+        // Fetch payments từ repository để đảm bảo load đầy đủ (tránh lazy loading issue)
+        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
+        
+        if (payments == null || payments.isEmpty()) {
+            // Chưa thanh toán gì → trả về totalPrice
+            return order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+        }
+        
+        // Kiểm tra FULL_PAYMENT (type 3) SUCCESS
+        // Nếu có FULL_PAYMENT SUCCESS, lấy remainingAmount từ payment đó
+        // (có thể > 0 nếu thêm dịch vụ sau khi thanh toán)
+        Optional<Payment> fullPayment = payments.stream()
+                .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+        
+        if (fullPayment.isPresent()) {
+            BigDecimal remaining = fullPayment.get().getRemainingAmount();
+            BigDecimal result = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
+                    ? remaining 
+                    : BigDecimal.ZERO;
+            System.out.println("✅ [calculateRemainingAmount] FULL_PAYMENT SUCCESS → remainingAmount = " + result);
+            return result;
+        }
+        
+        // Kiểm tra FINAL_PAYMENT (type 2) SUCCESS → đã thanh toán hết
+        boolean hasFinalPaymentSuccess = payments.stream()
+                .anyMatch(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.SUCCESS);
+        if (hasFinalPaymentSuccess) {
+            System.out.println("✅ [calculateRemainingAmount] Tìm thấy FINAL_PAYMENT SUCCESS → remainingAmount = 0");
+            return BigDecimal.ZERO;
+        }
+        
+        // Kiểm tra DEPOSIT (type 1) SUCCESS → lấy remainingAmount
+        Optional<Payment> depositPayment = payments.stream()
+                .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+        
+        if (depositPayment.isPresent()) {
+            BigDecimal remaining = depositPayment.get().getRemainingAmount();
+            BigDecimal result = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
+                    ? remaining 
+                    : BigDecimal.ZERO;
+            System.out.println("💰 [calculateRemainingAmount] DEPOSIT SUCCESS → remainingAmount = " + result);
+            return result;
+        }
+        
+        // Chưa thanh toán gì → trả về totalPrice
+        BigDecimal totalPrice = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+        System.out.println("⚠️ [calculateRemainingAmount] Không có payment SUCCESS nào → remainingAmount = totalPrice = " + totalPrice);
+        return totalPrice;
+    }
+
     private OrderResponse mapToResponse(RentalOrder order, RentalOrderDetail detail) {
         if (detail == null) return modelMapper.map(order, OrderResponse.class);
 
@@ -814,13 +879,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         res.setTotalPrice(order.getTotalPrice());
 
         // Lấy số tiền còn lại chưa thanh toán từ Payment
-        BigDecimal remainingAmount = Optional.ofNullable(order.getPayments())
-                .orElse(List.of()).stream()
-                .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                .findFirst()
-                .map(p -> Optional.ofNullable(p.getRemainingAmount()).orElse(BigDecimal.ZERO))
-                .orElse(BigDecimal.ZERO);
-        
+        BigDecimal remainingAmount = calculateRemainingAmount(order);
         res.setRemainingAmount(remainingAmount);
 
         if (v != null) {
@@ -1118,7 +1177,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .startTime(nextStart)
                     .endTime(nextEnd)
                     .status("BOOKED")
-                    .sourceType("AUTO_QUEUE_TRANSITION")
+                    .sourceType("AUTO_QUEUE")
                     .note("Tự động chuyển từ hàng chờ để chuẩn bị cho booking #" + nextBooking.getOrder().getOrderId())
                     .updatedAt(now)
                     .build();

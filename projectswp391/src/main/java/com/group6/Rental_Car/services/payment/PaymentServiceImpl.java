@@ -59,26 +59,23 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         short type = dto.getPaymentType();
-        if (type < 1 || type > 5)
+        if (type < 1 || type > 4)
             throw new BadRequestException("Invalid payment type");
-
-        // ============================
-        // TYPE 5 - SERVICE PAYMENT
-        // ============================
-        if (type == 5)
-            return createServicePayment(order);
 
         Vehicle vehicle = getMainVehicle(order);
         BigDecimal total = order.getTotalPrice();
 
-        // Validate payment method
-        String method = Optional.ofNullable(dto.getMethod()).orElse("momo");
+        // Validate payment method - yêu cầu phải có method
+        String method = dto.getMethod();
+        if (method == null || method.trim().isEmpty()) {
+            throw new BadRequestException("Phương thức thanh toán là bắt buộc");
+        }
 
         // Hạn chế các method hợp lệ
         List<String> validMethods = List.of("captureWallet", "payWithMethod", "momo");
 
         if (!validMethods.contains(method)) {
-            throw new BadRequestException("Invalid MOMO method: " + method);
+            throw new BadRequestException("Phương thức thanh toán không hợp lệ: " + method);
         }
 
         // ============================
@@ -92,15 +89,66 @@ public class PaymentServiceImpl implements PaymentService {
             amount = total.divide(BigDecimal.valueOf(2), 2, java.math.RoundingMode.HALF_UP);
             remainingAmount = total.subtract(amount);
         } else if (type == 2) {
-            // Thanh toán còn lại - lấy từ payment deposit
-            Payment depositPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+            // Thanh toán phần còn lại cho DEPOSIT hoặc FULL PAYMENT (dịch vụ phát sinh)
+            Optional<Payment> depositPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
                     .stream()
                     .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
-                    .findFirst()
-                    .orElseThrow(() -> new BadRequestException("Must pay deposit first"));
+                    .findFirst();
 
-            amount = depositPayment.getRemainingAmount();
+            Optional<Payment> fullPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst();
+
+            if (depositPaymentOpt.isPresent()) {
+                Payment depositPayment = depositPaymentOpt.get();
+
+                // Lấy số tiền còn lại từ deposit payment - ĐÂY LÀ SỐ TIỀN CẦN THANH TOÁN
+                BigDecimal depositRemaining = depositPayment.getRemainingAmount();
+                if (depositRemaining == null || depositRemaining.compareTo(BigDecimal.ZERO) <= 0) {
+                    // Tính lại số tiền còn lại = tổng - số đã đặt cọc
+                    amount = total.subtract(depositPayment.getAmount());
+                    log.info("💰 Final payment: calculated remaining = total({}) - deposit({}) = {}", 
+                            total, depositPayment.getAmount(), amount);
+                } else {
+                    amount = depositRemaining;
+                    log.info("💰 Final payment: using remainingAmount from deposit = {}", amount);
+                }
+            } else if (fullPaymentOpt.isPresent()) {
+                Payment fullPayment = fullPaymentOpt.get();
+                BigDecimal outstanding = fullPayment.getRemainingAmount();
+
+                if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new BadRequestException("Không có khoản nào cần thanh toán (full payment)");
+                }
+
+                amount = outstanding;
+                log.info("💰 Final payment (service): using remainingAmount from FULL_PAYMENT = {}", amount);
+            } else {
+                throw new BadRequestException("Must pay deposit first or have outstanding full payment");
+            }
+
             remainingAmount = BigDecimal.ZERO;
+            
+            // Tìm payment type 2 đã tồn tại (nếu có) hoặc tạo mới
+            Payment existingFinalPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.PENDING)
+                    .findFirst()
+                    .orElse(null);
+            
+            if (existingFinalPayment != null) {
+                // Cập nhật amount của payment đã tồn tại
+                existingFinalPayment.setAmount(amount);
+                existingFinalPayment.setRemainingAmount(BigDecimal.ZERO);
+                existingFinalPayment.setMethod(method);
+                Payment payment = paymentRepository.save(existingFinalPayment);
+                
+                log.info("✅ Using existing final payment {} with amount={}", payment.getPaymentId(), amount);
+                updateOrderStatus(order, type);
+                return buildMoMoPaymentUrl(order, payment, amount);
+            }
+            // Nếu chưa có payment type 2, tiếp tục tạo mới ở dưới
         } else if (type == 3) {
             // Full payment
             amount = total;
@@ -113,6 +161,29 @@ public class PaymentServiceImpl implements PaymentService {
         // ============================
         // TẠO PAYMENT MỚI cho mỗi giao dịch
         // ============================
+        // Đảm bảo amount đúng - đặc biệt cho type == 2
+        if (type == 2) {
+            log.info("🔍 DEBUG type==2: amount={}, total={}, remainingAmount={}", amount, total, remainingAmount);
+            // Double check: nếu amount == total, có thể đã bị sai
+            if (amount.compareTo(total) == 0) {
+                log.error("❌ ERROR: amount == total for type 2! This should not happen!");
+                // Tìm lại deposit payment và tính lại
+                Payment depositPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                        .stream()
+                        .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                        .findFirst()
+                        .orElse(null);
+                if (depositPayment != null) {
+                    BigDecimal correctAmount = depositPayment.getRemainingAmount();
+                    if (correctAmount == null || correctAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                        correctAmount = total.subtract(depositPayment.getAmount());
+                    }
+                    amount = correctAmount;
+                    log.info("🔧 FIXED: corrected amount from {} to {}", total, amount);
+                }
+            }
+        }
+        
         Payment payment = paymentRepository.save(
                 Payment.builder()
                         .rentalOrder(order)
@@ -124,8 +195,8 @@ public class PaymentServiceImpl implements PaymentService {
                         .build()
         );
 
-        log.info("✅ Created new payment {} with amount={}, remaining={}, type={}",
-                payment.getPaymentId(), payment.getAmount(), payment.getRemainingAmount(), type);
+        log.info("✅ Created new payment {} with amount={}, remaining={}, type={}, total={}",
+                payment.getPaymentId(), payment.getAmount(), payment.getRemainingAmount(), type, total);
 
         updateOrderStatus(order, type);
 
@@ -135,13 +206,6 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         return buildMoMoPaymentUrl(order, payment, amount);
-    }
-
-    // ============================================================
-    // TYPE 5 — SERVICE PAYMENT
-    // ============================================================
-    private PaymentResponse createServicePayment(RentalOrder order) {
-        throw new BadRequestException("Service payment is not supported");
     }
 
     // ============================================================
@@ -193,12 +257,6 @@ public class PaymentServiceImpl implements PaymentService {
         // Success
         payment.setStatus(PaymentStatus.SUCCESS);
 
-        // SERVICE PAYMENT
-        if (payment.getPaymentType() == 5) {
-            handleServiceSuccess(order, payment);
-            return buildCallbackResponse(order, payment, true);
-        }
-
         Vehicle v = getMainVehicle(order);
 
         switch (payment.getPaymentType()) {
@@ -216,40 +274,6 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ============================================================
-    // SERVICE SUCCESS
-    // ============================================================
-    private void handleServiceSuccess(RentalOrder order, Payment payment) {
-        // Service payment is not supported
-
-        // 🔥 2) Cập nhật RentalOrderDetail type SERVICE → SUCCESS
-        rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
-                .stream()
-                .filter(d -> "SERVICE_SERVICE".equalsIgnoreCase(d.getType()))
-                .forEach(d -> {
-                    d.setStatus("SUCCESS");
-                    rentalOrderDetailRepository.save(d);
-                });
-
-        // 3) Cập nhật trạng thái Order
-        if ("PENDING_FINAL_PAYMENT".equalsIgnoreCase(order.getStatus())) {
-            order.setStatus("COMPLETED");
-
-            Vehicle vehicle = getMainVehicle(order);
-            if (vehicle != null) {
-                deleteTimelineForOrder(order.getOrderId(), vehicle.getVehicleId());
-            }
-        } else {
-            order.setStatus("SERVICE_PAID");
-        }
-
-        paymentRepository.save(payment);
-        rentalOrderRepository.save(order);
-
-        // 4) Lưu lịch sử giao dịch
-        recordTransaction(order, payment, "SERVICE");
-    }
-
-    // ============================================================
     // RENTAL PAYMENT SUCCESS
     // ============================================================
 
@@ -264,43 +288,69 @@ public class PaymentServiceImpl implements PaymentService {
         // Create deposit detail
         createOrUpdateDetail(order, v, "DEPOSIT", deposit, "Thanh toán đặt cọc", "SUCCESS");
 
-        // AUTO CREATE PICKUP ONCE - nếu có remainingAmount
-        if (payment.getRemainingAmount() != null && payment.getRemainingAmount().compareTo(BigDecimal.ZERO) > 0) {
-            createOrUpdateDetail(order, v, "PICKUP", payment.getRemainingAmount(), "Thanh toán phần còn lại", "PENDING");
-        }
+        // Không tự động tạo PICKUP detail - chỉ tạo khi thanh toán phần còn lại
     }
 
     // TYPE 2 — Final Payment Success
     private void finalSuccess(RentalOrder order, Payment payment) {
-
-        RentalOrderDetail pickup = rentalOrderDetailRepository
-                .findByOrder_OrderId(order.getOrderId())
-                .stream()
-                .filter(d -> d.getType().equals("PICKUP"))
-                .findFirst()
-                .orElseThrow(() -> new BadRequestException("Missing PICKUP detail"));
-
-        if ("SUCCESS".equalsIgnoreCase(pickup.getStatus()))
-            throw new BadRequestException("Pickup already paid");
-
-        BigDecimal finalAmount = payment.getAmount();
-
         order.setStatus("PAID");
         payment.setRemainingAmount(BigDecimal.ZERO);
 
-        // CẬP NHẬT remainingAmount của payment deposit về 0
-        Payment depositPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+        // Ưu tiên xử lý phần còn lại của DEPOSIT (type 1)
+        Optional<Payment> depositPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
                 .stream()
                 .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+
+        if (depositPaymentOpt.isPresent()) {
+            Payment depositPayment = depositPaymentOpt.get();
+            BigDecimal remainingAmount = depositPayment.getRemainingAmount();
+
+            if (remainingAmount != null && remainingAmount.compareTo(BigDecimal.ZERO) > 0) {
+                // Lấy số tiền còn lại - nếu null hoặc 0, dùng amount của payment hiện tại (đã thanh toán)
+                log.info("💰 Final payment: using remainingAmount {} from deposit for PICKUP detail", remainingAmount);
+
+                depositPayment.setRemainingAmount(BigDecimal.ZERO);
+                paymentRepository.save(depositPayment);
+
+                // Tạo PICKUP detail với status SUCCESS khi thanh toán phần còn lại
+                Vehicle vehicle = getMainVehicle(order);
+                if (vehicle != null) {
+                    createOrUpdateDetail(order, vehicle, "PICKUP", remainingAmount, "Thanh toán phần còn lại", "SUCCESS");
+                    log.info("✅ Created PICKUP detail with amount={}", remainingAmount);
+                } else {
+                    log.warn("⚠️ Cannot create PICKUP detail: vehicle is null");
+                }
+                return;
+            }
+        }
+
+        // Nếu không còn deposit outstanding, xử lý remainingAmount của FULL_PAYMENT (dịch vụ phát sinh)
+        Payment fullPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                .stream()
+                .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
                 .findFirst()
-                .orElseThrow(() -> new BadRequestException("Deposit payment not found"));
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy thanh toán full để cập nhật"));
 
-        depositPayment.setRemainingAmount(BigDecimal.ZERO);
-        paymentRepository.save(depositPayment);
+        BigDecimal outstanding = Optional.ofNullable(fullPayment.getRemainingAmount()).orElse(BigDecimal.ZERO);
+        if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("⚠️ Final payment success nhưng không có remainingAmount nào trên FULL_PAYMENT");
+            return;
+        }
 
-        pickup.setStatus("SUCCESS");
-        pickup.setPrice(finalAmount);
-        rentalOrderDetailRepository.save(pickup);
+        BigDecimal newRemaining = outstanding.subtract(payment.getAmount());
+        if (newRemaining.compareTo(BigDecimal.ZERO) < 0) {
+            log.warn("⚠️ Thanh toán vượt quá remainingAmount. outstanding={}, payment={}", outstanding, payment.getAmount());
+            newRemaining = BigDecimal.ZERO;
+        }
+
+        fullPayment.setRemainingAmount(newRemaining);
+        paymentRepository.save(fullPayment);
+        log.info("✅ Updated FULL_PAYMENT remainingAmount: {} -> {}", outstanding, newRemaining);
+
+        if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
+            markServiceDetailsAsSuccess(order);
+        }
     }
 
     // TYPE 3 — Full Payment Success
@@ -368,12 +418,29 @@ public class PaymentServiceImpl implements PaymentService {
         rentalOrderDetailRepository.save(detail);
     }
 
+    private void markServiceDetailsAsSuccess(RentalOrder order) {
+        List<RentalOrderDetail> serviceDetails = Optional.ofNullable(order.getDetails())
+                .orElse(List.of()).stream()
+                .filter(d -> "SERVICE".equalsIgnoreCase(d.getType()))
+                .filter(d -> !"SUCCESS".equalsIgnoreCase(d.getStatus()))
+                .toList();
+
+        if (serviceDetails.isEmpty()) return;
+
+        serviceDetails.forEach(d -> d.setStatus("SUCCESS"));
+        rentalOrderDetailRepository.saveAll(serviceDetails);
+        log.info("✅ Updated {} service detail(s) to SUCCESS for order {}", serviceDetails.size(), order.getOrderId());
+    }
+
     private PaymentResponse buildMoMoPaymentUrl(RentalOrder order, Payment payment, BigDecimal amount) {
 
         // Validate amount
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BadRequestException("Payment amount must be greater than 0");
         }
+
+        log.info("🔗 Building MoMo URL: paymentId={}, amount={}, payment.getAmount()={}", 
+                payment.getPaymentId(), amount, payment.getAmount());
 
         try {
             String partnerCode = momoConfig.getPartnerCode();
@@ -556,7 +623,6 @@ public class PaymentServiceImpl implements PaymentService {
             case 2 -> "PICKUP";
             case 3 -> "FULL_PAYMENT";
             case 4 -> "REFUND";
-            case 5 -> "SERVICE";
             default -> "UNKNOWN";
         };
     }
@@ -567,7 +633,6 @@ public class PaymentServiceImpl implements PaymentService {
             case 2 -> "Thanh toán phần còn lại";
             case 3 -> "Thanh toán toàn bộ đơn thuê";
             case 4 -> "Hoàn tiền";
-            case 5 -> "Thanh toán dịch vụ phát sinh";
             default -> "Không xác định";
         };
     }
@@ -665,117 +730,113 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         short type = dto.getPaymentType();
-        if (type < 1 || type > 5)
+        if (type < 1 || type > 4)
             throw new BadRequestException("Invalid payment type");
-
-        // ============================
-        // TYPE 5 - SERVICE PAYMENT
-        // ============================
-        if (type == 5) {
-            return processCashServicePayment(order);
-        }
 
         BigDecimal total = order.getTotalPrice();
         BigDecimal amount;
         BigDecimal remainingAmount;
 
-        // ============================
-        // TYPE 1 — DEPOSIT (50%)
-        // ============================
         if (type == 1) {
             amount = total.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
             remainingAmount = total.subtract(amount);
+        } else if (type == 2) {
+            Optional<Payment> depositPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst();
 
-            // Create deposit payment (PENDING)
-            Payment depositPayment = paymentRepository.save(
+            Optional<Payment> fullPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst();
+
+            if (depositPaymentOpt.isPresent()) {
+                Payment depositPayment = depositPaymentOpt.get();
+
+                BigDecimal depositRemaining = depositPayment.getRemainingAmount();
+                if (depositRemaining == null || depositRemaining.compareTo(BigDecimal.ZERO) <= 0) {
+                    amount = total.subtract(depositPayment.getAmount());
+                    log.info("💵 [cash/type2] calculated remaining = total({}) - deposit({}) = {}",
+                            total, depositPayment.getAmount(), amount);
+                } else {
+                    amount = depositRemaining;
+                    log.info("💵 [cash/type2] using remainingAmount from deposit = {}", amount);
+                }
+            } else if (fullPaymentOpt.isPresent()) {
+                Payment fullPayment = fullPaymentOpt.get();
+                BigDecimal outstanding = fullPayment.getRemainingAmount();
+
+                if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new BadRequestException("Không có khoản nào cần thanh toán (full payment)");
+                }
+
+                amount = outstanding;
+                log.info("💵 [cash/type2] using remainingAmount from FULL_PAYMENT = {}", amount);
+            } else {
+                throw new BadRequestException("Must pay deposit first or have outstanding full payment");
+            }
+
+            remainingAmount = BigDecimal.ZERO;
+        } else if (type == 3) {
+            amount = total;
+            remainingAmount = BigDecimal.ZERO;
+        } else {
+            throw new BadRequestException("Unsupported cash payment type");
+        }
+
+        Payment payment;
+        if (type == 2) {
+            Payment existingFinalPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.PENDING)
+                    .findFirst()
+                    .orElse(null);
+
+            if (existingFinalPayment != null) {
+                existingFinalPayment.setAmount(amount);
+                existingFinalPayment.setRemainingAmount(BigDecimal.ZERO);
+                existingFinalPayment.setMethod("CASH");
+                payment = paymentRepository.save(existingFinalPayment);
+            } else {
+                payment = paymentRepository.save(
+                        Payment.builder()
+                                .rentalOrder(order)
+                                .amount(amount)
+                                .remainingAmount(remainingAmount)
+                                .method("CASH")
+                                .paymentType(type)
+                                .status(PaymentStatus.PENDING)
+                                .build()
+                );
+            }
+        } else {
+            payment = paymentRepository.save(
                     Payment.builder()
                             .rentalOrder(order)
                             .amount(amount)
                             .remainingAmount(remainingAmount)
                             .method("CASH")
-                            .paymentType((short) 1)
+                            .paymentType(type)
                             .status(PaymentStatus.PENDING)
                             .build()
             );
-
-            // Auto create final payment (PENDING)
-            Payment finalPayment = paymentRepository.save(
-                    Payment.builder()
-                            .rentalOrder(order)
-                            .amount(remainingAmount)
-                            .remainingAmount(BigDecimal.ZERO)
-                            .method("CASH")
-                            .paymentType((short) 2)
-                            .status(PaymentStatus.PENDING)
-                            .build()
-            );
-
-            log.info("🕒 Created CASH DEPOSIT & auto FINAL payments (both PENDING)");
-
-            recordTransaction(order, depositPayment, "DEPOSIT_PENDING");
-            recordTransaction(order, finalPayment, "FINAL_PENDING");
-
-            return PaymentResponse.builder()
-                    .paymentId(depositPayment.getPaymentId())
-                    .orderId(order.getOrderId())
-                    .amount(amount)
-                    .remainingAmount(remainingAmount)
-                    .method("CASH")
-                    .paymentType((short) 1)
-                    .status(PaymentStatus.PENDING)
-                    .message("CASH_DEPOSIT_PENDING_AND_FINAL_CREATED")
-                    .build();
         }
 
-        // ============================
-        // TYPE 2 — Final payment (Generated only by system)
-        // ============================
-        if (type == 2) {
-            throw new BadRequestException("Final payment is auto-created. Manual payment type=2 is not allowed.");
-        }
+        recordTransaction(order, payment, getTypeName(type) + "_PENDING");
 
-        // ============================
-        // TYPE 3 — FULL PAYMENT
-        // ============================
-        if (type == 3) {
-            amount = total;
-            remainingAmount = BigDecimal.ZERO;
-
-            Payment fullPayment = paymentRepository.save(
-                    Payment.builder()
-                            .rentalOrder(order)
-                            .amount(amount)
-                            .remainingAmount(BigDecimal.ZERO)
-                            .method("CASH")
-                            .paymentType((short) 3)
-                            .status(PaymentStatus.PENDING)
-                            .build()
-            );
-
-            recordTransaction(order, fullPayment, "FULL_PAYMENT_PENDING");
-
-            return PaymentResponse.builder()
-                    .paymentId(fullPayment.getPaymentId())
-                    .orderId(order.getOrderId())
-                    .amount(amount)
-                    .remainingAmount(BigDecimal.ZERO)
-                    .method("CASH")
-                    .paymentType((short) 3)
-                    .status(PaymentStatus.PENDING)
-                    .message("CASH_FULL_PAYMENT_PENDING")
-                    .build();
-        }
-
-        throw new BadRequestException("Unsupported cash payment type");
+        return PaymentResponse.builder()
+                .paymentId(payment.getPaymentId())
+                .orderId(order.getOrderId())
+                .amount(payment.getAmount())
+                .remainingAmount(payment.getRemainingAmount())
+                .method(payment.getMethod())
+                .paymentType(payment.getPaymentType())
+                .status(payment.getStatus())
+                .message("CASH_PAYMENT_CREATED")
+                .build();
     }
 
-
-    // ============================================================
-    // CASH SERVICE PAYMENT
-    // ============================================================
-    private PaymentResponse processCashServicePayment(RentalOrder order) {
-        throw new BadRequestException("Service payment is not supported");
-    }
 
     @Override
     @Transactional
@@ -808,7 +869,6 @@ public class PaymentServiceImpl implements PaymentService {
                 Vehicle v = getMainVehicle(order);
                 fullSuccess(order, payment, v);
             }
-            case 5 -> handleServiceSuccess(order, payment);
             default -> throw new BadRequestException("Unknown payment type");
         }
 
