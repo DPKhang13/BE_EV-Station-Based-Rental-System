@@ -26,5 +26,8 @@ public class VehicleCreateRequest {
     private String batteryStatus;
     private String batteryCapacity;
     private String carmodel;
+    
+    // Ảnh xe (có thể là null nếu không upload)
+    // Frontend sẽ gửi qua @RequestPart trong controller
 }
 

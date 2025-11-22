@@ -21,6 +21,7 @@ public class VehicleDetailResponse {
     private String status;
     private String vehicleName;
     private String description;
+    private String imageUrl; // URL ảnh xe (có thể là JSON array nếu nhiều ảnh)
 
     // ===== Thuộc tính từ bảng vehicleattribute =====
     private String brand;

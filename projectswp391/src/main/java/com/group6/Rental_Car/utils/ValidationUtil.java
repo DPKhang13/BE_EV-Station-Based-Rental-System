@@ -19,21 +19,21 @@ public class ValidationUtil {
 
     public static <T> T requireNonNull(T obj, String message) {
         if (obj == null) {
-            throw new BadRequestException(message + "is required");
+            throw new BadRequestException(message + " is required");
         }
         return obj;
     }
 
     public static String requireNonBlank(String obj, String message) {
         if (obj == null || obj.isBlank()) {
-            throw new BadRequestException(message + "is required");
+            throw new BadRequestException(message + " is required");
         }
         return obj;
     }
 
     public static void ensureMaxLength(String obj, int max, String message) {
         if (obj == null || obj.length() > max) {
-            throw new BadRequestException(message + "length must be <=" + max);
+            throw new BadRequestException(message + " length must be <= " + max);
         }
     }
 

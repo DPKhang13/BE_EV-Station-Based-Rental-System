@@ -1,5 +1,6 @@
 package com.group6.Rental_Car.controllers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.group6.Rental_Car.dtos.vehicle.VehicleCreateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleDetailResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
@@ -10,10 +11,14 @@ import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,13 +28,48 @@ import java.util.List;
 public class VehicleController {
     @Autowired
     private VehicleService vehicleService;
+    
+    @Autowired
+    private ObjectMapper objectMapper;
 
 
 
-    @PostMapping("/create")
-    public ResponseEntity<?> create(@Valid @RequestBody VehicleCreateRequest req,
-                                    @AuthenticationPrincipal JwtUserDetails userDetails) {
-        VehicleResponse response = vehicleService.createVehicle(req);
+    @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> create(
+            @RequestPart(value = "vehicle", required = false) String vehicleJson,
+            @ModelAttribute VehicleCreateRequest reqModel,
+            @RequestParam(value = "images", required = false) List<MultipartFile> images,
+            @AuthenticationPrincipal JwtUserDetails userDetails) throws IOException {
+        
+        VehicleCreateRequest req;
+        
+        if (StringUtils.hasText(vehicleJson)) {
+            System.out.println("[VehicleController] Received JSON string: " + vehicleJson);
+            try {
+                req = objectMapper.readValue(vehicleJson, VehicleCreateRequest.class);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid JSON format in 'vehicle' part: " + e.getMessage());
+            }
+        } 
+        // Nếu frontend gửi form data thông thường
+        else if (reqModel != null && reqModel.getPlateNumber() != null) {
+            System.out.println("[VehicleController] Received form data");
+            req = reqModel;
+        } 
+        // Nếu không có gì cả
+        else {
+            throw new IllegalArgumentException("Vehicle data is required. Send either 'vehicle' (JSON string) or form fields.");
+        }
+        
+        // Debug: Log request data
+        System.out.println("[VehicleController] Parsed request:");
+        System.out.println("  - plateNumber: " + req.getPlateNumber());
+        System.out.println("  - status: " + req.getStatus());
+        System.out.println("  - stationId: " + req.getStationId());
+        System.out.println("  - images count: " + (images != null ? images.size() : 0));
+        
+        // Validation sẽ được thực hiện trong service layer
+        VehicleResponse response = vehicleService.createVehicle(req, images);
         return ResponseEntity.ok(response);
     }
     @GetMapping("/get")
