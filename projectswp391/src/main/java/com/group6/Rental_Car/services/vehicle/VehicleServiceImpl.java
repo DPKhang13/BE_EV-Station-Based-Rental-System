@@ -223,6 +223,23 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    public List<VehicleResponse> getAvailableVehiclesByStation(Integer stationId) {
+        // Validate stationId
+        if (stationId == null || stationId <= 0) {
+            throw new BadRequestException("stationId phải là số dương");
+        }
+
+        // Kiểm tra station có tồn tại không
+        rentalStationRepository.findById(stationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental Station không tồn tại: " + stationId));
+
+        // Lấy xe có status AVAILABLE theo station, sắp xếp theo biển số
+        return vehicleRepository.findByRentalStation_StationIdAndStatusOrderByPlateNumberAsc(stationId, "AVAILABLE").stream()
+                .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<VehicleResponse> getVehiclesByCarmodel(String carmodel) {
         if (carmodel == null || carmodel.isBlank()) {
             throw new BadRequestException("carmodel không được để trống");

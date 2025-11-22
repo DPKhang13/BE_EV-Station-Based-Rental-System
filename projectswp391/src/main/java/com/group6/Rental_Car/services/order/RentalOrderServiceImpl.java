@@ -182,6 +182,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return mapToResponse(order, detail);
     }
 
+
     @Override
     public OrderResponse updateOrder(UUID orderId, OrderUpdateRequest req) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
@@ -203,13 +204,28 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
+        // Kiểm tra order status - chỉ cho phép đổi xe khi đơn đã đặt trước và chờ bàn giao (chưa pickup)
+        String currentStatus = order.getStatus();
+        if (currentStatus == null) {
+            throw new BadRequestException("Đơn hàng không có trạng thái hợp lệ");
+        }
+        String upperStatus = currentStatus.trim().toUpperCase();
+        System.out.println("[changeVehicle] Order ID: " + orderId + ", Current Status: '" + currentStatus + "' (normalized: '" + upperStatus + "')");
+        
+        // Chỉ cho phép đổi xe khi order ở trạng thái: DEPOSITED, AWAITING, PENDING (chưa pickup)
+        // Không cho phép khi đã RENTAL (đã pickup) hoặc các trạng thái khác
+        Set<String> allowedStatuses = Set.of("DEPOSITED", "AWAITING", "PENDING");
+        if (!allowedStatuses.contains(upperStatus)) {
+            throw new BadRequestException("Chỉ có thể đổi xe khi đơn hàng đang ở trạng thái đặt trước và chờ bàn giao (DEPOSITED, AWAITING, PENDING). Không thể đổi xe sau khi đã nhận xe. Trạng thái hiện tại: " + currentStatus);
+        }
+
         Vehicle newVehicle = vehicleRepository.findById(newVehicleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe mới"));
 
-        // Cho phép thay đổi sang xe khác dù xe đó đang RENTAL, chỉ kiểm tra overlap thôi
-        // if (!"AVAILABLE".equalsIgnoreCase(newVehicle.getStatus())) {
-        //     throw new BadRequestException("Xe mới không khả dụng để thay thế");
-        // }
+        // Chỉ cho phép đổi sang xe có trạng thái AVAILABLE
+        if (!"AVAILABLE".equalsIgnoreCase(newVehicle.getStatus())) {
+            throw new BadRequestException("Chỉ có thể đổi sang xe có trạng thái AVAILABLE. Xe mới hiện đang ở trạng thái: " + newVehicle.getStatus());
+        }
 
         RentalOrderDetail mainDetail = order.getDetails().stream()
                 .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
@@ -240,6 +256,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             mainDetail.setDescription(note);
         }
         rentalOrderDetailRepository.save(mainDetail);
+        System.out.println("[changeVehicle] Đã cập nhật detail với vehicle mới: " + newVehicle.getVehicleId() + 
+                         " (detail ID: " + mainDetail.getDetailId() + ")");
 
         // ====== TẠO TIMELINE MỚI ======
         VehicleTimeline timeline = VehicleTimeline.builder()
@@ -257,8 +275,18 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 .build();
         vehicleTimelineRepository.save(timeline);
 
-        // ====== CẬP NHẬT STATUS XE MỚI DỰA VÀO TIMELINE ======
-        updateVehicleStatusFromTimeline(newVehicle.getVehicleId());
+        // ====== CẬP NHẬT STATUS XE MỚI THÀNH BOOKED ======
+        newVehicle.setStatus("BOOKED");
+        vehicleRepository.save(newVehicle);
+        System.out.println("[changeVehicle] Đã cập nhật xe mới " + newVehicle.getVehicleId() + " sang trạng thái BOOKED");
+
+        // ====== CẬP NHẬT PAYMENT NẾU CÓ ======
+        // Payment không có vehicle_id, chỉ liên kết với order, nên không cần cập nhật
+        // Tuy nhiên, nếu có payment liên quan đến vehicle (nếu có trong tương lai), có thể cập nhật ở đây
+        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(orderId);
+        if (!payments.isEmpty()) {
+            System.out.println("[changeVehicle] Đơn hàng có " + payments.size() + " payment(s). Payment liên kết với order nên không cần cập nhật vehicle.");
+        }
 
         rentalOrderRepository.save(order);
         return mapToResponse(order, mainDetail);
@@ -302,7 +330,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setStatus("COMPLETED");
         rentalOrderRepository.save(order);
 
-        System.out.println("✅ [completeOrder] Đã hoàn tất đơn hàng " + orderId + " từ status: " + currentStatus);
+        System.out.println(" [completeOrder] Đã hoàn tất đơn hàng " + orderId + " từ status: " + currentStatus);
 
         // Lấy main detail để map response
         RentalOrderDetail mainDetail = getMainDetail(order);
@@ -919,11 +947,21 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return rentalOrderRepository.findOrdersByVehicleId(vehicleId)
                 .stream()
                 .map(order -> {
+                    // Tìm detail có vehicleId này (sau khi đổi xe, detail sẽ có vehicle mới)
+                    RentalOrderDetail detail = order.getDetails().stream()
+                            .filter(d -> d.getVehicle() != null && d.getVehicle().getVehicleId().equals(vehicleId))
+                            .findFirst()
+                            .orElse(null);
 
                     OrderDetailCompactResponse dto = new OrderDetailCompactResponse();
 
                     dto.setOrderId(order.getOrderId());
-                    dto.setPrice(order.getTotalPrice());
+                    // Lấy price từ detail nếu có, nếu không thì lấy từ order
+                    if (detail != null && detail.getPrice() != null) {
+                        dto.setPrice(detail.getPrice());
+                    } else {
+                        dto.setPrice(order.getTotalPrice());
+                    }
                     dto.setStatus(order.getStatus());
                     dto.setCreatedAt(order.getCreatedAt());
 
@@ -932,8 +970,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     dto.setCustomerName(customer.getFullName());
                     dto.setCustomerPhone(customer.getPhone());
 
-                    // station
-                    if (vehicle.getRentalStation() != null) {
+                    // station - lấy từ detail's vehicle hoặc vehicle parameter
+                    if (detail != null && detail.getVehicle() != null && detail.getVehicle().getRentalStation() != null) {
+                        dto.setStationName(detail.getVehicle().getRentalStation().getName());
+                    } else if (vehicle.getRentalStation() != null) {
                         dto.setStationName(vehicle.getRentalStation().getName());
                     }
 

@@ -9,7 +9,6 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
 import com.group6.Rental_Car.services.vehicle.VehicleService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -114,6 +113,13 @@ public class VehicleController {
     public ResponseEntity<List<VehicleResponse>> getVehiclesByStation(
             @PathVariable Integer stationId) {
         List<VehicleResponse> vehicles = vehicleService.getVehiclesByStation(stationId);
+        return ResponseEntity.ok(vehicles);
+    }
+
+    @GetMapping("/station/{stationId}/available")
+    public ResponseEntity<List<VehicleResponse>> getAvailableVehiclesByStation(
+            @PathVariable Integer stationId) {
+        List<VehicleResponse> vehicles = vehicleService.getAvailableVehiclesByStation(stationId);
         return ResponseEntity.ok(vehicles);
     }
 
