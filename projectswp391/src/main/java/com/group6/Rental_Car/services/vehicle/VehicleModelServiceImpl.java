@@ -73,9 +73,13 @@ public class VehicleModelServiceImpl implements VehicleModelService {
     @Override
     public VehicleResponse convertToDto(Vehicle vehicle, VehicleModel attr) {
         VehicleResponse dto = modelMapper.map(vehicle, VehicleResponse.class);
-        if (vehicle.getRentalStation() != null)
+        if (vehicle.getRentalStation() != null) {
             dto.setStationId(vehicle.getRentalStation().getStationId());
             dto.setStationName(vehicle.getRentalStation().getName());
+        }
+        // Map imageUrl từ vehicle
+        dto.setImageUrl(vehicle.getImageUrl());
+        
         if (attr != null) {
             dto.setBrand(attr.getBrand());
             dto.setColor(attr.getColor());

@@ -30,6 +30,10 @@ public class Vehicle {
 
     @Column(name = "vehicle_name", length = 100)
     private String vehicleName;
+    
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    private String imageUrl; // Lưu URL ảnh (có thể là 1 URL hoặc JSON array nếu nhiều ảnh)
+    
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<VehicleModel> attributes;
     @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

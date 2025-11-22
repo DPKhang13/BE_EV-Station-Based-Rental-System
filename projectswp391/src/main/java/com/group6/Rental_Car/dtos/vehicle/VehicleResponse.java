@@ -30,4 +30,5 @@ public class VehicleResponse {
     private String batteryCapacity;
     private String carmodel;
     private Integer pricingRuleId;
+    private String imageUrl; // URL ảnh xe (có thể là JSON array nếu nhiều ảnh)
 }

@@ -21,7 +21,12 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import com.group6.Rental_Car.services.storage.StorageService;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,9 +46,10 @@ public class VehicleServiceImpl implements VehicleService {
     private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
     private final VehicleModelRepository vehicleModelRepository;
+    private final StorageService storageService;
 
     @Override
-    public VehicleResponse createVehicle(VehicleCreateRequest req) {
+    public VehicleResponse createVehicle(VehicleCreateRequest req, List<MultipartFile> images) {
         Vehicle vehicle = modelMapper.map(req, Vehicle.class);
 
         //Validate thuộc tính của Vehicle
@@ -62,11 +68,40 @@ public class VehicleServiceImpl implements VehicleService {
         Integer seat = req.getSeatCount();
         String normalizedVariant = validateVariantBySeatCount(seat, req.getVariant());
 
+        // Set plateNumber vào vehicle trước khi upload ảnh
+        vehicle.setPlateNumber(plate);
+        vehicle.setStatus(status);
 
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
                     .orElseThrow(() -> new ResourceNotFoundException("Rental Station not found "));
             vehicle.setRentalStation(station);
+        }
+
+        // Upload và lưu ảnh xe
+        if (images != null && !images.isEmpty()) {
+            List<String> imageUrls = new ArrayList<>();
+            for (MultipartFile image : images) {
+                if (image != null && !image.isEmpty()) {
+                    try {
+                        // Dùng plateNumber để tạo folder (đã được validate và set ở trên)
+                        String folder = "vehicles/" + plate.replaceAll("[^a-zA-Z0-9]", "_");
+                        String url = storageService.uploadPublic(folder, image);
+                        imageUrls.add(url);
+                    } catch (IOException e) {
+                        throw new BadRequestException("Lỗi khi upload ảnh: " + e.getMessage());
+                    }
+                }
+            }
+            
+            // Lưu danh sách URL ảnh dưới dạng JSON array string
+            if (!imageUrls.isEmpty()) {
+                // Chuyển List<String> thành JSON array string
+                String imageUrlJson = "[" + imageUrls.stream()
+                        .map(url -> "\"" + url.replace("\"", "\\\"").replace("\\", "\\\\") + "\"")
+                        .collect(Collectors.joining(",")) + "]";
+                vehicle.setImageUrl(imageUrlJson);
+            }
         }
 
         vehicleRepository.save(vehicle);
@@ -320,6 +355,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .status(vehicle.getStatus())
                 .vehicleName(vehicle.getVehicleName())
                 .description(vehicle.getDescription())
+                .imageUrl(vehicle.getImageUrl())
                 .hasBooking(false)
                 .bookingNote("Chưa có đơn thuê")
                 .build();

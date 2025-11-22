@@ -5,13 +5,14 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleDetailResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleResponse;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateRequest;
 import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 
 public interface VehicleService {
-    VehicleResponse createVehicle(VehicleCreateRequest req);
+    VehicleResponse createVehicle(VehicleCreateRequest req, List<MultipartFile> images);
     VehicleResponse getVehicleById(Long vehicleId);
     VehicleDetailResponse getVehicleDetailById(Long vehicleId);
     VehicleResponse updateVehicle(Long vehicleId, VehicleUpdateRequest req);
