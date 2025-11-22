@@ -71,10 +71,14 @@ public class FeedbackServiceImpl implements FeedbackService{
 
     @Override
     @Transactional
-    public FeedbackResponse getById(Integer feedbackId) {
-        Feedback fb = feedbackRepository.findById(feedbackId)
-                .orElseThrow(() -> new ResourceNotFoundException("Feedback not found: " + feedbackId));
-        return toResponse(fb);
+    public List<FeedbackResponse> getByOrderId(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+        
+        List<Feedback> feedbacks = feedbackRepository.findAllByOrder(order);
+        return feedbacks.stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
     @Override

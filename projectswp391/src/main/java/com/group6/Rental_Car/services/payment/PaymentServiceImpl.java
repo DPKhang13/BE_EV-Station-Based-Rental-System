@@ -286,14 +286,13 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal deposit = payment.getAmount();
 
         // Create deposit detail
-        createOrUpdateDetail(order, v, "DEPOSIT", deposit, "Thanh toán đặt cọc", "SUCCESS");
+        createOrUpdateDetail(order, v, "DEPOSIT", deposit, "Đặt cọc giữ xe", "SUCCESS");
 
         // Không tự động tạo PICKUP detail - chỉ tạo khi thanh toán phần còn lại
     }
 
-    // TYPE 2 — Final Payment Success
+    // TYPE 2 — Final Payment Success (thanh toán dịch vụ/phần còn lại)
     private void finalSuccess(RentalOrder order, Payment payment) {
-        order.setStatus("PAID");
         payment.setRemainingAmount(BigDecimal.ZERO);
 
         // Ưu tiên xử lý phần còn lại của DEPOSIT (type 1)
@@ -307,61 +306,195 @@ public class PaymentServiceImpl implements PaymentService {
             BigDecimal remainingAmount = depositPayment.getRemainingAmount();
 
             if (remainingAmount != null && remainingAmount.compareTo(BigDecimal.ZERO) > 0) {
-                // Lấy số tiền còn lại - nếu null hoặc 0, dùng amount của payment hiện tại (đã thanh toán)
-                log.info("💰 Final payment: using remainingAmount {} from deposit for PICKUP detail", remainingAmount);
+                BigDecimal amountToPay = payment.getAmount();
+                BigDecimal currentRemaining = remainingAmount;
+                
+                log.info("💰 [finalSuccess] Deposit remainingAmount: {}, payment amount: {}", currentRemaining, amountToPay);
 
-                depositPayment.setRemainingAmount(BigDecimal.ZERO);
+                // Trừ amount đã thanh toán khỏi remainingAmount
+                BigDecimal newRemaining = currentRemaining.subtract(amountToPay);
+                if (newRemaining.compareTo(BigDecimal.ZERO) < 0) {
+                    log.warn("⚠️ Thanh toán vượt quá remainingAmount. remaining={}, payment={}", currentRemaining, amountToPay);
+                    newRemaining = BigDecimal.ZERO;
+                }
+
+                depositPayment.setRemainingAmount(newRemaining);
                 paymentRepository.save(depositPayment);
+                log.info("✅ [finalSuccess] Updated deposit remainingAmount: {} -> {}", currentRemaining, newRemaining);
 
                 // Tạo PICKUP detail với status SUCCESS khi thanh toán phần còn lại
                 Vehicle vehicle = getMainVehicle(order);
                 if (vehicle != null) {
-                    createOrUpdateDetail(order, vehicle, "PICKUP", remainingAmount, "Thanh toán phần còn lại", "SUCCESS");
-                    log.info("✅ Created PICKUP detail with amount={}", remainingAmount);
+                    createOrUpdateDetail(order, vehicle, "PICKUP", amountToPay, "Thanh toán thuê xe", "SUCCESS");
+                    log.info("✅ Created PICKUP detail with amount={}", amountToPay);
                 } else {
                     log.warn("⚠️ Cannot create PICKUP detail: vehicle is null");
+                }
+
+                // Mark service details as SUCCESS nếu đã thanh toán hết
+                if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
+                    markServiceDetailsAsSuccess(order);
+                    // Đã thanh toán hết → kiểm tra xem đã trả xe chưa
+                    // Reload order để có status mới nhất
+                    order = rentalOrderRepository.findById(order.getOrderId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                    Vehicle reloadedVehicle = getMainVehicle(order);
+                    String currentStatus = order.getStatus();
+                    String vehicleStatus = reloadedVehicle != null ? reloadedVehicle.getStatus() : null;
+                    // Chỉ set COMPLETED khi vehicle status = CHECKING (đã trả xe) hoặc order status = PENDING_FINAL_PAYMENT/RETURNED (đã confirm return)
+                    // KHÔNG kiểm tra "PAID" vì có thể đã PAID từ trước nhưng chưa trả xe
+                    boolean isReturned = currentStatus.equals("PENDING_FINAL_PAYMENT") || 
+                                        currentStatus.equals("RETURNED") ||
+                                        "CHECKING".equalsIgnoreCase(vehicleStatus);
+                    
+                    if (isReturned) {
+                        // Đã trả xe và thanh toán hết → COMPLETED
+                        order.setStatus("COMPLETED");
+                        log.info("✅ [finalSuccess] Đã trả xe và thanh toán hết → COMPLETED");
+                    } else {
+                        // Chưa trả xe nhưng đã thanh toán hết → PAID
+                        order.setStatus("PAID");
+                        log.info("✅ [finalSuccess] Chưa trả xe nhưng đã thanh toán hết → PAID");
+                    }
+                } else {
+                    // Còn số tiền chưa thanh toán → chuyển thành PENDING_FINAL_PAYMENT
+                    order.setStatus("PENDING_FINAL_PAYMENT");
+                    log.info("ℹ️ [finalSuccess] Còn {} chưa thanh toán, order status: PENDING_FINAL_PAYMENT", newRemaining);
                 }
                 return;
             }
         }
 
-        // Nếu không còn deposit outstanding, xử lý remainingAmount của FULL_PAYMENT (dịch vụ phát sinh)
-        Payment fullPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+        // Nếu không còn deposit, xử lý remainingAmount của FULL_PAYMENT (dịch vụ phát sinh)
+        Optional<Payment> fullPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
                 .stream()
                 .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
-                .findFirst()
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy thanh toán full để cập nhật"));
+                .findFirst();
 
-        BigDecimal outstanding = Optional.ofNullable(fullPayment.getRemainingAmount()).orElse(BigDecimal.ZERO);
-        if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
-            log.warn("⚠️ Final payment success nhưng không có remainingAmount nào trên FULL_PAYMENT");
-            return;
-        }
+        if (fullPaymentOpt.isPresent()) {
+            Payment fullPayment = fullPaymentOpt.get();
+            BigDecimal outstanding = Optional.ofNullable(fullPayment.getRemainingAmount()).orElse(BigDecimal.ZERO);
+            
+            if (outstanding.compareTo(BigDecimal.ZERO) <= 0) {
+                log.warn("⚠️ Final payment success nhưng không có remainingAmount nào trên FULL_PAYMENT");
+                // Không có remainingAmount → đã thanh toán hết
+                // Reload order để có status mới nhất
+                order = rentalOrderRepository.findById(order.getOrderId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                Vehicle vehicle = getMainVehicle(order);
+                String currentStatus = order.getStatus();
+                String vehicleStatus = vehicle != null ? vehicle.getStatus() : null;
+                // Chỉ set COMPLETED khi vehicle status = CHECKING (đã trả xe) hoặc order status = PENDING_FINAL_PAYMENT/RETURNED (đã confirm return)
+                // KHÔNG kiểm tra "PAID" vì có thể đã PAID từ trước nhưng chưa trả xe
+                boolean isReturned = currentStatus.equals("PENDING_FINAL_PAYMENT") || 
+                                    currentStatus.equals("RETURNED") ||
+                                    "CHECKING".equalsIgnoreCase(vehicleStatus);
+                
+                if (isReturned) {
+                    // Đã trả xe và thanh toán hết → COMPLETED
+                    order.setStatus("COMPLETED");
+                    log.info("✅ [finalSuccess] Đã trả xe và thanh toán hết → COMPLETED");
+                } else {
+                    // Chưa trả xe nhưng đã thanh toán hết → PAID
+                    order.setStatus("PAID");
+                    log.info("✅ [finalSuccess] Chưa trả xe nhưng đã thanh toán hết → PAID");
+                }
+                return;
+            }
 
-        BigDecimal newRemaining = outstanding.subtract(payment.getAmount());
-        if (newRemaining.compareTo(BigDecimal.ZERO) < 0) {
-            log.warn("⚠️ Thanh toán vượt quá remainingAmount. outstanding={}, payment={}", outstanding, payment.getAmount());
-            newRemaining = BigDecimal.ZERO;
-        }
+            BigDecimal amountToPay = payment.getAmount();
+            BigDecimal newRemaining = outstanding.subtract(amountToPay);
+            if (newRemaining.compareTo(BigDecimal.ZERO) < 0) {
+                log.warn("⚠️ Thanh toán vượt quá remainingAmount. outstanding={}, payment={}", outstanding, amountToPay);
+                newRemaining = BigDecimal.ZERO;
+            }
 
-        fullPayment.setRemainingAmount(newRemaining);
-        paymentRepository.save(fullPayment);
-        log.info("✅ Updated FULL_PAYMENT remainingAmount: {} -> {}", outstanding, newRemaining);
+            fullPayment.setRemainingAmount(newRemaining);
+            paymentRepository.save(fullPayment);
+            log.info("✅ [finalSuccess] Updated FULL_PAYMENT remainingAmount: {} -> {}", outstanding, newRemaining);
 
-        if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
-            markServiceDetailsAsSuccess(order);
+            if (newRemaining.compareTo(BigDecimal.ZERO) == 0) {
+                markServiceDetailsAsSuccess(order);
+                // Đã thanh toán hết → kiểm tra xem đã trả xe chưa
+                // Reload order để có status mới nhất
+                order = rentalOrderRepository.findById(order.getOrderId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                Vehicle vehicle = getMainVehicle(order);
+                String currentStatus = order.getStatus();
+                String vehicleStatus = vehicle != null ? vehicle.getStatus() : null;
+                // Chỉ set COMPLETED khi vehicle status = CHECKING (đã trả xe) hoặc order status = PENDING_FINAL_PAYMENT/RETURNED (đã confirm return)
+                // KHÔNG kiểm tra "PAID" vì có thể đã PAID từ trước nhưng chưa trả xe
+                boolean isReturned = currentStatus.equals("PENDING_FINAL_PAYMENT") || 
+                                    currentStatus.equals("RETURNED") ||
+                                    "CHECKING".equalsIgnoreCase(vehicleStatus);
+                
+                if (isReturned) {
+                    // Đã trả xe và thanh toán hết → COMPLETED
+                    order.setStatus("COMPLETED");
+                    log.info("✅ [finalSuccess] Đã trả xe và thanh toán hết → COMPLETED");
+                } else {
+                    // Chưa trả xe nhưng đã thanh toán hết → PAID
+                    order.setStatus("PAID");
+                    log.info("✅ [finalSuccess] Chưa trả xe nhưng đã thanh toán hết → PAID");
+                }
+            } else {
+                // Còn số tiền chưa thanh toán → chuyển thành PENDING_FINAL_PAYMENT
+                order.setStatus("PENDING_FINAL_PAYMENT");
+                log.info("ℹ️ [finalSuccess] Còn {} chưa thanh toán, order status: PENDING_FINAL_PAYMENT", newRemaining);
+            }
+        } else {
+            // Không tìm thấy DEPOSIT hoặc FULL_PAYMENT
+            log.warn("⚠️ [finalSuccess] Không tìm thấy DEPOSIT hoặc FULL_PAYMENT SUCCESS");
+            // Không có payment nào → có thể đã thanh toán hết
+            // Reload order để có status mới nhất
+            order = rentalOrderRepository.findById(order.getOrderId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+            Vehicle vehicle = getMainVehicle(order);
+            String currentStatus = order.getStatus();
+            String vehicleStatus = vehicle != null ? vehicle.getStatus() : null;
+            // Chỉ set COMPLETED khi vehicle status = CHECKING (đã trả xe) hoặc order status = PENDING_FINAL_PAYMENT/RETURNED (đã confirm return)
+            // KHÔNG kiểm tra "PAID" vì có thể đã PAID từ trước nhưng chưa trả xe
+            boolean isReturned = currentStatus.equals("PENDING_FINAL_PAYMENT") || 
+                                currentStatus.equals("RETURNED") ||
+                                "CHECKING".equalsIgnoreCase(vehicleStatus);
+            
+            if (isReturned) {
+                // Đã trả xe và thanh toán hết → COMPLETED
+                order.setStatus("COMPLETED");
+                log.info("✅ [finalSuccess] Đã trả xe và thanh toán hết → COMPLETED");
+            } else {
+                // Chưa trả xe nhưng đã thanh toán hết → PAID
+                order.setStatus("PAID");
+                log.info("✅ [finalSuccess] Chưa trả xe nhưng đã thanh toán hết → PAID");
+            }
         }
     }
 
     // TYPE 3 — Full Payment Success
     private void fullSuccess(RentalOrder order, Payment payment, Vehicle v) {
-
-        order.setStatus("PAID");
-
         BigDecimal fullAmount = payment.getAmount();
+        // Set remainingAmount = 0 vì đã thanh toán toàn bộ
         payment.setRemainingAmount(BigDecimal.ZERO);
 
         createOrUpdateDetail(order, v, "FULL_PAYMENT", fullAmount, "Thanh toán toàn bộ đơn", "SUCCESS");
+        
+        // Kiểm tra xem order đã được confirm return chưa (vehicle status = CHECKING hoặc order status = PENDING_FINAL_PAYMENT/RETURNED)
+        String currentStatus = order.getStatus();
+        String vehicleStatus = v.getStatus();
+        boolean isReturned = currentStatus.equals("PENDING_FINAL_PAYMENT") || 
+                            currentStatus.equals("RETURNED") ||
+                            currentStatus.equals("PAID") ||
+                            "CHECKING".equalsIgnoreCase(vehicleStatus);
+        
+        if (isReturned) {
+            // Đã trả xe và thanh toán hết → COMPLETED
+            order.setStatus("COMPLETED");
+            log.info("✅ [fullSuccess] Đã trả xe và thanh toán toàn bộ → COMPLETED");
+        } else {
+            // Chưa trả xe nhưng đã thanh toán toàn bộ → PAID
+            order.setStatus("PAID");
+            log.info("✅ [fullSuccess] Chưa trả xe nhưng đã thanh toán toàn bộ → PAID");
+        }
     }
 
     private Vehicle getMainVehicle(RentalOrder order) {
@@ -629,8 +762,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     private String getDescription(short type) {
         return switch (type) {
-            case 1 -> "Thanh toán đặt cọc";
-            case 2 -> "Thanh toán phần còn lại";
+            case 1 -> "Đặt cọc giữ xe";
+            case 2 -> "Thanh toán thuê xe";
             case 3 -> "Thanh toán toàn bộ đơn thuê";
             case 4 -> "Hoàn tiền";
             default -> "Không xác định";
@@ -741,6 +874,8 @@ public class PaymentServiceImpl implements PaymentService {
             amount = total.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
             remainingAmount = total.subtract(amount);
         } else if (type == 2) {
+            // Thanh toán phần còn lại cho DEPOSIT hoặc FULL PAYMENT (dịch vụ phát sinh)
+            // Logic giống hệt MoMo
             Optional<Payment> depositPaymentOpt = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
                     .stream()
                     .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
@@ -751,21 +886,33 @@ public class PaymentServiceImpl implements PaymentService {
                     .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
                     .findFirst();
 
+            log.info("💵 [cash/type2] Looking for deposit/full payment. Deposit found: {}, Full found: {}", 
+                    depositPaymentOpt.isPresent(), fullPaymentOpt.isPresent());
+
             if (depositPaymentOpt.isPresent()) {
                 Payment depositPayment = depositPaymentOpt.get();
 
+                // Lấy số tiền còn lại từ deposit payment - Logic giống hệt createPaymentUrl
                 BigDecimal depositRemaining = depositPayment.getRemainingAmount();
+                log.info("💵 [cash/type2] Deposit payment: amount={}, remainingAmount={}, total={}", 
+                        depositPayment.getAmount(), depositRemaining, total);
+                
                 if (depositRemaining == null || depositRemaining.compareTo(BigDecimal.ZERO) <= 0) {
+                    // Tính lại số tiền còn lại = tổng - số đã đặt cọc
                     amount = total.subtract(depositPayment.getAmount());
-                    log.info("💵 [cash/type2] calculated remaining = total({}) - deposit({}) = {}",
+                    log.info("💵 [cash/type2] calculated remaining = total({}) - deposit({}) = {}", 
                             total, depositPayment.getAmount(), amount);
                 } else {
+                    // Dựa vào remainingAmount của DEPOSIT (đã bao gồm phần còn lại + SERVICE)
                     amount = depositRemaining;
                     log.info("💵 [cash/type2] using remainingAmount from deposit = {}", amount);
                 }
             } else if (fullPaymentOpt.isPresent()) {
                 Payment fullPayment = fullPaymentOpt.get();
                 BigDecimal outstanding = fullPayment.getRemainingAmount();
+
+                log.info("💵 [cash/type2] Full payment: amount={}, remainingAmount={}", 
+                        fullPayment.getAmount(), outstanding);
 
                 if (outstanding == null || outstanding.compareTo(BigDecimal.ZERO) <= 0) {
                     throw new BadRequestException("Không có khoản nào cần thanh toán (full payment)");
@@ -779,26 +926,108 @@ public class PaymentServiceImpl implements PaymentService {
 
             remainingAmount = BigDecimal.ZERO;
         } else if (type == 3) {
-            amount = total;
-            remainingAmount = BigDecimal.ZERO;
+            // Full payment - tự động chuyển sang type 2 nếu đã có deposit SUCCESS
+            Optional<Payment> existingDeposit = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                    .stream()
+                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst();
+            
+            if (existingDeposit.isPresent()) {
+                // Đã có deposit SUCCESS → tự động chuyển sang type 2 (thanh toán phần còn lại)
+                log.info("💵 [cash/type3] Đã có deposit SUCCESS, tự động chuyển sang type 2");
+                Payment depositPayment = existingDeposit.get();
+                
+                BigDecimal depositRemaining = depositPayment.getRemainingAmount();
+                log.info("💵 [cash/type3→type2] Deposit payment: amount={}, remainingAmount={}, total={}", 
+                        depositPayment.getAmount(), depositRemaining, total);
+                
+                if (depositRemaining == null || depositRemaining.compareTo(BigDecimal.ZERO) <= 0) {
+                    // Tính lại số tiền còn lại = tổng - số đã đặt cọc
+                    amount = total.subtract(depositPayment.getAmount());
+                    log.info("💵 [cash/type3→type2] calculated remaining = total({}) - deposit({}) = {}", 
+                            total, depositPayment.getAmount(), amount);
+                } else {
+                    amount = depositRemaining;
+                    log.info("💵 [cash/type3→type2] using remainingAmount from deposit = {}", amount);
+                }
+                
+                // Đổi type từ 3 → 2
+                type = 2;
+                remainingAmount = BigDecimal.ZERO;
+            } else {
+                // Chưa có deposit → thanh toán toàn bộ (type 3)
+                amount = total;
+                remainingAmount = BigDecimal.ZERO;
+            }
         } else {
             throw new BadRequestException("Unsupported cash payment type");
         }
 
-        Payment payment;
+        // ============================
+        // DOUBLE CHECK cho type 2 (giống logic MoMo)
+        // ============================
         if (type == 2) {
-            Payment existingFinalPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
-                    .stream()
-                    .filter(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.PENDING)
-                    .findFirst()
-                    .orElse(null);
+            log.info("🔍 [cash/type2] DEBUG: amount={}, total={}, remainingAmount={}", amount, total, remainingAmount);
+            // Double check: nếu amount == total, có thể đã bị sai
+            if (amount.compareTo(total) == 0) {
+                log.error("❌ [cash/type2] ERROR: amount == total for type 2! This should not happen!");
+                // Tìm lại deposit payment và tính lại
+                Payment depositPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                        .stream()
+                        .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                        .findFirst()
+                        .orElse(null);
+                if (depositPayment != null) {
+                    BigDecimal correctAmount = depositPayment.getRemainingAmount();
+                    if (correctAmount == null || correctAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                        correctAmount = total.subtract(depositPayment.getAmount());
+                    }
+                    amount = correctAmount;
+                    log.info("🔧 [cash/type2] FIXED: corrected amount from {} to {}", total, amount);
+                }
+            }
+        }
 
-            if (existingFinalPayment != null) {
-                existingFinalPayment.setAmount(amount);
-                existingFinalPayment.setRemainingAmount(BigDecimal.ZERO);
-                existingFinalPayment.setMethod("CASH");
-                payment = paymentRepository.save(existingFinalPayment);
-            } else {
+        // ============================
+        // TẠO PAYMENT (giống logic MoMo)
+        // ============================
+        log.info("💵 [cash] Before creating payment: type={}, amount={}, remainingAmount={}, total={}", 
+                type, amount, remainingAmount, total);
+        
+         Payment payment;
+         try {
+             if (type == 2) {
+                 // Tìm payment type 2 CASH đã tồn tại (chỉ tìm CASH, không tìm MoMo)
+                 Payment existingFinalPayment = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                         .stream()
+                         .filter(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.PENDING)
+                         .filter(p -> "CASH".equalsIgnoreCase(p.getMethod()))
+                         .findFirst()
+                         .orElse(null);
+
+                 if (existingFinalPayment != null) {
+                     // Cập nhật amount của payment CASH đã tồn tại
+                     existingFinalPayment.setAmount(amount);
+                     existingFinalPayment.setRemainingAmount(BigDecimal.ZERO);
+                     existingFinalPayment.setMethod("CASH");
+                     payment = paymentRepository.save(existingFinalPayment);
+                     log.info("✅ [cash/type2] Using existing CASH final payment {} with amount={}", payment.getPaymentId(), amount);
+                 } else {
+                     // Tạo payment CASH mới (không update payment MoMo)
+                     payment = paymentRepository.save(
+                             Payment.builder()
+                                     .rentalOrder(order)
+                                     .amount(amount)
+                                     .remainingAmount(remainingAmount)
+                                     .method("CASH")
+                                     .paymentType(type)
+                                     .status(PaymentStatus.PENDING)
+                                     .build()
+                     );
+                     log.info("✅ [cash/type2] Created new CASH payment {} with amount={}, remaining={}, type={}, total={}",
+                             payment.getPaymentId(), payment.getAmount(), payment.getRemainingAmount(), type, total);
+                 }
+             } else {
                 payment = paymentRepository.save(
                         Payment.builder()
                                 .rentalOrder(order)
@@ -809,21 +1038,64 @@ public class PaymentServiceImpl implements PaymentService {
                                 .status(PaymentStatus.PENDING)
                                 .build()
                 );
+                log.info("✅ [cash] Created new payment {} with amount={}, remaining={}, type={}, total={}",
+                        payment.getPaymentId(), payment.getAmount(), payment.getRemainingAmount(), type, total);
             }
-        } else {
-            payment = paymentRepository.save(
-                    Payment.builder()
-                            .rentalOrder(order)
-                            .amount(amount)
-                            .remainingAmount(remainingAmount)
-                            .method("CASH")
-                            .paymentType(type)
-                            .status(PaymentStatus.PENDING)
-                            .build()
-            );
+            
+            log.info("✅ [cash] Payment created successfully: paymentId={}, type={}, status={}", 
+                    payment.getPaymentId(), payment.getPaymentType(), payment.getStatus());
+        } catch (Exception e) {
+            log.error("❌ [cash] Error creating payment: {}", e.getMessage(), e);
+            throw new BadRequestException("Lỗi khi tạo payment: " + e.getMessage());
         }
 
-        recordTransaction(order, payment, getTypeName(type) + "_PENDING");
+        // Cập nhật order status (giống logic MoMo)
+        try {
+            updateOrderStatus(order, type);
+            log.info("✅ [cash] Updated order status to {}", order.getStatus());
+        } catch (Exception e) {
+            log.warn("⚠️ [cash] Error updating order status (non-critical): {}", e.getMessage());
+        }
+
+        try {
+            recordTransaction(order, payment, getTypeName(type) + "_PENDING");
+            log.info("✅ [cash] Transaction recorded successfully");
+        } catch (Exception e) {
+            log.warn("⚠️ [cash] Error recording transaction (non-critical): {}", e.getMessage());
+        }
+
+        // Tạo / cập nhật detail PENDING cho thanh toán CASH
+        // để FE thấy phương thức CASH trong phần chi tiết đơn hàng
+        // NHƯNG: Nếu type = 2 và đã có FULL_PAYMENT SUCCESS, không tạo PICKUP detail (sẽ được tạo trong finalSuccess khi payment SUCCESS)
+        try {
+            // Kiểm tra nếu type = 2 và đã có FULL_PAYMENT SUCCESS, thì không tạo PICKUP detail
+            if (type == 2) {
+                boolean hasFullPaymentSuccess = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
+                        .stream()
+                        .anyMatch(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS);
+                
+                if (hasFullPaymentSuccess) {
+                    log.info("ℹ️ [cash/type2] Đã có FULL_PAYMENT SUCCESS, không tạo PICKUP detail (sẽ được xử lý khi payment SUCCESS)");
+                    // Không tạo detail, vì sẽ được xử lý trong finalSuccess khi payment chuyển sang SUCCESS
+                } else {
+                    // Chưa có FULL_PAYMENT SUCCESS, tạo PICKUP detail như bình thường
+                    Vehicle v = getMainVehicle(order);
+                    String detailType = getTypeName(type);   // PICKUP
+                    String desc = getDescription(type);
+                    createOrUpdateDetail(order, v, detailType, amount, desc, "PENDING");
+                    log.info("✅ [cash/type2] Created/updated {} detail with PENDING status for order {}", detailType, order.getOrderId());
+                }
+            } else {
+                // Type 1 (DEPOSIT) hoặc type 3 (FULL_PAYMENT), tạo detail như bình thường
+                Vehicle v = getMainVehicle(order);
+                String detailType = getTypeName(type);   // DEPOSIT | FULL_PAYMENT
+                String desc = getDescription(type);
+                createOrUpdateDetail(order, v, detailType, amount, desc, "PENDING");
+                log.info("✅ [cash] Created/updated {} detail with PENDING status for order {}", detailType, order.getOrderId());
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [cash] Error creating pending detail for CASH payment (non-critical): {}", e.getMessage());
+        }
 
         return PaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
@@ -841,23 +1113,36 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public void approveCashPaymentByOrder(UUID orderId) {
+        log.info("💵 [approveCash] Starting approval for orderId={}", orderId);
 
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        Payment payment = paymentRepository.findByRentalOrder_OrderId(orderId).stream()
+        // Lấy tất cả payment CASH PENDING để debug
+        List<Payment> allCashPending = paymentRepository.findByRentalOrder_OrderId(orderId).stream()
                 .filter(p -> "CASH".equalsIgnoreCase(p.getMethod()))
                 .filter(p -> p.getStatus() == PaymentStatus.PENDING)
+                .toList();
+        
+        log.info("💵 [approveCash] Found {} CASH PENDING payment(s) for order {}", allCashPending.size(), orderId);
+        allCashPending.forEach(p -> log.info("💵 [approveCash] Payment: id={}, type={}, amount={}, status={}", 
+                p.getPaymentId(), p.getPaymentType(), p.getAmount(), p.getStatus()));
+
+        Payment payment = allCashPending.stream()
                 .findFirst()
-                .orElseThrow(() -> new BadRequestException("No pending CASH payment for this order"));
+                .orElseThrow(() -> {
+                    log.error("❌ [approveCash] No pending CASH payment found for order {}", orderId);
+                    return new BadRequestException("No pending CASH payment for this order");
+                });
 
         short type = payment.getPaymentType();
+        log.info("💵 [approveCash] Approving payment: id={}, type={}, amount={}", 
+                payment.getPaymentId(), type, payment.getAmount());
 
         // UPDATE PAYMENT STATUS
         payment.setStatus(PaymentStatus.SUCCESS);
-        paymentRepository.save(payment);
-
-        log.info("💵 Approving CASH payment for orderId={}, paymentType={}", orderId, type);
+        payment = paymentRepository.save(payment);
+        log.info("💵 [approveCash] Payment status updated to SUCCESS: id={}", payment.getPaymentId());
 
         switch (type) {
             case 1 -> {
@@ -873,8 +1158,88 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         rentalOrderRepository.save(order);
+        
+        // Reload order để có dữ liệu mới nhất
+        order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+        
+        // Kiểm tra xem đã thanh toán hết chưa và order đã trả xe chưa
+        // Nếu đã trả xe (PENDING_FINAL_PAYMENT hoặc RETURNED hoặc vehicle = CHECKING) và đã thanh toán hết, chuyển thành COMPLETED
+        String currentStatus = order.getStatus();
+        Vehicle vehicle = getMainVehicle(order);
+        String vehicleStatus = vehicle != null ? vehicle.getStatus() : null;
+        // Chỉ set COMPLETED khi vehicle status = CHECKING (đã trả xe) hoặc order status = PENDING_FINAL_PAYMENT/RETURNED (đã confirm return)
+        // KHÔNG kiểm tra "PAID" vì có thể đã PAID từ trước nhưng chưa trả xe
+        boolean isReturned = currentStatus.equals("PENDING_FINAL_PAYMENT") || 
+                            currentStatus.equals("RETURNED") ||
+                            "CHECKING".equalsIgnoreCase(vehicleStatus);
+        
+        if (isReturned) {
+            // Tính remainingAmount sau khi approve
+            BigDecimal remainingAmount = calculateRemainingAmountForOrder(order);
+            log.info("💰 [approveCash] Order status: {}, vehicle status: {}, remainingAmount: {}", currentStatus, vehicleStatus, remainingAmount);
+            
+            if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
+                order.setStatus("COMPLETED");
+                rentalOrderRepository.save(order);
+                log.info("✅ [approveCash] Đã thanh toán hết và đã trả xe → chuyển thành COMPLETED");
+            }
+        } else {
+            log.info("ℹ️ [approveCash] Chưa trả xe (vehicle status: {}, order status: {}), giữ nguyên status", vehicleStatus, currentStatus);
+        }
 
         log.info("✅ CASH payment approved successfully for orderId={}", orderId);
+    }
+
+    // Helper method để tính remainingAmount cho order
+    // Logic mới: remainingAmount đã bao gồm cả dịch vụ (không cần cộng thêm SERVICE PENDING)
+    private BigDecimal calculateRemainingAmountForOrder(RentalOrder order) {
+        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
+        
+        if (payments == null || payments.isEmpty()) {
+            BigDecimal totalPrice = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+            return totalPrice;
+        }
+        
+        // Kiểm tra FULL_PAYMENT (type 3) SUCCESS
+        Optional<Payment> fullPayment = payments.stream()
+                .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+        
+        if (fullPayment.isPresent()) {
+            BigDecimal remaining = fullPayment.get().getRemainingAmount();
+            return remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 ? remaining : BigDecimal.ZERO;
+        }
+        
+        // Kiểm tra FINAL_PAYMENT (type 2) SUCCESS
+        boolean hasFinalPaymentSuccess = payments.stream()
+                .anyMatch(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.SUCCESS);
+        if (hasFinalPaymentSuccess) {
+            // Đã thanh toán PICKUP, kiểm tra xem DEPOSIT còn remainingAmount không (dịch vụ mới)
+            Optional<Payment> depositPayment = payments.stream()
+                    .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                    .findFirst();
+            
+            if (depositPayment.isPresent()) {
+                BigDecimal remaining = depositPayment.get().getRemainingAmount();
+                return remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 ? remaining : BigDecimal.ZERO;
+            }
+            return BigDecimal.ZERO;
+        }
+        
+        // Kiểm tra DEPOSIT (type 1) SUCCESS
+        Optional<Payment> depositPayment = payments.stream()
+                .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+        
+        if (depositPayment.isPresent()) {
+            BigDecimal remaining = depositPayment.get().getRemainingAmount();
+            return remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 ? remaining : BigDecimal.ZERO;
+        }
+        
+        // Chưa thanh toán gì
+        BigDecimal totalPrice = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+        return totalPrice;
     }
 
     @Override

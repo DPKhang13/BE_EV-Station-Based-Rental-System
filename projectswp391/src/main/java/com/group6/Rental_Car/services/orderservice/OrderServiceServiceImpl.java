@@ -2,8 +2,10 @@ package com.group6.Rental_Car.services.orderservice;
 
 import com.group6.Rental_Car.dtos.orderservice.OrderServiceCreateRequest;
 import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
+import com.group6.Rental_Car.dtos.orderservice.ServicePriceCreateRequest;
 import com.group6.Rental_Car.entities.*;
 import com.group6.Rental_Car.enums.PaymentStatus;
+import com.group6.Rental_Car.exceptions.BadRequestException;
 import com.group6.Rental_Car.exceptions.ResourceNotFoundException;
 import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
@@ -110,6 +112,40 @@ public class OrderServiceServiceImpl implements OrderServiceService {
         response.setServiceType(request.getServiceType());
         response.setDescription(description);
         response.setCost(request.getCost());
+
+        return response;
+    }
+
+    // ===============================
+    //  TẠO DỊCH VỤ CHUNG (BẢNG GIÁ) - KHÔNG CẦN ORDERID
+    // ===============================
+    @Override
+    @Transactional
+    public OrderServiceResponse createServicePrice(ServicePriceCreateRequest request) {
+        // Validate
+        if (request.getServiceType() == null || request.getServiceType().trim().isEmpty()) {
+            throw new BadRequestException("Service type là bắt buộc");
+        }
+        if (request.getCost() == null || request.getCost().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException("Cost phải lớn hơn 0");
+        }
+
+        // Tạo OrderService entity (dịch vụ chung trong bảng giá)
+        OrderService service = OrderService.builder()
+                .serviceType(request.getServiceType().toUpperCase())
+                .description(Optional.ofNullable(request.getDescription())
+                        .orElse("Phí dịch vụ " + request.getServiceType()))
+                .cost(request.getCost())
+                .build();
+        
+        OrderService savedService = orderServiceRepository.save(service);
+
+        // Tạo response
+        OrderServiceResponse response = new OrderServiceResponse();
+        response.setServiceId(savedService.getServiceId());
+        response.setServiceType(savedService.getServiceType());
+        response.setDescription(savedService.getDescription());
+        response.setCost(savedService.getCost());
 
         return response;
     }

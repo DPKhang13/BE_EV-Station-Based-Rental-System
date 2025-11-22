@@ -80,6 +80,11 @@ import java.util.stream.Collectors;
             Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy xe"));
 
+            // Lưu giá cũ để tính toán remainingAmount
+            BigDecimal oldPrice = existing.getPrice() != null ? existing.getPrice() : BigDecimal.ZERO;
+            BigDecimal newPrice = request.getPrice() != null ? request.getPrice() : BigDecimal.ZERO;
+            BigDecimal priceDifference = newPrice.subtract(oldPrice);
+
             existing.setOrder(order);
             existing.setVehicle(vehicle);
             existing.setType(request.getType().trim().toUpperCase());
@@ -88,7 +93,52 @@ import java.util.stream.Collectors;
             existing.setPrice(request.getPrice());
             existing.setDescription(request.getDescription());
 
-            return toResponse(rentalOrderDetailRepository.save(existing));
+            RentalOrderDetail savedDetail = rentalOrderDetailRepository.save(existing);
+
+            // Nếu detail là SERVICE và status là PENDING, cập nhật remainingAmount của payment
+            // và totalPrice của order
+            if ("SERVICE".equalsIgnoreCase(existing.getType()) && "PENDING".equalsIgnoreCase(existing.getStatus())) {
+                // Cập nhật totalPrice của order
+                BigDecimal currentTotal = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+                BigDecimal updatedTotal = currentTotal.add(priceDifference);
+                order.setTotalPrice(updatedTotal);
+                rentalOrderRepository.save(order);
+
+                // Cập nhật remainingAmount của payment (DEPOSIT hoặc FULL_PAYMENT)
+                List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
+
+                Optional<Payment> depositPayment = payments.stream()
+                        .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                        .findFirst();
+
+                if (depositPayment.isPresent()) {
+                    Payment deposit = depositPayment.get();
+                    BigDecimal currentRemaining = deposit.getRemainingAmount() != null
+                            ? deposit.getRemainingAmount()
+                            : BigDecimal.ZERO;
+                    deposit.setRemainingAmount(currentRemaining.add(priceDifference));
+                    paymentRepository.save(deposit);
+                    System.out.println("✅ [updateDetail] Đã cập nhật remainingAmount cho deposit payment: " +
+                            currentRemaining + " + " + priceDifference + " = " + deposit.getRemainingAmount());
+                } else {
+                    Optional<Payment> fullPayment = payments.stream()
+                            .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                            .findFirst();
+
+                    if (fullPayment.isPresent()) {
+                        Payment full = fullPayment.get();
+                        BigDecimal currentRemaining = full.getRemainingAmount() != null
+                                ? full.getRemainingAmount()
+                                : BigDecimal.ZERO;
+                        full.setRemainingAmount(currentRemaining.add(priceDifference));
+                        paymentRepository.save(full);
+                        System.out.println("✅ [updateDetail] Đã cập nhật remainingAmount cho full payment: " +
+                                currentRemaining + " + " + priceDifference + " = " + full.getRemainingAmount());
+                    }
+                }
+            }
+
+            return toResponse(savedDetail);
         }
 
         // =====================================================
@@ -96,10 +146,71 @@ import java.util.stream.Collectors;
         // =====================================================
         @Override
         public void deleteDetail(Long detailId) {
-            if (!rentalOrderDetailRepository.existsById(detailId)) {
-                throw new ResourceNotFoundException("Chi tiết thuê không tồn tại");
-            }
+            RentalOrderDetail existing = rentalOrderDetailRepository.findById(detailId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Chi tiết thuê không tồn tại"));
+
+            // Lưu thông tin detail trước khi xóa để cập nhật remainingAmount
+            String detailType = existing.getType();
+            String detailStatus = existing.getStatus();
+            BigDecimal detailPrice = existing.getPrice() != null ? existing.getPrice() : BigDecimal.ZERO;
+            RentalOrder order = existing.getOrder();
+
+            // Xóa detail
             rentalOrderDetailRepository.deleteById(detailId);
+
+            // Nếu detail là SERVICE và status là PENDING, cập nhật remainingAmount của payment
+            // và totalPrice của order
+            if ("SERVICE".equalsIgnoreCase(detailType) && "PENDING".equalsIgnoreCase(detailStatus)) {
+                // Trừ detailPrice khỏi totalPrice của order
+                BigDecimal currentTotal = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
+                BigDecimal updatedTotal = currentTotal.subtract(detailPrice);
+                if (updatedTotal.compareTo(BigDecimal.ZERO) < 0) {
+                    updatedTotal = BigDecimal.ZERO;
+                }
+                order.setTotalPrice(updatedTotal);
+                rentalOrderRepository.save(order);
+
+                // Trừ detailPrice khỏi remainingAmount của payment (DEPOSIT hoặc FULL_PAYMENT)
+                List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
+
+                Optional<Payment> depositPayment = payments.stream()
+                        .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                        .findFirst();
+
+                if (depositPayment.isPresent()) {
+                    Payment deposit = depositPayment.get();
+                    BigDecimal currentRemaining = deposit.getRemainingAmount() != null
+                            ? deposit.getRemainingAmount()
+                            : BigDecimal.ZERO;
+                    BigDecimal updatedRemaining = currentRemaining.subtract(detailPrice);
+                    if (updatedRemaining.compareTo(BigDecimal.ZERO) < 0) {
+                        updatedRemaining = BigDecimal.ZERO;
+                    }
+                    deposit.setRemainingAmount(updatedRemaining);
+                    paymentRepository.save(deposit);
+                    System.out.println("✅ [deleteDetail] Đã cập nhật remainingAmount cho deposit payment: " +
+                            currentRemaining + " - " + detailPrice + " = " + deposit.getRemainingAmount());
+                } else {
+                    Optional<Payment> fullPayment = payments.stream()
+                            .filter(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS)
+                            .findFirst();
+
+                    if (fullPayment.isPresent()) {
+                        Payment full = fullPayment.get();
+                        BigDecimal currentRemaining = full.getRemainingAmount() != null
+                                ? full.getRemainingAmount()
+                                : BigDecimal.ZERO;
+                        BigDecimal updatedRemaining = currentRemaining.subtract(detailPrice);
+                        if (updatedRemaining.compareTo(BigDecimal.ZERO) < 0) {
+                            updatedRemaining = BigDecimal.ZERO;
+                        }
+                        full.setRemainingAmount(updatedRemaining);
+                        paymentRepository.save(full);
+                        System.out.println("✅ [deleteDetail] Đã cập nhật remainingAmount cho full payment: " +
+                                currentRemaining + " - " + detailPrice + " = " + full.getRemainingAmount());
+                    }
+                }
+            }
         }
 
         // =====================================================
@@ -138,19 +249,31 @@ import java.util.stream.Collectors;
             // Lấy danh sách payments để map với từng detail type
             List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
             
+            // Kiểm tra có payment CASH PENDING không (để hiển thị detail PENDING)
+            boolean hasCashPending = payments.stream()
+                    .anyMatch(p -> "CASH".equalsIgnoreCase(p.getMethod()) && p.getStatus() == PaymentStatus.PENDING);
+            
             // Show RENTAL khi: PENDING (chưa thanh toán), CREATED, BOOKED
             // Show TẤT CẢ khi: FAILED (để hiển thị đầy đủ thông tin đơn đã hủy)
+            // Show payment details khi: có payment CASH PENDING hoặc đã thanh toán
             boolean showOnlyRental =
                     status.equals("PENDING") ||
                     status.equals("CREATED") ||
                     status.equals("BOOKED");
             boolean showAll = status.equals("FAILED");
+            boolean showPaymentDetails = hasCashPending || 
+                    status.equals("PENDING_DEPOSIT") ||
+                    status.equals("PENDING_FINAL") ||
+                    status.equals("PENDING_FULL_PAYMENT") ||
+                    status.equals("DEPOSITED") ||
+                    status.equals("PAID") ||
+                    status.equals("RENTAL") ||
+                    status.equals("COMPLETED");
 
             List<RentalOrderDetail> raw = rentalOrderDetailRepository.findByOrder_OrderId(orderId);
 
             // Lấy số tiền còn lại chưa thanh toán từ Payment
-            // Logic: Kiểm tra FULL_PAYMENT SUCCESS trước (có thể có remainingAmount > 0 nếu thêm dịch vụ)
-            // Sau đó mới kiểm tra DEPOSIT SUCCESS
+            // Logic mới: remainingAmount đã bao gồm cả dịch vụ (không cần cộng thêm SERVICE PENDING)
             BigDecimal remainingAmount;
             
             // Kiểm tra FULL_PAYMENT (type 3) SUCCESS
@@ -164,11 +287,23 @@ import java.util.stream.Collectors;
                         ? remaining 
                         : BigDecimal.ZERO;
             } else {
-                // Kiểm tra FINAL_PAYMENT (type 2) SUCCESS → đã thanh toán hết
+                // Kiểm tra FINAL_PAYMENT (type 2) SUCCESS
                 boolean hasFinalPaymentSuccess = payments.stream()
                         .anyMatch(p -> p.getPaymentType() == 2 && p.getStatus() == PaymentStatus.SUCCESS);
                 if (hasFinalPaymentSuccess) {
-                    remainingAmount = BigDecimal.ZERO;
+                    // Đã thanh toán PICKUP, kiểm tra xem DEPOSIT còn remainingAmount không (dịch vụ mới)
+                    Optional<Payment> depositPayment = payments.stream()
+                            .filter(p -> p.getPaymentType() == 1 && p.getStatus() == PaymentStatus.SUCCESS)
+                            .findFirst();
+                    
+                    if (depositPayment.isPresent()) {
+                        BigDecimal remaining = depositPayment.get().getRemainingAmount();
+                        remainingAmount = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
+                                ? remaining 
+                                : BigDecimal.ZERO;
+                    } else {
+                        remainingAmount = BigDecimal.ZERO;
+                    }
                 } else {
                     // Kiểm tra DEPOSIT (type 1) SUCCESS
                     Optional<Payment> depositPayment = payments.stream()
@@ -193,7 +328,23 @@ import java.util.stream.Collectors;
                         if (showAll) return true;
                         
                         String type = safeType(d);
+                        
+                        // Nếu showOnlyRental → chỉ show RENTAL
                         if (showOnlyRental) return type.equals("RENTAL");
+                        
+                        // Nếu có payment CASH PENDING → show payment details (DEPOSIT/PICKUP/FULL_PAYMENT) cả SUCCESS và PENDING, ẩn RENTAL
+                        if (hasCashPending) {
+                            return type.equals("DEPOSIT") || 
+                                   type.equals("PICKUP") || 
+                                   type.equals("FULL_PAYMENT");
+                        }
+                        
+                        // Nếu showPaymentDetails → show payment details (không show RENTAL)
+                        if (showPaymentDetails) {
+                            return !type.equals("RENTAL");
+                        }
+                        
+                        // Mặc định: không show RENTAL
                         return !type.equals("RENTAL");
                     })
                     .map(d -> {
@@ -205,7 +356,7 @@ import java.util.stream.Collectors;
                         String methodPayment = null;
                         
                         if (!"SERVICE".equals(detailType)) {
-                            // Tìm payment method tương ứng với detail type
+                            // Tìm payment method tương ứng với detail type (bao gồm cả PENDING và SUCCESS)
                             methodPayment = payments.stream()
                                     .sorted(Comparator.comparing(Payment::getPaymentId))
                                     .filter(p -> {
@@ -215,6 +366,9 @@ import java.util.stream.Collectors;
                                         if ("FULL_PAYMENT".equals(detailType) && p.getPaymentType() == 3) return true;
                                         return false;
                                     })
+                                    // Ưu tiên payment PENDING (CASH) trước, sau đó mới đến SUCCESS
+                                    .sorted(Comparator.comparing((Payment p) -> p.getStatus() == PaymentStatus.PENDING ? 0 : 1)
+                                            .thenComparing(Payment::getPaymentId))
                                     .map(Payment::getMethod)
                                     .map(mth -> mth != null && mth.equalsIgnoreCase("CASH") ? "CASH" : mth)
                                     .findFirst()

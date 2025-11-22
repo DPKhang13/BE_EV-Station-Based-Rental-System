@@ -60,12 +60,18 @@ public class CouponServiceImpl implements CouponService{
         BigDecimal discount = coupon.getDiscount() != null ? coupon.getDiscount() : BigDecimal.ZERO;
         BigDecimal total = basePrice;
 
-        // Nếu discount < 1 → giảm theo %
-        if (discount.compareTo(BigDecimal.ONE) < 0) {
-            total = basePrice.subtract(basePrice.multiply(discount));
+        // Logic: Database lưu discount dạng số (10.00 = 10%, 20.00 = 20%)
+        // Nếu discount <= 100 → coi là phần trăm (chia cho 100)
+        // Nếu discount > 100 → coi là giá cố định (giảm trực tiếp)
+        if (discount.compareTo(new BigDecimal("100")) <= 0) {
+            // Giảm theo phần trăm: discount = 10.00 → 10% → 0.1
+            BigDecimal discountPercent = discount.divide(new BigDecimal("100"), 4, java.math.RoundingMode.HALF_UP);
+            total = basePrice.subtract(basePrice.multiply(discountPercent));
+            System.out.println("💰 [applyCouponIfValid] Discount " + discount + "% → " + discountPercent + " → Giảm: " + basePrice.multiply(discountPercent) + " → Total: " + total);
         } else {
-            // Nếu discount >= 1 → giảm theo giá cố định
+            // Giảm theo giá cố định
             total = basePrice.subtract(discount);
+            System.out.println("💰 [applyCouponIfValid] Discount cố định: " + discount + " → Total: " + total);
         }
 
         // Không bao giờ âm giá
