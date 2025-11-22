@@ -124,4 +124,10 @@ public class OrderController {
     ) {
         return ResponseEntity.ok(rentalOrderService.updateCompactOrder(vehicleId, orderId, req));
     }
+
+    @PutMapping("/{orderId}/complete")
+    public ResponseEntity<OrderResponse> completeOrder(@PathVariable UUID orderId) {
+        OrderResponse response = rentalOrderService.completeOrder(orderId);
+        return ResponseEntity.ok(response);
+    }
 }

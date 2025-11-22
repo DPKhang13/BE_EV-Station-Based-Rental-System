@@ -266,6 +266,51 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
     @Override
     @Transactional
+    public OrderResponse completeOrder(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        String currentStatus = order.getStatus();
+        if ("COMPLETED".equals(currentStatus)) {
+            throw new BadRequestException("Đơn hàng đã hoàn thành rồi");
+        }
+
+        if ("FAILED".equals(currentStatus) || "REFUNDED".equals(currentStatus)) {
+            throw new BadRequestException("Không thể hoàn tất đơn hàng đã hủy hoặc đã hoàn tiền");
+        }
+
+        // Chỉ cho phép complete từ AWAITING, PAID, PENDING_FINAL_PAYMENT, hoặc RETURNED
+        // (đã thanh toán hết và đã trả xe hoặc đã thanh toán đặt cọc và đang chờ nhận xe)
+        boolean canComplete = "AWAITING".equals(currentStatus) ||
+                             "PAID".equals(currentStatus) ||
+                             "PENDING_FINAL_PAYMENT".equals(currentStatus) ||
+                             "RETURNED".equals(currentStatus);
+        
+        if (!canComplete) {
+            throw new BadRequestException("Không thể hoàn tất đơn hàng với trạng thái: " + currentStatus + 
+                    ". Chỉ có thể hoàn tất đơn hàng đã thanh toán hết (AWAITING, PAID, PENDING_FINAL_PAYMENT, RETURNED)");
+        }
+
+        // Kiểm tra xem đã thanh toán hết chưa
+        BigDecimal remainingAmount = calculateRemainingAmount(order);
+        
+        if (remainingAmount.compareTo(BigDecimal.ZERO) > 0) {
+            throw new BadRequestException("Không thể hoàn tất đơn hàng. Còn " + remainingAmount + " VND chưa thanh toán");
+        }
+
+        // Đã thanh toán hết → chuyển sang COMPLETED
+        order.setStatus("COMPLETED");
+        rentalOrderRepository.save(order);
+
+        System.out.println("✅ [completeOrder] Đã hoàn tất đơn hàng " + orderId + " từ status: " + currentStatus);
+
+        // Lấy main detail để map response
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        return mapToResponse(order, mainDetail);
+    }
+
+    @Override
+    @Transactional
     public OrderResponse cancelOrder(UUID orderId, String cancellationReason) {
         // Tìm đơn hàng
         RentalOrder order = rentalOrderRepository.findById(orderId)
@@ -340,7 +385,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         List<String> allowedStatuses = List.of(
             "FAILED", // Đơn đã hủy (từ cancelOrder)
             "PAYMENT_FAILED",
-            "COMPLETED", "PAID"
+            "COMPLETED", "AWAITING" // AWAITING = đã thanh toán đặt cọc, chờ nhận xe
         );
         
         boolean canDelete = allowedStatuses.stream()
@@ -471,18 +516,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
-        // Tìm chi tiết PICKUP hoặc FULL_PAYMENT
-        RentalOrderDetail pickupDetail = order.getDetails().stream()
-                .filter(d -> "PICKUP".equalsIgnoreCase(d.getType()) || "FULL_PAYMENT".equalsIgnoreCase(d.getType()))
-                .reduce((first, second) -> second)
-                .orElse(null);
-
-        if (pickupDetail == null)
-            throw new BadRequestException("Không tìm thấy chi tiết thanh toán (PICKUP hoặc FULL_PAYMENT) trong đơn thuê");
-
-        //  Nếu chưa thanh toán phần còn lại (chưa SUCCESS) thì chặn
-        if (!"SUCCESS".equalsIgnoreCase(pickupDetail.getStatus()))
-            throw new BadRequestException("Khách hàng chưa thanh toán — không thể bàn giao xe");
+        String currentStatus = order.getStatus();
+        if (!"AWAITING".equals(currentStatus) && !"PAID".equals(currentStatus)) {
+            throw new BadRequestException("Chỉ có thể bàn giao xe khi đơn hàng ở trạng thái AWAITING (đã thanh toán đặt cọc) hoặc PAID (đã thanh toán hết dịch vụ)");
+        }
 
         //  Lấy chi tiết chính (RENTAL)
         RentalOrderDetail mainDetail = getMainDetail(order);
@@ -709,10 +746,12 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         vehicle.setStatus("CHECKING");
         
         // Nếu có phí trễ hoặc dịch vụ chưa thanh toán → chuyển thành PENDING_FINAL_PAYMENT
-        // Chỉ chuyển thành COMPLETED khi đã thanh toán hết (remainingAmount = 0)
+        // KHÔNG tự động set COMPLETED khi đã thanh toán hết
+        // Chỉ khi gọi API /complete thì mới set COMPLETED
         if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
-            order.setStatus("COMPLETED");
-            System.out.println("✅ [confirmReturn] Đã thanh toán hết → chuyển thành COMPLETED");
+            // Đã thanh toán hết → chuyển thành PENDING_FINAL_PAYMENT (chờ gọi API /complete)
+            order.setStatus("PENDING_FINAL_PAYMENT");
+            System.out.println("✅ [confirmReturn] Đã thanh toán hết → chuyển thành PENDING_FINAL_PAYMENT (chờ gọi API /complete)");
         } else {
             // Có phí trễ hoặc dịch vụ chưa thanh toán → chuyển thành PENDING_FINAL_PAYMENT
             order.setStatus("PENDING_FINAL_PAYMENT");
@@ -783,10 +822,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
                     return s.startsWith("PENDING")
                             || s.equals("COMPLETED")
-                            || s.equals("PAID")
-                            || s.equals("RENTAL")              // đang thuê
+                            || s.equals("AWAITING")             // đã thanh toán đặt cọc, chờ nhận xe
+                            || s.equals("PAID")                 // đã thanh toán hết dịch vụ
+                            || s.equals("RENTAL")               // đang thuê
                             || s.equals("DEPOSITED")
-                            || s.equals("SERVICE_PAID") // đã đặt cọc
+                            || s.equals("SERVICE_PAID")         // đã đặt cọc
                             || s.equals("PENDING_FINAL_PAYMENT"); // chờ thanh toán cuối (services + phí trễ)
                 })
                 //  sort theo createdAt mới nhất

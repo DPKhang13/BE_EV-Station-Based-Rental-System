@@ -266,7 +266,8 @@ import java.util.stream.Collectors;
                     status.equals("PENDING_FINAL") ||
                     status.equals("PENDING_FULL_PAYMENT") ||
                     status.equals("DEPOSITED") ||
-                    status.equals("PAID") ||
+                    status.equals("AWAITING") ||              // đã thanh toán đặt cọc, chờ nhận xe
+                    status.equals("PAID") ||                  // đã thanh toán hết dịch vụ
                     status.equals("RENTAL") ||
                     status.equals("COMPLETED");
 
@@ -372,15 +373,48 @@ import java.util.stream.Collectors;
                     .map(d -> {
                         OrderDetailResponse dto = toResponse(d, order);
                         
-                        // Chỉ set payment method cho các detail có payment tương ứng
-                        // SERVICE detail không có payment riêng → không set method
+                        // Set payment method cho các detail
+                        // SERVICE detail: lấy từ payment type 2 (final payment) khi thanh toán dịch vụ
                         String detailType = safeType(d);
                         String methodPayment = null;
                         
-                        if (!"SERVICE".equals(detailType)) {
-                            // Tìm payment method tương ứng với detail type (bao gồm cả PENDING và SUCCESS)
-                            methodPayment = payments.stream()
-                                    .sorted(Comparator.comparing(Payment::getPaymentId))
+                        if ("SERVICE".equals(detailType)) {
+                            // SERVICE detail: mặc định methodPayment = null
+                            methodPayment = null;
+                            
+                            // Chỉ set payment method khi detail status là SUCCESS và có payment SUCCESS
+                            String detailStatus = d.getStatus() != null ? d.getStatus() : "";
+                            if ("SUCCESS".equalsIgnoreCase(detailStatus)) {
+                                // Ưu tiên payment type 5 (service payment), sau đó mới lấy payment type 2 (final payment)
+                                List<Payment> servicePayments = payments.stream()
+                                        .filter(p -> (p.getPaymentType() == 5 || p.getPaymentType() == 2))
+                                        .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                                        .sorted(Comparator.comparing((Payment p) -> p.getPaymentType() == 5 ? 0 : 1)
+                                                .thenComparing(Payment::getPaymentId))
+                                        .collect(Collectors.toList());
+                                
+                                if (!servicePayments.isEmpty()) {
+                                    Payment successPayment = servicePayments.get(0);
+                                    String method = successPayment.getMethod();
+                                    if (method != null) {
+                                        if (method.equalsIgnoreCase("CASH")) {
+                                            methodPayment = "CASH";
+                                        } else if (method.equalsIgnoreCase("captureWallet") || 
+                                                   method.equalsIgnoreCase("payWithMethod") || 
+                                                   method.equalsIgnoreCase("momo")) {
+                                            methodPayment = "MoMo";
+                                        } else {
+                                            methodPayment = method;
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // DEPOSIT, PICKUP, FULL_PAYMENT: tìm payment method tương ứng với detail type
+                            // Logic: 
+                            // 1. Ưu tiên payment SUCCESS trước (đã thanh toán) - lấy payment cũ nhất (theo paymentId)
+                            // 2. Chỉ lấy PENDING nếu không có SUCCESS nào
+                            List<Payment> filteredPayments = payments.stream()
                                     .filter(p -> {
                                         // Map detail type với payment type
                                         if ("DEPOSIT".equals(detailType) && p.getPaymentType() == 1) return true;
@@ -388,13 +422,55 @@ import java.util.stream.Collectors;
                                         if ("FULL_PAYMENT".equals(detailType) && p.getPaymentType() == 3) return true;
                                         return false;
                                     })
-                                    // Ưu tiên payment PENDING (CASH) trước, sau đó mới đến SUCCESS
-                                    .sorted(Comparator.comparing((Payment p) -> p.getStatus() == PaymentStatus.PENDING ? 0 : 1)
-                                            .thenComparing(Payment::getPaymentId))
-                                    .map(Payment::getMethod)
-                                    .map(mth -> mth != null && mth.equalsIgnoreCase("CASH") ? "CASH" : mth)
-                                    .findFirst()
-                                    .orElse(null);
+                                    .collect(Collectors.toList());
+                            
+                            // Tìm payment SUCCESS - ưu tiên payment cũ nhất (đã có từ trước)
+                            // Để giữ nguyên payment method đã có, không thay đổi khi thanh toán cuối bằng CASH
+                            List<Payment> successPayments = filteredPayments.stream()
+                                    .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                                    .sorted(Comparator.comparing(Payment::getPaymentId)) // Payment cũ trước
+                                    .collect(Collectors.toList());
+                            
+                            if (!successPayments.isEmpty()) {
+                                // Ưu tiên payment cũ nhất (payment đầu tiên) để giữ nguyên payment method đã có
+                                // Nếu có nhiều payment (ví dụ: MoMo cũ + CASH mới), lấy payment cũ nhất
+                                Payment firstSuccessPayment = successPayments.get(0);
+                                String method = firstSuccessPayment.getMethod();
+                                if (method != null) {
+                                    if (method.equalsIgnoreCase("CASH")) {
+                                        methodPayment = "CASH";
+                                    } else if (method.equalsIgnoreCase("captureWallet") || 
+                                               method.equalsIgnoreCase("payWithMethod") || 
+                                               method.equalsIgnoreCase("momo")) {
+                                        methodPayment = "MoMo";
+                                    } else {
+                                        methodPayment = method;
+                                    }
+                                }
+                            } else {
+                                // Chưa thanh toán → lấy method từ payment PENDING (nếu có)
+                                // Ưu tiên payment cũ nhất
+                                List<Payment> pendingPayments = filteredPayments.stream()
+                                        .filter(p -> p.getStatus() == PaymentStatus.PENDING)
+                                        .sorted(Comparator.comparing(Payment::getPaymentId))
+                                        .collect(Collectors.toList());
+                                
+                                if (!pendingPayments.isEmpty()) {
+                                    Payment firstPendingPayment = pendingPayments.get(0);
+                                    String method = firstPendingPayment.getMethod();
+                                    if (method != null) {
+                                        if (method.equalsIgnoreCase("CASH")) {
+                                            methodPayment = "CASH";
+                                        } else if (method.equalsIgnoreCase("captureWallet") || 
+                                                   method.equalsIgnoreCase("payWithMethod") || 
+                                                   method.equalsIgnoreCase("momo")) {
+                                            methodPayment = "MoMo";
+                                        } else {
+                                            methodPayment = method;
+                                        }
+                                    }
+                                }
+                            }
                         }
                         
                         dto.setMethodPayment(methodPayment);
