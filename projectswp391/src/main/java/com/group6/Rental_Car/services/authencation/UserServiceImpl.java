@@ -4,13 +4,18 @@ import com.group6.Rental_Car.dtos.loginpage.AccountDto;
 import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
+import com.group6.Rental_Car.dtos.stafflist.StaffCreateRequest;
+import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.entities.Photo;
+import com.group6.Rental_Car.entities.RentalStation;
 import com.group6.Rental_Car.entities.User;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.enums.UserStatus;
 import com.group6.Rental_Car.exceptions.*;
+import com.group6.Rental_Car.repositories.EmployeeScheduleRepository;
 import com.group6.Rental_Car.repositories.PhotoRepository;
+import com.group6.Rental_Car.repositories.RentalStationRepository;
 import com.group6.Rental_Car.repositories.UserRepository;
 import com.group6.Rental_Car.services.otpmailsender.OtpMailService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
@@ -33,7 +38,8 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final ModelMapper modelMapper;
     private final PhotoRepository photoRepository;
-
+    private final RentalStationRepository rentalStationRepository;
+    private final EmployeeScheduleRepository employeeScheduleRepository;
     // ------- Helper -------
     private AccountDtoResponse mapToResponse(User user) {
         return AccountDtoResponse.builder()
@@ -262,6 +268,87 @@ public class UserServiceImpl implements UserService {
         return userRepository.findById(userId)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy userId: " + userId));
+    }
+    @Override
+    public User createStaff(StaffCreateRequest request) {
+
+        RentalStation station = rentalStationRepository.findById(request.getStationId())
+                .orElseThrow(() -> new RuntimeException("Station not found"));
+
+        String encodedPassword = passwordEncoder.encode(request.getPassword());
+
+        User user = User.builder()
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
+                .password(encodedPassword)
+                .role(Role.staff)
+                .status(UserStatus.ACTIVE)
+                .rentalStation(station)
+                .build();
+
+        return userRepository.save(user);
+    }
+
+
+    @Override
+    public StaffResponse updateStaffByEmail(String email,
+                                            com.group6.Rental_Car.dtos.staffList.StaffUpdateRequest request) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user với email: " + email));
+
+        if (user.getRole() != Role.staff) {
+            throw new BadRequestException("User này không phải STAFF");
+        }
+
+        if (request.getFullName() != null) {
+            user.setFullName(request.getFullName());
+        }
+
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+
+        if (request.getStationId() != null) {
+            RentalStation station = rentalStationRepository.findById(request.getStationId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạm"));
+            user.setRentalStation(station);
+        }
+
+        userRepository.save(user);
+
+        return toStaffResponse(user);
+    }
+
+
+    @Transactional
+    @Override
+    public void deleteByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user với email: " + email));
+
+        // XÓA SCHEDULE TRƯỚC
+        employeeScheduleRepository.deleteByStaff_UserId(user.getUserId());
+
+        userRepository.delete(user);
+    }
+
+    public StaffResponse toStaffResponse(User user) {
+        StaffResponse dto = new StaffResponse();
+        dto.setStaffId(user.getUserId());
+        dto.setStaffName(user.getFullName());
+        dto.setStaffEmail(user.getEmail());
+        dto.setStaffPhone(user.getPhone());
+        dto.setStatus(user.getStatus().name());
+        dto.setRole(user.getRole().name());
+
+        if (user.getRentalStation() != null) {
+            dto.setStationName(user.getRentalStation().getName());
+            dto.setStationName(user.getRentalStation().getName());
+        }
+
+        return dto;
     }
 
 }

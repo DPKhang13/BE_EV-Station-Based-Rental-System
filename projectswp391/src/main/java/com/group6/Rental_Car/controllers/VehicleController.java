@@ -32,8 +32,6 @@ public class VehicleController {
     @Autowired
     private ObjectMapper objectMapper;
 
-
-
     @PostMapping(value = "/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> create(
             @RequestPart(value = "vehicle", required = false) String vehicleJson,
@@ -55,20 +53,10 @@ public class VehicleController {
         else if (reqModel != null && reqModel.getPlateNumber() != null) {
             System.out.println("[VehicleController] Received form data");
             req = reqModel;
-        } 
-        // Nếu không có gì cả
+        }
         else {
             throw new IllegalArgumentException("Vehicle data is required. Send either 'vehicle' (JSON string) or form fields.");
         }
-        
-        // Debug: Log request data
-        System.out.println("[VehicleController] Parsed request:");
-        System.out.println("  - plateNumber: " + req.getPlateNumber());
-        System.out.println("  - status: " + req.getStatus());
-        System.out.println("  - stationId: " + req.getStationId());
-        System.out.println("  - images count: " + (images != null ? images.size() : 0));
-        
-        // Validation sẽ được thực hiện trong service layer
         VehicleResponse response = vehicleService.createVehicle(req, images);
         return ResponseEntity.ok(response);
     }

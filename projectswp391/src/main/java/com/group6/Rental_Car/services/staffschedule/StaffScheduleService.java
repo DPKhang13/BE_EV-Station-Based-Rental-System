@@ -15,4 +15,5 @@ public interface StaffScheduleService {
     Page<StaffScheduleResponse> getAll(Pageable pageable);
     List<StaffResponse> getStaffList();
     StaffScheduleResponse getStaffById(Integer id);
+    void toggleStaffStatus(UUID staffId);
 }
