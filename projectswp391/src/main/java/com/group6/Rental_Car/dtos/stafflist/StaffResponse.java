@@ -1,16 +1,17 @@
 package com.group6.Rental_Car.dtos.stafflist;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class StaffResponse {
-    private String staffId;
+
+    private Object staffId;
     private String staffName;
     private String staffEmail;
+    private String staffPhone;
     private String role;
     private String stationName;
     private Long pickupCount;
