@@ -9,6 +9,5 @@ import java.util.UUID;
 
 public interface StorageService {
     String uploadPublic(String folder, MultipartFile file ) throws IOException;
-    String uploadPrivateAndPresign(String folder, MultipartFile file, Duration ttl) throws IOException;
 
 }

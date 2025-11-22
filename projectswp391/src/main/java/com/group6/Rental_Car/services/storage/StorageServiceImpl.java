@@ -51,34 +51,6 @@ public class StorageServiceImpl implements StorageService {
         return base + "/" + bucket + "/" + urlEncodePath(key);
     }
 
-    /** Upload private → trả presigned URL (hết hạn sau ttl) cho admin xem */
-    public String uploadPrivateAndPresign(String folder, MultipartFile file, Duration ttl) throws IOException {
-        String key = buildKey(folder, file.getOriginalFilename());
-        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
-
-        s3.putObject(
-                PutObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .contentType(contentType)
-                        .contentLength(file.getSize())
-                        .acl(ObjectCannedACL.PUBLIC_READ)
-                        .build(),
-                RequestBody.fromInputStream(file.getInputStream(), file.getSize())
-        );
-
-        GetObjectRequest getReq = GetObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .build();
-
-        var presignReq = GetObjectPresignRequest.builder()
-                .signatureDuration(ttl)
-                .getObjectRequest(getReq)
-                .build();
-
-        return presigner.presignGetObject(presignReq).url().toString();
-    }
 
     // =================================== helpers ===================================
     private String buildKey(String folder, String originalName) {
