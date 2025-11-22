@@ -322,26 +322,48 @@ import java.util.stream.Collectors;
                 }
             }
 
+            // Kiểm tra có PICKUP SUCCESS không và đã thanh toán hết chưa
+            boolean hasPickupSuccess = raw.stream()
+                    .anyMatch(d -> "PICKUP".equalsIgnoreCase(safeType(d)) && "SUCCESS".equalsIgnoreCase(d.getStatus()));
+            boolean isFullyPaid = remainingAmount.compareTo(BigDecimal.ZERO) == 0;
+            
             List<OrderDetailResponse> details = raw.stream()
                     .filter(d -> {
                         // Nếu FAILED, show tất cả detail
                         if (showAll) return true;
                         
                         String type = safeType(d);
+                        String detailStatus = d.getStatus() != null ? d.getStatus().toUpperCase() : "";
                         
                         // Nếu showOnlyRental → chỉ show RENTAL
                         if (showOnlyRental) return type.equals("RENTAL");
                         
-                        // Nếu có payment CASH PENDING → show payment details (DEPOSIT/PICKUP/FULL_PAYMENT) cả SUCCESS và PENDING, ẩn RENTAL
+                        // Nếu có payment CASH PENDING → show payment details (DEPOSIT/PICKUP/FULL_PAYMENT) và SERVICE, ẩn RENTAL
                         if (hasCashPending) {
                             return type.equals("DEPOSIT") || 
                                    type.equals("PICKUP") || 
-                                   type.equals("FULL_PAYMENT");
+                                   type.equals("FULL_PAYMENT") ||
+                                   type.equals("SERVICE");
                         }
                         
-                        // Nếu showPaymentDetails → show payment details (không show RENTAL)
+                        // Nếu đã thanh toán hết và có PICKUP SUCCESS → ẩn PICKUP PENDING
+                        if (isFullyPaid && hasPickupSuccess && type.equals("PICKUP") && "PENDING".equalsIgnoreCase(detailStatus)) {
+                            return false;
+                        }
+                        
+                        // Nếu showPaymentDetails → show payment details và SERVICE, không show RENTAL
                         if (showPaymentDetails) {
-                            return !type.equals("RENTAL");
+                            // Nếu đã thanh toán hết và có PICKUP SUCCESS → ẩn PICKUP PENDING
+                            if (isFullyPaid && hasPickupSuccess && type.equals("PICKUP") && "PENDING".equalsIgnoreCase(detailStatus)) {
+                                return false;
+                            }
+                            // Luôn ẩn RENTAL detail khi đã thanh toán
+                            // Chỉ show payment details (DEPOSIT, PICKUP, FULL_PAYMENT, REFUND) và SERVICE
+                            return type.equals("DEPOSIT") || 
+                                   type.equals("PICKUP") || 
+                                   type.equals("FULL_PAYMENT") ||
+                                   type.equals("REFUND") ||
+                                   type.equals("SERVICE");
                         }
                         
                         // Mặc định: không show RENTAL

@@ -322,11 +322,39 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentRepository.save(depositPayment);
                 log.info("✅ [finalSuccess] Updated deposit remainingAmount: {} -> {}", currentRemaining, newRemaining);
 
-                // Tạo PICKUP detail với status SUCCESS khi thanh toán phần còn lại
+                // Tạo/update PICKUP detail với status SUCCESS khi thanh toán phần còn lại
+                // NHƯNG: Nếu đã có PICKUP SUCCESS rồi (từ lần thanh toán trước), không tạo PICKUP detail mới
                 Vehicle vehicle = getMainVehicle(order);
                 if (vehicle != null) {
-                    createOrUpdateDetail(order, vehicle, "PICKUP", amountToPay, "Thanh toán thuê xe", "SUCCESS");
-                    log.info("✅ Created PICKUP detail with amount={}", amountToPay);
+                    // Kiểm tra xem đã có PICKUP SUCCESS chưa
+                    boolean hasPickupSuccess = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                            .stream()
+                            .anyMatch(d -> "PICKUP".equalsIgnoreCase(d.getType()) && "SUCCESS".equalsIgnoreCase(d.getStatus()));
+                    
+                    if (hasPickupSuccess) {
+                        // Đã có PICKUP SUCCESS → chỉ update PICKUP PENDING (nếu có) thành SUCCESS, không tạo mới
+                        Optional<RentalOrderDetail> pickupPending = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                                .stream()
+                                .filter(d -> "PICKUP".equalsIgnoreCase(d.getType()) && "PENDING".equalsIgnoreCase(d.getStatus()))
+                                .findFirst();
+                        
+                        if (pickupPending.isPresent()) {
+                            // Update PICKUP PENDING thành SUCCESS
+                            RentalOrderDetail d = pickupPending.get();
+                            d.setStatus("SUCCESS");
+                            d.setPrice(amountToPay);
+                            rentalOrderDetailRepository.save(d);
+                            log.info("✅ Updated existing PICKUP PENDING to SUCCESS with amount={}", amountToPay);
+                        } else {
+                            // Đã có PICKUP SUCCESS và không có PICKUP PENDING → không tạo PICKUP detail mới
+                            // (đây là trường hợp thanh toán dịch vụ cuối cùng, không cần tạo PICKUP detail)
+                            log.info("ℹ️ Đã có PICKUP SUCCESS và không có PICKUP PENDING, không tạo PICKUP detail mới (thanh toán dịch vụ)");
+                        }
+                    } else {
+                        // Chưa có PICKUP SUCCESS → tạo/update PICKUP detail (thanh toán phần thuê xe)
+                        createOrUpdateDetail(order, vehicle, "PICKUP", amountToPay, "Thanh toán thuê xe", "SUCCESS");
+                        log.info("✅ Created/updated PICKUP detail with amount={}", amountToPay);
+                    }
                 } else {
                     log.warn("⚠️ Cannot create PICKUP detail: vehicle is null");
                 }
@@ -1066,24 +1094,38 @@ public class PaymentServiceImpl implements PaymentService {
 
         // Tạo / cập nhật detail PENDING cho thanh toán CASH
         // để FE thấy phương thức CASH trong phần chi tiết đơn hàng
-        // NHƯNG: Nếu type = 2 và đã có FULL_PAYMENT SUCCESS, không tạo PICKUP detail (sẽ được tạo trong finalSuccess khi payment SUCCESS)
+        // NHƯNG: Nếu type = 2, chỉ tạo PICKUP detail nếu chưa có payment type 2, FULL_PAYMENT, hoặc PICKUP detail
         try {
-            // Kiểm tra nếu type = 2 và đã có FULL_PAYMENT SUCCESS, thì không tạo PICKUP detail
             if (type == 2) {
-                boolean hasFullPaymentSuccess = paymentRepository.findByRentalOrder_OrderId(order.getOrderId())
-                        .stream()
-                        .anyMatch(p -> p.getPaymentType() == 3 && p.getStatus() == PaymentStatus.SUCCESS);
+                // Kiểm tra xem đã có payment type 2 (PICKUP) chưa (MoMo hoặc CASH, SUCCESS hoặc PENDING)
+                List<Payment> existingPayments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
+                boolean hasPickupPayment = existingPayments.stream()
+                        .anyMatch(p -> p.getPaymentType() == 2);
                 
-                if (hasFullPaymentSuccess) {
-                    log.info("ℹ️ [cash/type2] Đã có FULL_PAYMENT SUCCESS, không tạo PICKUP detail (sẽ được xử lý khi payment SUCCESS)");
-                    // Không tạo detail, vì sẽ được xử lý trong finalSuccess khi payment chuyển sang SUCCESS
+                // Kiểm tra xem đã có FULL_PAYMENT (type 3) chưa (MoMo hoặc CASH, SUCCESS hoặc PENDING)
+                boolean hasFullPayment = existingPayments.stream()
+                        .anyMatch(p -> p.getPaymentType() == 3);
+                
+                // Kiểm tra xem đã có PICKUP detail chưa
+                boolean hasPickupDetail = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                        .stream()
+                        .anyMatch(d -> "PICKUP".equalsIgnoreCase(d.getType()));
+                
+                // Kiểm tra xem đã có FULL_PAYMENT detail chưa
+                boolean hasFullPaymentDetail = rentalOrderDetailRepository.findByOrder_OrderId(order.getOrderId())
+                        .stream()
+                        .anyMatch(d -> "FULL_PAYMENT".equalsIgnoreCase(d.getType()));
+                
+                if (hasPickupPayment || hasFullPayment || hasPickupDetail || hasFullPaymentDetail) {
+                    log.info("ℹ️ [cash/type2] Đã có payment type 2, FULL_PAYMENT, hoặc detail tương ứng (có thể là MoMo hoặc CASH), không tạo mới hoặc update (chỉ thanh toán phần còn lại)");
+                    // Không tạo/update PICKUP detail, vì đã có rồi (có thể từ MoMo hoặc CASH trước đó)
                 } else {
-                    // Chưa có FULL_PAYMENT SUCCESS, tạo PICKUP detail như bình thường
+                    // Chưa có payment type 2, FULL_PAYMENT, hoặc detail tương ứng → tạo mới
                     Vehicle v = getMainVehicle(order);
                     String detailType = getTypeName(type);   // PICKUP
                     String desc = getDescription(type);
                     createOrUpdateDetail(order, v, detailType, amount, desc, "PENDING");
-                    log.info("✅ [cash/type2] Created/updated {} detail with PENDING status for order {}", detailType, order.getOrderId());
+                    log.info("✅ [cash/type2] Created new {} detail with PENDING status for order {}", detailType, order.getOrderId());
                 }
             } else {
                 // Type 1 (DEPOSIT) hoặc type 3 (FULL_PAYMENT), tạo detail như bình thường
