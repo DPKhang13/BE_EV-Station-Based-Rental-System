@@ -17,7 +17,7 @@ import java.util.UUID;
 public class UploadController {
 
     private final StorageServiceImpl storage;
-    private final PhotoService photoService; // <-- thêm service lưu DB
+    private final PhotoService photoService;
 
     @PostMapping(value = "/cccd", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> uploadCCCD(

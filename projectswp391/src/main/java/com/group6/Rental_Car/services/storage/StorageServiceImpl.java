@@ -7,6 +7,7 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -41,6 +42,7 @@ public class StorageServiceImpl implements StorageService {
                         .key(key)
                         .contentType(contentType)
                         .contentLength(file.getSize())
+                        .acl(ObjectCannedACL.PUBLIC_READ)
                         .build(),
                 RequestBody.fromInputStream(file.getInputStream(), file.getSize())
         );
@@ -50,32 +52,6 @@ public class StorageServiceImpl implements StorageService {
     }
 
     /** Upload private → trả presigned URL (hết hạn sau ttl) cho admin xem */
-    public String uploadPrivateAndPresign(String folder, MultipartFile file, Duration ttl) throws IOException {
-        String key = buildKey(folder, file.getOriginalFilename());
-        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
-
-        s3.putObject(
-                PutObjectRequest.builder()
-                        .bucket(bucket)
-                        .key(key)
-                        .contentType(contentType)
-                        .contentLength(file.getSize())
-                        .build(),
-                RequestBody.fromInputStream(file.getInputStream(), file.getSize())
-        );
-
-        GetObjectRequest getReq = GetObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .build();
-
-        var presignReq = GetObjectPresignRequest.builder()
-                .signatureDuration(ttl)
-                .getObjectRequest(getReq)
-                .build();
-
-        return presigner.presignGetObject(presignReq).url().toString();
-    }
 
     // =================================== helpers ===================================
     private String buildKey(String folder, String originalName) {
