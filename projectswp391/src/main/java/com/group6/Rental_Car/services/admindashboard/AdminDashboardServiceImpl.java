@@ -51,7 +51,38 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // ===== ORDER KPIs =====
         long totalOrders = rentalOrderRepository.count();
         long completedOrders = rentalOrderRepository.countByStatus("COMPLETED");
-        double revenueInRange = Optional.ofNullable(rentalOrderRepository.revenueBetween(dtFrom, dtTo)).orElse(0d);
+        
+        // Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
+        double revenueInRange = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(dtFrom) 
+                        && !d.getStartTime().isAfter(dtTo))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return "RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type);
+                })
+                .filter(d -> {
+                    // Chỉ tính các detail có order status hợp lệ
+                    if (d.getOrder() == null) return false;
+                    String orderStatus = d.getOrder().getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase().trim();
+                    // So sánh chính xác hoặc contains để đảm bảo không bỏ sót
+                    return upperStatus.equals("RENTAL") ||
+                           upperStatus.equals("COMPLETED") ||
+                           upperStatus.equals("RETURN") ||
+                           upperStatus.equals("ACTIVE") ||
+                           upperStatus.equals("PAID") ||
+                           upperStatus.equals("AWAITING") ||
+                           upperStatus.equals("DEPOSITED") ||
+                           upperStatus.equals("PENDING") ||
+                           upperStatus.equals("BOOKED") ||
+                           upperStatus.startsWith("RENTAL") ||
+                           upperStatus.startsWith("COMPLETED");
+                })
+                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                .sum();
 
         // ===== USER KPIs =====
         long totalUsers = userRepository.count();
@@ -130,21 +161,94 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ).toList();
 
         // ===== REVENUE BY STATION =====
-        var revStationRows = rentalOrderRepository.revenuePerStation(dtFrom, dtTo);
-        var revenueByStation = revStationRows.stream()
-                .map(r -> AdminDashboardResponse.StationRevenue.builder()
-                        .stationId(((Number) r[0]).intValue())
-                        .stationName((String) r[1])
-                        .totalRevenue(r[2] == null ? 0d : ((Number) r[2]).doubleValue())
-                        .build())
+        // Tính revenue từ RentalOrderDetail bao gồm cả RENTAL và SERVICE
+        Map<Integer, Double> revenueByStationMap = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
+                        && d.getVehicle().getRentalStation().getStationId() != null)
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(dtFrom) 
+                        && !d.getStartTime().isAfter(dtTo))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return "RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type);
+                })
+                .filter(d -> {
+                    // Chỉ tính các detail có order status hợp lệ
+                    if (d.getOrder() == null) return false;
+                    String orderStatus = d.getOrder().getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase().trim();
+                    // So sánh chính xác hoặc contains để đảm bảo không bỏ sót
+                    return upperStatus.equals("RENTAL") ||
+                           upperStatus.equals("COMPLETED") ||
+                           upperStatus.equals("RETURN") ||
+                           upperStatus.equals("ACTIVE") ||
+                           upperStatus.equals("PAID") ||
+                           upperStatus.equals("AWAITING") ||
+                           upperStatus.equals("DEPOSITED") ||
+                           upperStatus.equals("PENDING") ||
+                           upperStatus.equals("BOOKED") ||
+                           upperStatus.startsWith("RENTAL") ||
+                           upperStatus.startsWith("COMPLETED");
+                })
+                .collect(Collectors.groupingBy(
+                        d -> d.getVehicle().getRentalStation().getStationId(),
+                        Collectors.summingDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                ));
+        
+        // Lấy tất cả stations và tính revenue
+        var allStations = vehicleRepository.countByStation();
+        var revenueByStation = allStations.stream()
+                .map(r -> {
+                    Integer stationId = r[0] != null ? ((Number) r[0]).intValue() : null;
+                    String stationName = (String) r[1];
+                    Double totalRevenue = revenueByStationMap.getOrDefault(stationId, 0d);
+                    
+                    return AdminDashboardResponse.StationRevenue.builder()
+                            .stationId(stationId)
+                            .stationName(stationName != null ? stationName : "Unknown Station")
+                            .totalRevenue(totalRevenue)
+                            .build();
+                })
+                .filter(sr -> sr.getStationId() != null)
                 .toList();
 
         // ===== REVENUE BY DAY =====
-        var revRows = rentalOrderRepository.revenueByDay(dtFrom, dtTo);
-        Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(
-                r -> ((java.sql.Date) r[0]).toLocalDate(),
-                r -> ((Number) r[1]).doubleValue()
-        ));
+        // Tính revenue theo ngày bao gồm cả RENTAL và SERVICE
+        Map<LocalDate, Double> revMap = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(dtFrom) 
+                        && !d.getStartTime().isAfter(dtTo))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return "RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type);
+                })
+                .filter(d -> {
+                    // Chỉ tính các detail có order status hợp lệ
+                    if (d.getOrder() == null) return false;
+                    String orderStatus = d.getOrder().getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase().trim();
+                    // So sánh chính xác hoặc contains để đảm bảo không bỏ sót
+                    return upperStatus.equals("RENTAL") ||
+                           upperStatus.equals("COMPLETED") ||
+                           upperStatus.equals("RETURN") ||
+                           upperStatus.equals("ACTIVE") ||
+                           upperStatus.equals("PAID") ||
+                           upperStatus.equals("AWAITING") ||
+                           upperStatus.equals("DEPOSITED") ||
+                           upperStatus.equals("PENDING") ||
+                           upperStatus.equals("BOOKED") ||
+                           upperStatus.startsWith("RENTAL") ||
+                           upperStatus.startsWith("COMPLETED");
+                })
+                .collect(Collectors.groupingBy(
+                        d -> d.getStartTime().toLocalDate(),
+                        Collectors.summingDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                ));
+        
         List<AdminDashboardResponse.DayRevenue> revenueByDay = new ArrayList<>();
         for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             revenueByDay.add(AdminDashboardResponse.DayRevenue.builder()
@@ -364,15 +468,19 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     if (d.getOrder() == null) return false;
                     String orderStatus = d.getOrder().getStatus();
                     if (orderStatus == null) return false;
-                    String upperStatus = orderStatus.toUpperCase();
-                    return upperStatus.contains("RENTAL") || 
-                           upperStatus.contains("COMPLETED") ||
-                           upperStatus.contains("RETURN") ||
-                           upperStatus.contains("ACTIVE") ||
-                           upperStatus.contains("PAID") ||
-                           upperStatus.contains("AWAITING") ||
-                           upperStatus.contains("DEPOSITED") ||
-                           upperStatus.contains("PENDING");
+                    String upperStatus = orderStatus.toUpperCase().trim();
+                    // So sánh chính xác hoặc contains để đảm bảo không bỏ sót
+                    return upperStatus.equals("RENTAL") ||
+                           upperStatus.equals("COMPLETED") ||
+                           upperStatus.equals("RETURN") ||
+                           upperStatus.equals("ACTIVE") ||
+                           upperStatus.equals("PAID") ||
+                           upperStatus.equals("AWAITING") ||
+                           upperStatus.equals("DEPOSITED") ||
+                           upperStatus.equals("PENDING") ||
+                           upperStatus.equals("BOOKED") ||
+                           upperStatus.startsWith("RENTAL") ||
+                           upperStatus.startsWith("COMPLETED");
                 })
                 .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
                 .sum();
