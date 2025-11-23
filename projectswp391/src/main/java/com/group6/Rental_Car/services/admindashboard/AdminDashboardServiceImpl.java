@@ -56,6 +56,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
         // Với RENTAL + COMPLETED: filter theo createdAt hoặc actualReturnTime của order
         // Với RENTAL khác: filter theo startTime của detail
+        // Bao gồm cả DEPOSIT, PICKUP, FULL_PAYMENT nếu có giá trị
         double revenueInRange = rentalOrderDetailRepository.findAll().stream()
                 .filter(d -> {
                     String type = d.getType();
@@ -68,8 +69,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                                !d.getStartTime().isAfter(dtTo);
                     }
                     
-                    // Với RENTAL: cần check order status
-                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type) && 
+                        !"DEPOSIT".equalsIgnoreCase(type) &&
+                        !"PICKUP".equalsIgnoreCase(type) &&
+                        !"FULL_PAYMENT".equalsIgnoreCase(type)) {
                         return false;
                     }
                     
@@ -80,7 +84,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     if (orderStatus == null) return false;
                     String upperStatus = orderStatus.toUpperCase();
                     
-                    // Chỉ tính các đơn có status hợp lệ
+                    // Chỉ tính các đơn có status hợp lệ (bao gồm cả CANCELLED nếu đã thanh toán)
                     if (!upperStatus.contains("RENTAL") && 
                         !upperStatus.contains("COMPLETED") &&
                         !upperStatus.contains("RETURN") &&
@@ -88,7 +92,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         !upperStatus.contains("PAID") &&
                         !upperStatus.contains("AWAITING") &&
                         !upperStatus.contains("DEPOSITED") &&
-                        !upperStatus.contains("PENDING")) {
+                        !upperStatus.contains("PENDING") &&
+                        !upperStatus.contains("CANCELLED") &&
+                        !upperStatus.contains("PENDING_FINAL")) {
                         return false;
                     }
                     
@@ -205,8 +211,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                                !d.getStartTime().isAfter(dtTo);
                     }
                     
-                    // Với RENTAL: cần check order status
-                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type) && 
+                        !"DEPOSIT".equalsIgnoreCase(type) &&
+                        !"PICKUP".equalsIgnoreCase(type) &&
+                        !"FULL_PAYMENT".equalsIgnoreCase(type)) {
                         return false;
                     }
                     
@@ -217,7 +226,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     if (orderStatus == null) return false;
                     String upperStatus = orderStatus.toUpperCase();
                     
-                    // Chỉ tính các đơn có status hợp lệ
+                    // Chỉ tính các đơn có status hợp lệ (bao gồm cả CANCELLED nếu đã thanh toán)
                     if (!upperStatus.contains("RENTAL") && 
                         !upperStatus.contains("COMPLETED") &&
                         !upperStatus.contains("RETURN") &&
@@ -225,7 +234,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         !upperStatus.contains("PAID") &&
                         !upperStatus.contains("AWAITING") &&
                         !upperStatus.contains("DEPOSITED") &&
-                        !upperStatus.contains("PENDING")) {
+                        !upperStatus.contains("PENDING") &&
+                        !upperStatus.contains("CANCELLED") &&
+                        !upperStatus.contains("PENDING_FINAL")) {
                         return false;
                     }
                     
@@ -283,8 +294,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         return true;
                     }
                     
-                    // Với RENTAL: cần check order status
-                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type) && 
+                        !"DEPOSIT".equalsIgnoreCase(type) &&
+                        !"PICKUP".equalsIgnoreCase(type) &&
+                        !"FULL_PAYMENT".equalsIgnoreCase(type)) {
                         return false;
                     }
                     
@@ -295,7 +309,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     if (orderStatus == null) return false;
                     String upperStatus = orderStatus.toUpperCase();
                     
-                    // Chỉ tính các đơn có status hợp lệ
+                    // Chỉ tính các đơn có status hợp lệ (bao gồm cả CANCELLED nếu đã thanh toán)
                     if (!upperStatus.contains("RENTAL") && 
                         !upperStatus.contains("COMPLETED") &&
                         !upperStatus.contains("RETURN") &&
@@ -303,7 +317,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         !upperStatus.contains("PAID") &&
                         !upperStatus.contains("AWAITING") &&
                         !upperStatus.contains("DEPOSITED") &&
-                        !upperStatus.contains("PENDING")) {
+                        !upperStatus.contains("PENDING") &&
+                        !upperStatus.contains("CANCELLED") &&
+                        !upperStatus.contains("PENDING_FINAL")) {
                         return false;
                     }
                     
@@ -541,7 +557,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
     
     /**
-     * Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
+     * Tính revenue bao gồm cả RENTAL, SERVICE, DEPOSIT, PICKUP, FULL_PAYMENT từ RentalOrderDetail
      * Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
      * Với RENTAL + COMPLETED: filter theo createdAt hoặc actualReturnTime của order
      * Với RENTAL khác: filter theo startTime của detail
@@ -562,8 +578,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                                !d.getStartTime().isAfter(end);
                     }
                     
-                    // Với RENTAL: cần check order status
-                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type) && 
+                        !"DEPOSIT".equalsIgnoreCase(type) &&
+                        !"PICKUP".equalsIgnoreCase(type) &&
+                        !"FULL_PAYMENT".equalsIgnoreCase(type)) {
                         return false;
                     }
                     
@@ -574,7 +593,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     if (orderStatus == null) return false;
                     String upperStatus = orderStatus.toUpperCase();
                     
-                    // Chỉ tính các đơn có status hợp lệ
+                    // Chỉ tính các đơn có status hợp lệ (bao gồm cả CANCELLED nếu đã thanh toán)
                     if (!upperStatus.contains("RENTAL") && 
                         !upperStatus.contains("COMPLETED") &&
                         !upperStatus.contains("RETURN") &&
@@ -582,7 +601,9 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         !upperStatus.contains("PAID") &&
                         !upperStatus.contains("AWAITING") &&
                         !upperStatus.contains("DEPOSITED") &&
-                        !upperStatus.contains("PENDING")) {
+                        !upperStatus.contains("PENDING") &&
+                        !upperStatus.contains("CANCELLED") &&
+                        !upperStatus.contains("PENDING_FINAL")) {
                         return false;
                     }
                     
