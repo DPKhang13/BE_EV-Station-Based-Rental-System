@@ -53,38 +53,61 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long completedOrders = rentalOrderRepository.countByStatus("COMPLETED");
         
         // Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
-        // Sử dụng query trực tiếp từ database để tránh lazy loading issues
-        // Tính từ tất cả detail có type RENTAL hoặc SERVICE trong khoảng thời gian
-        List<com.group6.Rental_Car.entities.RentalOrderDetail> allDetails = rentalOrderDetailRepository.findAll();
-        System.out.println("[revenueInRange] Total details found: " + allDetails.size());
-        
-        double revenueInRange = allDetails.stream()
+        // Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
+        // Với RENTAL + COMPLETED: filter theo createdAt hoặc actualReturnTime của order
+        // Với RENTAL khác: filter theo startTime của detail
+        double revenueInRange = rentalOrderDetailRepository.findAll().stream()
                 .filter(d -> {
-                    if (d.getStartTime() == null) {
-                        System.out.println("[revenueInRange] Detail " + d.getDetailId() + " has null startTime");
+                    String type = d.getType();
+                    if (type == null) return false;
+                    
+                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian
+                    if ("SERVICE".equalsIgnoreCase(type)) {
+                        return d.getStartTime() != null && 
+                               !d.getStartTime().isBefore(dtFrom) && 
+                               !d.getStartTime().isAfter(dtTo);
+                    }
+                    
+                    // Với RENTAL: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type)) {
                         return false;
                     }
-                    boolean inRange = !d.getStartTime().isBefore(dtFrom) && !d.getStartTime().isAfter(dtTo);
-                    if (!inRange) return false;
                     
-                    // Bao gồm cả RENTAL và SERVICE
-                    String type = d.getType();
-                    boolean isRentalOrService = type != null && 
-                            ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                    // Chỉ tính các detail có order hợp lệ
+                    if (d.getOrder() == null) return false;
+                    com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
+                    String orderStatus = order.getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase();
                     
-                    if (isRentalOrService) {
-                        double price = d.getPrice() != null ? d.getPrice().doubleValue() : 0d;
-                        System.out.println("[revenueInRange] Including Detail ID: " + d.getDetailId() + 
-                                         ", Type: " + type + 
-                                         ", Price: " + price + 
-                                         ", StartTime: " + d.getStartTime());
+                    // Chỉ tính các đơn có status hợp lệ
+                    if (!upperStatus.contains("RENTAL") && 
+                        !upperStatus.contains("COMPLETED") &&
+                        !upperStatus.contains("RETURN") &&
+                        !upperStatus.contains("ACTIVE") &&
+                        !upperStatus.contains("PAID") &&
+                        !upperStatus.contains("AWAITING") &&
+                        !upperStatus.contains("DEPOSITED") &&
+                        !upperStatus.contains("PENDING")) {
+                        return false;
                     }
-                    return isRentalOrService;
+                    
+                    // Với đơn COMPLETED: filter theo createdAt hoặc actualReturnTime
+                    if ("COMPLETED".equals(upperStatus)) {
+                        LocalDateTime orderTime = order.getActualReturnTime() != null ? 
+                                order.getActualReturnTime() : order.getCreatedAt();
+                        return orderTime != null && 
+                               !orderTime.isBefore(dtFrom) && 
+                               !orderTime.isAfter(dtTo);
+                    }
+                    
+                    // Với đơn khác: filter theo startTime của detail
+                    return d.getStartTime() != null && 
+                           !d.getStartTime().isBefore(dtFrom) && 
+                           !d.getStartTime().isAfter(dtTo);
                 })
                 .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
                 .sum();
-        
-        System.out.println("[revenueInRange] Final total revenue: " + revenueInRange);
 
         // ===== USER KPIs =====
         long totalUsers = userRepository.count();
@@ -144,8 +167,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         }
 
         // ===== RECENT SERVICES =====
-        // Lấy 10 service details gần nhất (sắp xếp theo startTime giảm dần)
-        var recentServices = serviceDetailsForKpi.stream()
+        // Lấy 10 service details gần nhất từ TẤT CẢ details (không filter theo thời gian)
+        // Sắp xếp theo startTime giảm dần để lấy các service mới nhất
+        var recentServices = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> "SERVICE".equalsIgnoreCase(d.getType()))
+                .filter(d -> d.getStartTime() != null)
                 .sorted((a, b) -> b.getStartTime().compareTo(a.getStartTime()))
                 .limit(10)
                 .map(d -> AdminDashboardResponse.RecentService.builder()
@@ -164,17 +190,58 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== REVENUE BY STATION =====
         // Tính revenue từ RentalOrderDetail bao gồm cả RENTAL và SERVICE
-        // Bỏ filter order status để tính tất cả detail hợp lệ
+        // Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
         Map<Integer, Double> revenueByStationMap = rentalOrderDetailRepository.findAll().stream()
                 .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
                         && d.getVehicle().getRentalStation().getStationId() != null)
-                .filter(d -> d.getStartTime() != null 
-                        && !d.getStartTime().isBefore(dtFrom) 
-                        && !d.getStartTime().isAfter(dtTo))
                 .filter(d -> {
-                    // Bao gồm cả RENTAL và SERVICE
                     String type = d.getType();
-                    return type != null && ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                    if (type == null) return false;
+                    
+                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian
+                    if ("SERVICE".equalsIgnoreCase(type)) {
+                        return d.getStartTime() != null && 
+                               !d.getStartTime().isBefore(dtFrom) && 
+                               !d.getStartTime().isAfter(dtTo);
+                    }
+                    
+                    // Với RENTAL: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                        return false;
+                    }
+                    
+                    // Chỉ tính các detail có order hợp lệ
+                    if (d.getOrder() == null) return false;
+                    com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
+                    String orderStatus = order.getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase();
+                    
+                    // Chỉ tính các đơn có status hợp lệ
+                    if (!upperStatus.contains("RENTAL") && 
+                        !upperStatus.contains("COMPLETED") &&
+                        !upperStatus.contains("RETURN") &&
+                        !upperStatus.contains("ACTIVE") &&
+                        !upperStatus.contains("PAID") &&
+                        !upperStatus.contains("AWAITING") &&
+                        !upperStatus.contains("DEPOSITED") &&
+                        !upperStatus.contains("PENDING")) {
+                        return false;
+                    }
+                    
+                    // Với đơn COMPLETED: filter theo createdAt hoặc actualReturnTime
+                    if ("COMPLETED".equals(upperStatus)) {
+                        LocalDateTime orderTime = order.getActualReturnTime() != null ? 
+                                order.getActualReturnTime() : order.getCreatedAt();
+                        return orderTime != null && 
+                               !orderTime.isBefore(dtFrom) && 
+                               !orderTime.isAfter(dtTo);
+                    }
+                    
+                    // Với đơn khác: filter theo startTime của detail
+                    return d.getStartTime() != null && 
+                           !d.getStartTime().isBefore(dtFrom) && 
+                           !d.getStartTime().isAfter(dtTo);
                 })
                 .collect(Collectors.groupingBy(
                         d -> d.getVehicle().getRentalStation().getStationId(),
@@ -200,18 +267,78 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // ===== REVENUE BY DAY =====
         // Tính revenue theo ngày bao gồm cả RENTAL và SERVICE
-        // Bỏ filter order status để tính tất cả detail hợp lệ
+        // Với SERVICE: luôn filter theo startTime của detail
         Map<LocalDate, Double> revMap = rentalOrderDetailRepository.findAll().stream()
-                .filter(d -> d.getStartTime() != null 
-                        && !d.getStartTime().isBefore(dtFrom) 
-                        && !d.getStartTime().isAfter(dtTo))
                 .filter(d -> {
-                    // Bao gồm cả RENTAL và SERVICE
                     String type = d.getType();
-                    return type != null && ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                    if (type == null) return false;
+                    
+                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian
+                    if ("SERVICE".equalsIgnoreCase(type)) {
+                        if (d.getStartTime() == null || 
+                            d.getStartTime().isBefore(dtFrom) || 
+                            d.getStartTime().isAfter(dtTo)) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    
+                    // Với RENTAL: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                        return false;
+                    }
+                    
+                    // Chỉ tính các detail có order hợp lệ
+                    if (d.getOrder() == null) return false;
+                    com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
+                    String orderStatus = order.getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase();
+                    
+                    // Chỉ tính các đơn có status hợp lệ
+                    if (!upperStatus.contains("RENTAL") && 
+                        !upperStatus.contains("COMPLETED") &&
+                        !upperStatus.contains("RETURN") &&
+                        !upperStatus.contains("ACTIVE") &&
+                        !upperStatus.contains("PAID") &&
+                        !upperStatus.contains("AWAITING") &&
+                        !upperStatus.contains("DEPOSITED") &&
+                        !upperStatus.contains("PENDING")) {
+                        return false;
+                    }
+                    
+                    // Với đơn COMPLETED: filter theo createdAt hoặc actualReturnTime
+                    if ("COMPLETED".equals(upperStatus)) {
+                        LocalDateTime orderTime = order.getActualReturnTime() != null ? 
+                                order.getActualReturnTime() : order.getCreatedAt();
+                        if (orderTime == null || orderTime.isBefore(dtFrom) || orderTime.isAfter(dtTo)) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    
+                    // Với đơn khác: filter theo startTime của detail
+                    return d.getStartTime() != null && 
+                           !d.getStartTime().isBefore(dtFrom) && 
+                           !d.getStartTime().isAfter(dtTo);
                 })
                 .collect(Collectors.groupingBy(
-                        d -> d.getStartTime().toLocalDate(),
+                        d -> {
+                            String type = d.getType();
+                            // Với SERVICE: luôn dùng startTime
+                            if ("SERVICE".equalsIgnoreCase(type)) {
+                                return d.getStartTime().toLocalDate();
+                            }
+                            // Với đơn COMPLETED: dùng thời gian của order
+                            com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
+                            if ("COMPLETED".equals(order.getStatus().toUpperCase())) {
+                                LocalDateTime orderTime = order.getActualReturnTime() != null ? 
+                                        order.getActualReturnTime() : order.getCreatedAt();
+                                return orderTime != null ? orderTime.toLocalDate() : d.getStartTime().toLocalDate();
+                            }
+                            // Với đơn khác: dùng startTime của detail
+                            return d.getStartTime().toLocalDate();
+                        },
                         Collectors.summingDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
                 ));
         
@@ -415,20 +542,63 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     
     /**
      * Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
-     * Bỏ filter order status để tính tất cả detail hợp lệ
+     * Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
+     * Với RENTAL + COMPLETED: filter theo createdAt hoặc actualReturnTime của order
+     * Với RENTAL khác: filter theo startTime của detail
      */
     private Double calculateRevenueWithService(Integer stationId, LocalDateTime start, LocalDateTime end) {
         return rentalOrderDetailRepository.findAll().stream()
                 .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
                         && d.getVehicle().getRentalStation().getStationId() != null
                         && d.getVehicle().getRentalStation().getStationId().equals(stationId))
-                .filter(d -> d.getStartTime() != null 
-                        && !d.getStartTime().isBefore(start) 
-                        && !d.getStartTime().isAfter(end))
                 .filter(d -> {
-                    // Bao gồm cả RENTAL và SERVICE
                     String type = d.getType();
-                    return type != null && ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                    if (type == null) return false;
+                    
+                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian
+                    if ("SERVICE".equalsIgnoreCase(type)) {
+                        return d.getStartTime() != null && 
+                               !d.getStartTime().isBefore(start) && 
+                               !d.getStartTime().isAfter(end);
+                    }
+                    
+                    // Với RENTAL: cần check order status
+                    if (!"RENTAL".equalsIgnoreCase(type)) {
+                        return false;
+                    }
+                    
+                    // Chỉ tính các detail có order hợp lệ
+                    if (d.getOrder() == null) return false;
+                    com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
+                    String orderStatus = order.getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase();
+                    
+                    // Chỉ tính các đơn có status hợp lệ
+                    if (!upperStatus.contains("RENTAL") && 
+                        !upperStatus.contains("COMPLETED") &&
+                        !upperStatus.contains("RETURN") &&
+                        !upperStatus.contains("ACTIVE") &&
+                        !upperStatus.contains("PAID") &&
+                        !upperStatus.contains("AWAITING") &&
+                        !upperStatus.contains("DEPOSITED") &&
+                        !upperStatus.contains("PENDING")) {
+                        return false;
+                    }
+                    
+                    // Với đơn COMPLETED: filter theo createdAt hoặc actualReturnTime
+                    if ("COMPLETED".equals(upperStatus)) {
+                        LocalDateTime orderTime = order.getActualReturnTime() != null ? 
+                                order.getActualReturnTime() : order.getCreatedAt();
+                        return orderTime != null && 
+                               !orderTime.isBefore(start) && 
+                               !orderTime.isAfter(end);
+                    }
+                    
+                    // Với đơn khác: filter theo startTime của detail
+                    return d.getStartTime() != null && 
+                           !d.getStartTime().isBefore(start) && 
+                           !d.getStartTime().isAfter(end);
                 })
                 .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
                 .sum();
