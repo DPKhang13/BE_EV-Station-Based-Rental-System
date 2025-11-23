@@ -249,54 +249,42 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     Integer stationId = sr.getStationId();
                     String stationName = sr.getStationName();
 
-                    // Tính doanh thu trung bình mỗi ngày
+                    // Tính doanh thu trung bình mỗi ngày (bao gồm cả SERVICE)
                     long dayCount = java.time.temporal.ChronoUnit.DAYS.between(fromDate, toDate) + 1;
                     Double avgPerDay = sr.getTotalRevenue() / dayCount;
 
-                    // Doanh thu hôm nay
+                    // Doanh thu hôm nay (bao gồm cả SERVICE)
                     LocalDateTime todayStart = LocalDate.now().atStartOfDay();
                     LocalDateTime todayEnd = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
-                    Double todayRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, todayStart, todayEnd)
-                    ).orElse(0d);
+                    Double todayRevenue = calculateRevenueWithService(stationId, todayStart, todayEnd);
 
-                    // Doanh thu tuần này
+                    // Doanh thu tuần này (bao gồm cả SERVICE)
                     LocalDateTime weekStart = LocalDate.now().minusDays(7).atStartOfDay();
-                    Double weekRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, weekStart, todayEnd)
-                    ).orElse(0d);
+                    Double weekRevenue = calculateRevenueWithService(stationId, weekStart, todayEnd);
 
-                    // Doanh thu tháng này
+                    // Doanh thu tháng này (bao gồm cả SERVICE)
                     LocalDateTime monthStart = LocalDate.now().minusDays(30).atStartOfDay();
-                    Double monthRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, monthStart, todayEnd)
-                    ).orElse(0d);
+                    Double monthRevenue = calculateRevenueWithService(stationId, monthStart, todayEnd);
 
-                    // Tính tỷ lệ tăng trưởng (so với kỳ trước)
+                    // Tính tỷ lệ tăng trưởng (so với kỳ trước) - bao gồm cả SERVICE
                     // Growth Day: so sánh hôm nay với hôm qua
                     LocalDateTime yesterdayStart = LocalDate.now().minusDays(1).atStartOfDay();
                     LocalDateTime yesterdayEnd = LocalDateTime.of(LocalDate.now().minusDays(1), LocalTime.MAX);
-                    Double yesterdayRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, yesterdayStart, yesterdayEnd)
-                    ).orElse(0d);
+                    Double yesterdayRevenue = calculateRevenueWithService(stationId, yesterdayStart, yesterdayEnd);
                     Double growthDay = yesterdayRevenue > 0 ? 
                             ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0.0;
                     
                     // Growth Week: so sánh tuần này với tuần trước
                     LocalDateTime lastWeekStart = LocalDate.now().minusDays(14).atStartOfDay();
                     LocalDateTime lastWeekEnd = LocalDate.now().minusDays(8).atStartOfDay();
-                    Double lastWeekRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, lastWeekStart, lastWeekEnd)
-                    ).orElse(0d);
+                    Double lastWeekRevenue = calculateRevenueWithService(stationId, lastWeekStart, lastWeekEnd);
                     Double growthWeek = lastWeekRevenue > 0 ? 
                             ((weekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100 : 0.0;
                     
                     // Growth Month: so sánh tháng này với tháng trước
                     LocalDateTime lastMonthStart = LocalDate.now().minusDays(60).atStartOfDay();
                     LocalDateTime lastMonthEnd = LocalDate.now().minusDays(31).atStartOfDay();
-                    Double lastMonthRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, lastMonthStart, lastMonthEnd)
-                    ).orElse(0d);
+                    Double lastMonthRevenue = calculateRevenueWithService(stationId, lastMonthStart, lastMonthEnd);
                     Double growthMonth = lastMonthRevenue > 0 ? 
                             ((monthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0.0;
 
@@ -353,5 +341,40 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .serviceKpi(serviceKpi)
                 .recentServices(recentServices)
                 .build();
+    }
+    
+    /**
+     * Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
+     */
+    private Double calculateRevenueWithService(Integer stationId, LocalDateTime start, LocalDateTime end) {
+        return rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
+                        && d.getVehicle().getRentalStation().getStationId() != null
+                        && d.getVehicle().getRentalStation().getStationId().equals(stationId))
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(start) 
+                        && !d.getStartTime().isAfter(end))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return "RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type);
+                })
+                .filter(d -> {
+                    // Chỉ tính các detail có order status hợp lệ
+                    if (d.getOrder() == null) return false;
+                    String orderStatus = d.getOrder().getStatus();
+                    if (orderStatus == null) return false;
+                    String upperStatus = orderStatus.toUpperCase();
+                    return upperStatus.contains("RENTAL") || 
+                           upperStatus.contains("COMPLETED") ||
+                           upperStatus.contains("RETURN") ||
+                           upperStatus.contains("ACTIVE") ||
+                           upperStatus.contains("PAID") ||
+                           upperStatus.contains("AWAITING") ||
+                           upperStatus.contains("DEPOSITED") ||
+                           upperStatus.contains("PENDING");
+                })
+                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                .sum();
     }
 }
