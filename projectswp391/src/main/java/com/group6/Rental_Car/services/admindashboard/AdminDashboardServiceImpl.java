@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -82,21 +83,28 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long customers = userRepository.countByRole(Role.customer);
 
         // ===== SERVICE KPIs =====
-        // Tính từ RentalOrderDetail có type = "SERVICE" trong khoảng thời gian
-        List<com.group6.Rental_Car.entities.RentalOrderDetail> serviceDetailsForKpi = rentalOrderDetailRepository.findAll().stream()
-                .filter(d -> "SERVICE".equalsIgnoreCase(d.getType())
-                        && d.getStartTime() != null
+        // Tính TẤT CẢ service (không filter theo thời gian) cho tổng số
+        List<com.group6.Rental_Car.entities.RentalOrderDetail> allServiceDetails = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> "SERVICE".equalsIgnoreCase(d.getType()))
+                .toList();
+        
+        // Tính service trong khoảng thời gian cho các metric khác (servicesByDay, etc.)
+        List<com.group6.Rental_Car.entities.RentalOrderDetail> serviceDetailsForKpi = allServiceDetails.stream()
+                .filter(d -> d.getStartTime() != null
                         && !d.getStartTime().isBefore(dtFrom)
                         && !d.getStartTime().isAfter(dtTo))
                 .toList();
         
-        double totalServiceCost = serviceDetailsForKpi.stream()
+        // Tổng số service: TẤT CẢ service (không filter theo thời gian)
+        long totalServices = allServiceDetails.size();
+        
+        // Tổng chi phí: TẤT CẢ service (không filter theo thời gian)
+        double totalServiceCost = allServiceDetails.stream()
                 .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
                 .sum();
-        long totalServices = serviceDetailsForKpi.size();
 
-        // Phân loại theo description hoặc type
-        Map<String, Long> servicesByType = serviceDetailsForKpi.stream()
+        // Phân loại theo description hoặc type (từ tất cả service)
+        Map<String, Long> servicesByType = allServiceDetails.stream()
                 .collect(Collectors.groupingBy(
                         d -> {
                             String desc = d.getDescription();
@@ -109,8 +117,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         Collectors.counting()
                 ));
         
-        // Phân loại theo status
-        Map<String, Long> servicesByStatus = serviceDetailsForKpi.stream()
+        // Phân loại theo status (từ TẤT CẢ service để có trạng thái hiện tại chính xác)
+        Map<String, Long> servicesByStatus = allServiceDetails.stream()
                 .collect(Collectors.groupingBy(
                         d -> Optional.ofNullable(d.getStatus()).orElse("UNKNOWN"),
                         Collectors.counting()
@@ -518,11 +526,19 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     
     /**
      * Tính revenue bao gồm cả RENTAL, SERVICE, DEPOSIT, PICKUP, FULL_PAYMENT từ RentalOrderDetail
+     * Chỉ tính các detail từ order có ít nhất một payment SUCCESS
      * Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
      * Với RENTAL + COMPLETED: filter theo createdAt hoặc actualReturnTime của order
      * Với RENTAL khác: filter theo startTime của detail
      */
     private Double calculateRevenueWithService(Integer stationId, LocalDateTime start, LocalDateTime end) {
+        // Tạo set các orderId có payment SUCCESS để filter nhanh
+        Set<UUID> ordersWithSuccessfulPayment = paymentRepository.findAll().stream()
+                .filter(p -> p.getStatus() != null && p.getStatus() == com.group6.Rental_Car.enums.PaymentStatus.SUCCESS)
+                .filter(p -> p.getRentalOrder() != null)
+                .map(p -> p.getRentalOrder().getOrderId())
+                .collect(Collectors.toSet());
+        
         return rentalOrderDetailRepository.findAll().stream()
                 .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
                         && d.getVehicle().getRentalStation().getStationId() != null
@@ -531,14 +547,16 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     String type = d.getType();
                     if (type == null) return false;
                     
-                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian
+                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian và order có payment SUCCESS
                     if ("SERVICE".equalsIgnoreCase(type)) {
+                        if (d.getOrder() == null) return false;
+                        if (!ordersWithSuccessfulPayment.contains(d.getOrder().getOrderId())) return false;
                         return d.getStartTime() != null && 
                                !d.getStartTime().isBefore(start) && 
                                !d.getStartTime().isAfter(end);
                     }
                     
-                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status
+                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status và payment SUCCESS
                     if (!"RENTAL".equalsIgnoreCase(type) && 
                         !"DEPOSIT".equalsIgnoreCase(type) &&
                         !"PICKUP".equalsIgnoreCase(type) &&
@@ -546,14 +564,16 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                         return false;
                     }
                     
-                    // Chỉ tính các detail có order hợp lệ
+                    // Chỉ tính các detail có order hợp lệ và có payment SUCCESS
                     if (d.getOrder() == null) return false;
+                    if (!ordersWithSuccessfulPayment.contains(d.getOrder().getOrderId())) return false;
+                    
                     com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
                     String orderStatus = order.getStatus();
                     if (orderStatus == null) return false;
                     String upperStatus = orderStatus.toUpperCase();
                     
-                    // Chỉ tính các đơn có status hợp lệ (bao gồm cả CANCELLED nếu đã thanh toán)
+                    // Chỉ tính các đơn có status hợp lệ
                     if (!upperStatus.contains("RENTAL") && 
                         !upperStatus.contains("COMPLETED") &&
                         !upperStatus.contains("RETURN") &&
