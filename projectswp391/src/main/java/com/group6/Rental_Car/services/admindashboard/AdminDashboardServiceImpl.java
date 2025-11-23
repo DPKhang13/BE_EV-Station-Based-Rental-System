@@ -21,6 +21,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final FeedbackRepository feedbackRepository;
     private final OrderServiceRepository orderServiceRepository;
     private final RentalOrderDetailRepository rentalOrderDetailRepository;
+    private final PaymentRepository paymentRepository;
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
@@ -52,67 +53,26 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long totalOrders = rentalOrderRepository.count();
         long completedOrders = rentalOrderRepository.countByStatus("COMPLETED");
         
-        // Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
-        // Với SERVICE: luôn filter theo startTime của detail, không phụ thuộc order status
-        // Với RENTAL + COMPLETED: filter theo createdAt hoặc actualReturnTime của order
-        // Với RENTAL khác: filter theo startTime của detail
-        // Bao gồm cả DEPOSIT, PICKUP, FULL_PAYMENT nếu có giá trị
-        double revenueInRange = rentalOrderDetailRepository.findAll().stream()
-                .filter(d -> {
-                    String type = d.getType();
-                    if (type == null) return false;
-                    
-                    // Với SERVICE: luôn tính nếu startTime trong khoảng thời gian
-                    if ("SERVICE".equalsIgnoreCase(type)) {
-                        return d.getStartTime() != null && 
-                               !d.getStartTime().isBefore(dtFrom) && 
-                               !d.getStartTime().isAfter(dtTo);
-                    }
-                    
-                    // Với RENTAL, DEPOSIT, PICKUP, FULL_PAYMENT: cần check order status
-                    if (!"RENTAL".equalsIgnoreCase(type) && 
-                        !"DEPOSIT".equalsIgnoreCase(type) &&
-                        !"PICKUP".equalsIgnoreCase(type) &&
-                        !"FULL_PAYMENT".equalsIgnoreCase(type)) {
+        // Tính revenueInRange: chỉ tính các payment có status = SUCCESS
+        // Tính tổng amount của tất cả payment SUCCESS trong khoảng thời gian
+        // Filter theo createdAt của order (vì Payment không có createdAt)
+        double revenueInRange = paymentRepository.findAll().stream()
+                .filter(p -> {
+                    // Chỉ tính các payment có status = SUCCESS
+                    if (p.getStatus() == null || p.getStatus() != com.group6.Rental_Car.enums.PaymentStatus.SUCCESS) {
                         return false;
                     }
                     
-                    // Chỉ tính các detail có order hợp lệ
-                    if (d.getOrder() == null) return false;
-                    com.group6.Rental_Car.entities.RentalOrder order = d.getOrder();
-                    String orderStatus = order.getStatus();
-                    if (orderStatus == null) return false;
-                    String upperStatus = orderStatus.toUpperCase();
+                    // Filter theo createdAt của order (vì Payment không có createdAt)
+                    if (p.getRentalOrder() == null) return false;
+                    com.group6.Rental_Car.entities.RentalOrder order = p.getRentalOrder();
+                    LocalDateTime orderTime = order.getCreatedAt();
+                    if (orderTime == null) return false;
                     
-                    // Chỉ tính các đơn có status hợp lệ (bao gồm cả CANCELLED nếu đã thanh toán)
-                    if (!upperStatus.contains("RENTAL") && 
-                        !upperStatus.contains("COMPLETED") &&
-                        !upperStatus.contains("RETURN") &&
-                        !upperStatus.contains("ACTIVE") &&
-                        !upperStatus.contains("PAID") &&
-                        !upperStatus.contains("AWAITING") &&
-                        !upperStatus.contains("DEPOSITED") &&
-                        !upperStatus.contains("PENDING") &&
-                        !upperStatus.contains("CANCELLED") &&
-                        !upperStatus.contains("PENDING_FINAL")) {
-                        return false;
-                    }
-                    
-                    // Với đơn COMPLETED: filter theo createdAt hoặc actualReturnTime
-                    if ("COMPLETED".equals(upperStatus)) {
-                        LocalDateTime orderTime = order.getActualReturnTime() != null ? 
-                                order.getActualReturnTime() : order.getCreatedAt();
-                        return orderTime != null && 
-                               !orderTime.isBefore(dtFrom) && 
-                               !orderTime.isAfter(dtTo);
-                    }
-                    
-                    // Với đơn khác: filter theo startTime của detail
-                    return d.getStartTime() != null && 
-                           !d.getStartTime().isBefore(dtFrom) && 
-                           !d.getStartTime().isAfter(dtTo);
+                    // Chỉ tính các payment SUCCESS có order createdAt trong khoảng thời gian
+                    return !orderTime.isBefore(dtFrom) && !orderTime.isAfter(dtTo);
                 })
-                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                .mapToDouble(p -> p.getAmount() != null ? p.getAmount().doubleValue() : 0d)
                 .sum();
 
         // ===== USER KPIs =====
