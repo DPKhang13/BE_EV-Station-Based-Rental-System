@@ -1,7 +1,6 @@
 package com.group6.Rental_Car.services.admindashboard;
 
 import com.group6.Rental_Car.dtos.admindashboard.AdminDashboardResponse;
-import com.group6.Rental_Car.entities.OrderService;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +20,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final RentalOrderRepository rentalOrderRepository;
     private final FeedbackRepository feedbackRepository;
     private final OrderServiceRepository orderServiceRepository;
+    private final RentalOrderDetailRepository rentalOrderDetailRepository;
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
@@ -60,40 +60,72 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long customers = userRepository.countByRole(Role.customer);
 
         // ===== SERVICE KPIs =====
-        List<OrderService> allServices = orderServiceRepository.findAll();
-        double totalServiceCost = allServices.stream()
-                .mapToDouble(s -> s.getCost() != null ? s.getCost().doubleValue() : 0d)
+        // Tính từ RentalOrderDetail có type = "SERVICE" trong khoảng thời gian
+        List<com.group6.Rental_Car.entities.RentalOrderDetail> serviceDetailsForKpi = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> "SERVICE".equalsIgnoreCase(d.getType())
+                        && d.getStartTime() != null
+                        && !d.getStartTime().isBefore(dtFrom)
+                        && !d.getStartTime().isAfter(dtTo))
+                .toList();
+        
+        double totalServiceCost = serviceDetailsForKpi.stream()
+                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
                 .sum();
-        long totalServices = allServices.size();
+        long totalServices = serviceDetailsForKpi.size();
 
-        Map<String, Long> servicesByType = allServices.stream()
+        // Phân loại theo description hoặc type
+        Map<String, Long> servicesByType = serviceDetailsForKpi.stream()
                 .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getServiceType()).orElse("UNKNOWN"),
+                        d -> {
+                            String desc = d.getDescription();
+                            if (desc != null && !desc.isEmpty()) {
+                                // Lấy từ đầu description (có thể là service type)
+                                return desc.length() > 50 ? desc.substring(0, 50) : desc;
+                            }
+                            return "SERVICE";
+                        },
+                        Collectors.counting()
+                ));
+        
+        // Phân loại theo status
+        Map<String, Long> servicesByStatus = serviceDetailsForKpi.stream()
+                .collect(Collectors.groupingBy(
+                        d -> Optional.ofNullable(d.getStatus()).orElse("UNKNOWN"),
                         Collectors.counting()
                 ));
 
         // ===== SERVICES BY DAY =====
+        // Đếm services theo ngày từ serviceDetailsForKpi
+        Map<LocalDate, Long> servicesByDayMap = serviceDetailsForKpi.stream()
+                .collect(Collectors.groupingBy(
+                        d -> d.getStartTime().toLocalDate(),
+                        Collectors.counting()
+                ));
+        
         List<AdminDashboardResponse.DayCount> servicesByDay = new ArrayList<>();
         for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             servicesByDay.add(AdminDashboardResponse.DayCount.builder()
                     .date(d)
-                    .count(0L)
+                    .count(servicesByDayMap.getOrDefault(d, 0L))
                     .build());
         }
 
         // ===== RECENT SERVICES =====
-        var recentServices = orderServiceRepository.findAll().stream()
+        // Lấy 10 service details gần nhất (sắp xếp theo startTime giảm dần)
+        var recentServices = serviceDetailsForKpi.stream()
+                .sorted((a, b) -> b.getStartTime().compareTo(a.getStartTime()))
                 .limit(10)
-                .map(s -> AdminDashboardResponse.RecentService.builder()
-                        .serviceId(s.getServiceId())
-                        .vehicleId(null)
-                        .vehicleName(null)
-                        .serviceType(s.getServiceType())
-                        .description(s.getDescription())
-                        .status(null)
-                        .cost(s.getCost() != null ? s.getCost().doubleValue() : 0d)
-                        .occurredAt(null)
-                        .resolvedAt(null)
+                .map(d -> AdminDashboardResponse.RecentService.builder()
+                        .serviceId(d.getDetailId())
+                        .vehicleId(d.getVehicle() != null ? d.getVehicle().getVehicleId() : null)
+                        .vehicleName(d.getVehicle() != null ? 
+                                (d.getVehicle().getPlateNumber() != null ? d.getVehicle().getPlateNumber() : "N/A") : null)
+                        .serviceType(d.getDescription() != null ? d.getDescription() : "SERVICE")
+                        .description(d.getDescription())
+                        .status(d.getStatus())
+                        .cost(d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                        .occurredAt(d.getStartTime())
+                        .resolvedAt(d.getEndTime())
                         .build()
                 ).toList();
 
@@ -240,11 +272,33 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                             rentalOrderRepository.revenueByStationBetween(stationId, monthStart, todayEnd)
                     ).orElse(0d);
 
-                    // Tính tỷ lệ tăng trưởng (so với tuần/tháng trước)
-                    // Đơn giản hóa: growth = 0 (có thể mở rộng sau)
-                    Double growthDay = 0.0;
-                    Double growthWeek = 0.0;
-                    Double growthMonth = 0.0;
+                    // Tính tỷ lệ tăng trưởng (so với kỳ trước)
+                    // Growth Day: so sánh hôm nay với hôm qua
+                    LocalDateTime yesterdayStart = LocalDate.now().minusDays(1).atStartOfDay();
+                    LocalDateTime yesterdayEnd = LocalDateTime.of(LocalDate.now().minusDays(1), LocalTime.MAX);
+                    Double yesterdayRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, yesterdayStart, yesterdayEnd)
+                    ).orElse(0d);
+                    Double growthDay = yesterdayRevenue > 0 ? 
+                            ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0.0;
+                    
+                    // Growth Week: so sánh tuần này với tuần trước
+                    LocalDateTime lastWeekStart = LocalDate.now().minusDays(14).atStartOfDay();
+                    LocalDateTime lastWeekEnd = LocalDate.now().minusDays(8).atStartOfDay();
+                    Double lastWeekRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, lastWeekStart, lastWeekEnd)
+                    ).orElse(0d);
+                    Double growthWeek = lastWeekRevenue > 0 ? 
+                            ((weekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100 : 0.0;
+                    
+                    // Growth Month: so sánh tháng này với tháng trước
+                    LocalDateTime lastMonthStart = LocalDate.now().minusDays(60).atStartOfDay();
+                    LocalDateTime lastMonthEnd = LocalDate.now().minusDays(31).atStartOfDay();
+                    Double lastMonthRevenue = Optional.ofNullable(
+                            rentalOrderRepository.revenueByStationBetween(stationId, lastMonthStart, lastMonthEnd)
+                    ).orElse(0d);
+                    Double growthMonth = lastMonthRevenue > 0 ? 
+                            ((monthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0.0;
 
                     return AdminDashboardResponse.StationRevenueAnalysis.builder()
                             .stationId(stationId)
@@ -281,7 +335,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .totalServices(totalServices)
                 .totalCost(totalServiceCost)
                 .servicesByType(servicesByType)
-                .servicesByStatus(new HashMap<>())
+                .servicesByStatus(servicesByStatus)
                 .build();
 
         return AdminDashboardResponse.builder()
