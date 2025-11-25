@@ -1,7 +1,6 @@
 package com.group6.Rental_Car.services.admindashboard;
 
 import com.group6.Rental_Car.dtos.admindashboard.AdminDashboardResponse;
-import com.group6.Rental_Car.entities.OrderService;
 import com.group6.Rental_Car.enums.Role;
 import com.group6.Rental_Car.repositories.*;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +20,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final RentalOrderRepository rentalOrderRepository;
     private final FeedbackRepository feedbackRepository;
     private final OrderServiceRepository orderServiceRepository;
+    private final RentalOrderDetailRepository rentalOrderDetailRepository;
 
     @Override
     public AdminDashboardResponse getOverview(LocalDate from, LocalDate to) {
@@ -51,7 +51,40 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         // ===== ORDER KPIs =====
         long totalOrders = rentalOrderRepository.count();
         long completedOrders = rentalOrderRepository.countByStatus("COMPLETED");
-        double revenueInRange = Optional.ofNullable(rentalOrderRepository.revenueBetween(dtFrom, dtTo)).orElse(0d);
+        
+        // Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
+        // Sử dụng query trực tiếp từ database để tránh lazy loading issues
+        // Tính từ tất cả detail có type RENTAL hoặc SERVICE trong khoảng thời gian
+        List<com.group6.Rental_Car.entities.RentalOrderDetail> allDetails = rentalOrderDetailRepository.findAll();
+        System.out.println("[revenueInRange] Total details found: " + allDetails.size());
+        
+        double revenueInRange = allDetails.stream()
+                .filter(d -> {
+                    if (d.getStartTime() == null) {
+                        System.out.println("[revenueInRange] Detail " + d.getDetailId() + " has null startTime");
+                        return false;
+                    }
+                    boolean inRange = !d.getStartTime().isBefore(dtFrom) && !d.getStartTime().isAfter(dtTo);
+                    if (!inRange) return false;
+                    
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    boolean isRentalOrService = type != null && 
+                            ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                    
+                    if (isRentalOrService) {
+                        double price = d.getPrice() != null ? d.getPrice().doubleValue() : 0d;
+                        System.out.println("[revenueInRange] Including Detail ID: " + d.getDetailId() + 
+                                         ", Type: " + type + 
+                                         ", Price: " + price + 
+                                         ", StartTime: " + d.getStartTime());
+                    }
+                    return isRentalOrService;
+                })
+                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                .sum();
+        
+        System.out.println("[revenueInRange] Final total revenue: " + revenueInRange);
 
         // ===== USER KPIs =====
         long totalUsers = userRepository.count();
@@ -60,67 +93,128 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long customers = userRepository.countByRole(Role.customer);
 
         // ===== SERVICE KPIs =====
-        double totalServiceCost = Optional.ofNullable(orderServiceRepository.totalCostBetween(dtFrom, dtTo)).orElse(0d);
-        List<OrderService> servicesInRange = orderServiceRepository.findAllInRange(fromDate, toDate);
-        long totalServices = servicesInRange.size();
+        // Tính từ RentalOrderDetail có type = "SERVICE" trong khoảng thời gian
+        List<com.group6.Rental_Car.entities.RentalOrderDetail> serviceDetailsForKpi = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> "SERVICE".equalsIgnoreCase(d.getType())
+                        && d.getStartTime() != null
+                        && !d.getStartTime().isBefore(dtFrom)
+                        && !d.getStartTime().isAfter(dtTo))
+                .toList();
+        
+        double totalServiceCost = serviceDetailsForKpi.stream()
+                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                .sum();
+        long totalServices = serviceDetailsForKpi.size();
 
-        Map<String, Long> servicesByType = servicesInRange.stream()
+        // Phân loại theo description hoặc type
+        Map<String, Long> servicesByType = serviceDetailsForKpi.stream()
                 .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getServiceType()).orElse("UNKNOWN"),
+                        d -> {
+                            String desc = d.getDescription();
+                            if (desc != null && !desc.isEmpty()) {
+                                // Lấy từ đầu description (có thể là service type)
+                                return desc.length() > 50 ? desc.substring(0, 50) : desc;
+                            }
+                            return "SERVICE";
+                        },
                         Collectors.counting()
                 ));
-
-        Map<String, Long> servicesByStatus = servicesInRange.stream()
+        
+        // Phân loại theo status
+        Map<String, Long> servicesByStatus = serviceDetailsForKpi.stream()
                 .collect(Collectors.groupingBy(
-                        s -> Optional.ofNullable(s.getStatus()).orElse("UNKNOWN"),
+                        d -> Optional.ofNullable(d.getStatus()).orElse("UNKNOWN"),
                         Collectors.counting()
                 ));
 
         // ===== SERVICES BY DAY =====
-        var serviceDayRows = orderServiceRepository.countByDay(dtFrom, dtTo);
-        Map<LocalDate, Long> serviceDayMap = serviceDayRows.stream().collect(Collectors.toMap(
-                r -> ((java.sql.Date) r[0]).toLocalDate(),
-                r -> ((Number) r[1]).longValue()
-        ));
+        // Đếm services theo ngày từ serviceDetailsForKpi
+        Map<LocalDate, Long> servicesByDayMap = serviceDetailsForKpi.stream()
+                .collect(Collectors.groupingBy(
+                        d -> d.getStartTime().toLocalDate(),
+                        Collectors.counting()
+                ));
+        
         List<AdminDashboardResponse.DayCount> servicesByDay = new ArrayList<>();
         for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             servicesByDay.add(AdminDashboardResponse.DayCount.builder()
                     .date(d)
-                    .count(serviceDayMap.getOrDefault(d, 0L))
+                    .count(servicesByDayMap.getOrDefault(d, 0L))
                     .build());
         }
 
         // ===== RECENT SERVICES =====
-        var recentServices = orderServiceRepository.findTop10ByOrderByOccurredAtDesc().stream()
-                .map(s -> AdminDashboardResponse.RecentService.builder()
-                        .serviceId(s.getServiceId())
-                        .vehicleId(s.getVehicle().getVehicleId())
-                        .vehicleName(s.getVehicle().getVehicleName())
-                        .serviceType(s.getServiceType())
-                        .description(s.getDescription())
-                        .status(s.getStatus())
-                        .cost(s.getCost() != null ? s.getCost().doubleValue() : 0d)
-                        .occurredAt(s.getOccurredAt())
-                        .resolvedAt(s.getResolvedAt())
+        // Lấy 10 service details gần nhất (sắp xếp theo startTime giảm dần)
+        var recentServices = serviceDetailsForKpi.stream()
+                .sorted((a, b) -> b.getStartTime().compareTo(a.getStartTime()))
+                .limit(10)
+                .map(d -> AdminDashboardResponse.RecentService.builder()
+                        .serviceId(d.getDetailId())
+                        .vehicleId(d.getVehicle() != null ? d.getVehicle().getVehicleId() : null)
+                        .vehicleName(d.getVehicle() != null ? 
+                                (d.getVehicle().getPlateNumber() != null ? d.getVehicle().getPlateNumber() : "N/A") : null)
+                        .serviceType(d.getDescription() != null ? d.getDescription() : "SERVICE")
+                        .description(d.getDescription())
+                        .status(d.getStatus())
+                        .cost(d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                        .occurredAt(d.getStartTime())
+                        .resolvedAt(d.getEndTime())
                         .build()
                 ).toList();
 
         // ===== REVENUE BY STATION =====
-        var revStationRows = rentalOrderRepository.revenuePerStation(dtFrom, dtTo);
-        var revenueByStation = revStationRows.stream()
-                .map(r -> AdminDashboardResponse.StationRevenue.builder()
-                        .stationId(((Number) r[0]).intValue())
-                        .stationName((String) r[1])
-                        .totalRevenue(r[2] == null ? 0d : ((Number) r[2]).doubleValue())
-                        .build())
+        // Tính revenue từ RentalOrderDetail bao gồm cả RENTAL và SERVICE
+        // Bỏ filter order status để tính tất cả detail hợp lệ
+        Map<Integer, Double> revenueByStationMap = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
+                        && d.getVehicle().getRentalStation().getStationId() != null)
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(dtFrom) 
+                        && !d.getStartTime().isAfter(dtTo))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return type != null && ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                })
+                .collect(Collectors.groupingBy(
+                        d -> d.getVehicle().getRentalStation().getStationId(),
+                        Collectors.summingDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                ));
+        
+        // Lấy tất cả stations và tính revenue
+        var allStations = vehicleRepository.countByStation();
+        var revenueByStation = allStations.stream()
+                .map(r -> {
+                    Integer stationId = r[0] != null ? ((Number) r[0]).intValue() : null;
+                    String stationName = (String) r[1];
+                    Double totalRevenue = revenueByStationMap.getOrDefault(stationId, 0d);
+                    
+                    return AdminDashboardResponse.StationRevenue.builder()
+                            .stationId(stationId)
+                            .stationName(stationName != null ? stationName : "Unknown Station")
+                            .totalRevenue(totalRevenue)
+                            .build();
+                })
+                .filter(sr -> sr.getStationId() != null)
                 .toList();
 
         // ===== REVENUE BY DAY =====
-        var revRows = rentalOrderRepository.revenueByDay(dtFrom, dtTo);
-        Map<LocalDate, Double> revMap = revRows.stream().collect(Collectors.toMap(
-                r -> ((java.sql.Date) r[0]).toLocalDate(),
-                r -> ((Number) r[1]).doubleValue()
-        ));
+        // Tính revenue theo ngày bao gồm cả RENTAL và SERVICE
+        // Bỏ filter order status để tính tất cả detail hợp lệ
+        Map<LocalDate, Double> revMap = rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(dtFrom) 
+                        && !d.getStartTime().isAfter(dtTo))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return type != null && ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                })
+                .collect(Collectors.groupingBy(
+                        d -> d.getStartTime().toLocalDate(),
+                        Collectors.summingDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                ));
+        
         List<AdminDashboardResponse.DayRevenue> revenueByDay = new ArrayList<>();
         for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
             revenueByDay.add(AdminDashboardResponse.DayRevenue.builder()
@@ -225,34 +319,44 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                     Integer stationId = sr.getStationId();
                     String stationName = sr.getStationName();
 
-                    // Tính doanh thu trung bình mỗi ngày
+                    // Tính doanh thu trung bình mỗi ngày (bao gồm cả SERVICE)
                     long dayCount = java.time.temporal.ChronoUnit.DAYS.between(fromDate, toDate) + 1;
                     Double avgPerDay = sr.getTotalRevenue() / dayCount;
 
-                    // Doanh thu hôm nay
+                    // Doanh thu hôm nay (bao gồm cả SERVICE)
                     LocalDateTime todayStart = LocalDate.now().atStartOfDay();
                     LocalDateTime todayEnd = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
-                    Double todayRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, todayStart, todayEnd)
-                    ).orElse(0d);
+                    Double todayRevenue = calculateRevenueWithService(stationId, todayStart, todayEnd);
 
-                    // Doanh thu tuần này
+                    // Doanh thu tuần này (bao gồm cả SERVICE)
                     LocalDateTime weekStart = LocalDate.now().minusDays(7).atStartOfDay();
-                    Double weekRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, weekStart, todayEnd)
-                    ).orElse(0d);
+                    Double weekRevenue = calculateRevenueWithService(stationId, weekStart, todayEnd);
 
-                    // Doanh thu tháng này
+                    // Doanh thu tháng này (bao gồm cả SERVICE)
                     LocalDateTime monthStart = LocalDate.now().minusDays(30).atStartOfDay();
-                    Double monthRevenue = Optional.ofNullable(
-                            rentalOrderRepository.revenueByStationBetween(stationId, monthStart, todayEnd)
-                    ).orElse(0d);
+                    Double monthRevenue = calculateRevenueWithService(stationId, monthStart, todayEnd);
 
-                    // Tính tỷ lệ tăng trưởng (so với tuần/tháng trước)
-                    // Đơn giản hóa: growth = 0 (có thể mở rộng sau)
-                    Double growthDay = 0.0;
-                    Double growthWeek = 0.0;
-                    Double growthMonth = 0.0;
+                    // Tính tỷ lệ tăng trưởng (so với kỳ trước) - bao gồm cả SERVICE
+                    // Growth Day: so sánh hôm nay với hôm qua
+                    LocalDateTime yesterdayStart = LocalDate.now().minusDays(1).atStartOfDay();
+                    LocalDateTime yesterdayEnd = LocalDateTime.of(LocalDate.now().minusDays(1), LocalTime.MAX);
+                    Double yesterdayRevenue = calculateRevenueWithService(stationId, yesterdayStart, yesterdayEnd);
+                    Double growthDay = yesterdayRevenue > 0 ? 
+                            ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 : 0.0;
+                    
+                    // Growth Week: so sánh tuần này với tuần trước
+                    LocalDateTime lastWeekStart = LocalDate.now().minusDays(14).atStartOfDay();
+                    LocalDateTime lastWeekEnd = LocalDate.now().minusDays(8).atStartOfDay();
+                    Double lastWeekRevenue = calculateRevenueWithService(stationId, lastWeekStart, lastWeekEnd);
+                    Double growthWeek = lastWeekRevenue > 0 ? 
+                            ((weekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100 : 0.0;
+                    
+                    // Growth Month: so sánh tháng này với tháng trước
+                    LocalDateTime lastMonthStart = LocalDate.now().minusDays(60).atStartOfDay();
+                    LocalDateTime lastMonthEnd = LocalDate.now().minusDays(31).atStartOfDay();
+                    Double lastMonthRevenue = calculateRevenueWithService(stationId, lastMonthStart, lastMonthEnd);
+                    Double growthMonth = lastMonthRevenue > 0 ? 
+                            ((monthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0.0;
 
                     return AdminDashboardResponse.StationRevenueAnalysis.builder()
                             .stationId(stationId)
@@ -307,5 +411,26 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .serviceKpi(serviceKpi)
                 .recentServices(recentServices)
                 .build();
+    }
+    
+    /**
+     * Tính revenue bao gồm cả RENTAL và SERVICE từ RentalOrderDetail
+     * Bỏ filter order status để tính tất cả detail hợp lệ
+     */
+    private Double calculateRevenueWithService(Integer stationId, LocalDateTime start, LocalDateTime end) {
+        return rentalOrderDetailRepository.findAll().stream()
+                .filter(d -> d.getVehicle() != null && d.getVehicle().getRentalStation() != null
+                        && d.getVehicle().getRentalStation().getStationId() != null
+                        && d.getVehicle().getRentalStation().getStationId().equals(stationId))
+                .filter(d -> d.getStartTime() != null 
+                        && !d.getStartTime().isBefore(start) 
+                        && !d.getStartTime().isAfter(end))
+                .filter(d -> {
+                    // Bao gồm cả RENTAL và SERVICE
+                    String type = d.getType();
+                    return type != null && ("RENTAL".equalsIgnoreCase(type) || "SERVICE".equalsIgnoreCase(type));
+                })
+                .mapToDouble(d -> d.getPrice() != null ? d.getPrice().doubleValue() : 0d)
+                .sum();
     }
 }

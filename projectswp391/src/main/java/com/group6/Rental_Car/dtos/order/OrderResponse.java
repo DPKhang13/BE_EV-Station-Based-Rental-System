@@ -15,6 +15,9 @@ public class OrderResponse {
 
     private UUID orderId;
     private Long vehicleId;
+    private String plateNumber; // Biển số xe
+    private String brand; // Hãng xe
+    private String carmodel; // Car model
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;
@@ -26,6 +29,7 @@ public class OrderResponse {
     private LocalDateTime createdAt;
 
     private BigDecimal totalPrice;
+    private BigDecimal remainingAmount; // Tiền chưa thanh toán
     private String status;
     private String couponCode;
 

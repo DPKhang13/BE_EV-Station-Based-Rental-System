@@ -21,7 +21,12 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import com.group6.Rental_Car.services.storage.StorageService;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,9 +46,10 @@ public class VehicleServiceImpl implements VehicleService {
     private final VehicleModelService vehicleModelService; // <-- thay vì repository
     private final ModelMapper modelMapper;
     private final VehicleModelRepository vehicleModelRepository;
+    private final StorageService storageService;
 
     @Override
-    public VehicleResponse createVehicle(VehicleCreateRequest req) {
+    public VehicleResponse createVehicle(VehicleCreateRequest req, List<MultipartFile> images) {
         Vehicle vehicle = modelMapper.map(req, Vehicle.class);
 
         //Validate thuộc tính của Vehicle
@@ -62,11 +68,40 @@ public class VehicleServiceImpl implements VehicleService {
         Integer seat = req.getSeatCount();
         String normalizedVariant = validateVariantBySeatCount(seat, req.getVariant());
 
+        // Set plateNumber vào vehicle trước khi upload ảnh
+        vehicle.setPlateNumber(plate);
+        vehicle.setStatus(status);
 
         if (req.getStationId() != null) {
             var station = rentalStationRepository.findById(req.getStationId())
                     .orElseThrow(() -> new ResourceNotFoundException("Rental Station not found "));
             vehicle.setRentalStation(station);
+        }
+
+        // Upload và lưu ảnh xe
+        if (images != null && !images.isEmpty()) {
+            List<String> imageUrls = new ArrayList<>();
+            for (MultipartFile image : images) {
+                if (image != null && !image.isEmpty()) {
+                    try {
+                        // Dùng plateNumber để tạo folder (đã được validate và set ở trên)
+                        String folder = "vehicles/" + plate.replaceAll("[^a-zA-Z0-9]", "_");
+                        String url = storageService.uploadPublic(folder, image);
+                        imageUrls.add(url);
+                    } catch (IOException e) {
+                        throw new BadRequestException("Lỗi khi upload ảnh: " + e.getMessage());
+                    }
+                }
+            }
+            
+            // Lưu danh sách URL ảnh dưới dạng JSON array string
+            if (!imageUrls.isEmpty()) {
+                // Chuyển List<String> thành JSON array string
+                String imageUrlJson = "[" + imageUrls.stream()
+                        .map(url -> "\"" + url.replace("\"", "\\\"").replace("\\", "\\\\") + "\"")
+                        .collect(Collectors.joining(",")) + "]";
+                vehicle.setImageUrl(imageUrlJson);
+            }
         }
 
         vehicleRepository.save(vehicle);
@@ -188,6 +223,140 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
+    public List<VehicleResponse> getAvailableVehiclesByStation(Integer stationId) {
+        // Validate stationId
+        if (stationId == null || stationId <= 0) {
+            throw new BadRequestException("stationId phải là số dương");
+        }
+
+        // Kiểm tra station có tồn tại không
+        rentalStationRepository.findById(stationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental Station không tồn tại: " + stationId));
+
+        // Lấy xe có status AVAILABLE theo station, sắp xếp theo biển số
+        return vehicleRepository.findByRentalStation_StationIdAndStatusOrderByPlateNumberAsc(stationId, "AVAILABLE").stream()
+                .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<VehicleResponse> getVehiclesByCarmodel(String carmodel) {
+        if (carmodel == null || carmodel.isBlank()) {
+            throw new BadRequestException("carmodel không được để trống");
+        }
+
+        List<VehicleModel> models = vehicleModelRepository.findByCarmodelIgnoreCase(carmodel.trim());
+        return models.stream()
+                .map(model -> vehicleModelService.convertToDto(model.getVehicle(), model))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<VehicleResponse> getAvailableVehicles(LocalDateTime startTime, LocalDateTime endTime, Integer stationId) {
+        if (startTime == null || endTime == null) {
+            throw new BadRequestException("startTime và endTime không được để trống");
+        }
+        if (!endTime.isAfter(startTime)) {
+            throw new BadRequestException("endTime phải sau startTime");
+        }
+
+        // Lấy xe theo stationId nếu có, nếu không thì lấy tất cả
+        List<Vehicle> allVehicles;
+        if (stationId != null) {
+            // Validate stationId
+            if (stationId <= 0) {
+                throw new BadRequestException("stationId phải là số dương");
+            }
+            // Kiểm tra station có tồn tại không
+            rentalStationRepository.findById(stationId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Rental Station không tồn tại: " + stationId));
+            allVehicles = vehicleRepository.findByRentalStation_StationIdOrderByPlateNumberAsc(stationId);
+        } else {
+            allVehicles = vehicleRepository.findAll();
+        }
+
+        // Lọc những xe không có booking overlap trong khoảng thời gian
+        return allVehicles.stream()
+                .filter(vehicle -> {
+                    // Kiểm tra timeline BOOKED/RENTAL có overlap không
+                    List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicle.getVehicleId());
+                    
+                    boolean hasOverlap = timelines.stream()
+                            .anyMatch(timeline -> {
+                                String status = timeline.getStatus();
+                                // Chỉ kiểm tra các status BOOKED, RENTAL
+                                if (!"BOOKED".equalsIgnoreCase(status) && !"RENTAL".equalsIgnoreCase(status)) {
+                                    return false;
+                                }
+                                
+                                LocalDateTime timelineStart = timeline.getStartTime();
+                                LocalDateTime timelineEnd = timeline.getEndTime();
+                                
+                                if (timelineStart == null || timelineEnd == null) {
+                                    return false;
+                                }
+                                
+                                // Kiểm tra overlap: (start1 < end2) AND (end1 > start2)
+                                return startTime.isBefore(timelineEnd) && endTime.isAfter(timelineStart);
+                            });
+                    
+                    return !hasOverlap;
+                })
+                .map(vehicle -> vehicleModelService.convertToDto(vehicle, vehicleModelService.findByVehicle(vehicle)))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<VehicleResponse> getSimilarAvailableVehicles(Long vehicleId) {
+        // Lấy xe hiện tại
+        Vehicle currentVehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle không tồn tại: " + vehicleId));
+
+        // Lấy station ID của xe hiện tại
+        final Integer currentStationId = (currentVehicle.getRentalStation() != null) 
+                ? currentVehicle.getRentalStation().getStationId() 
+                : null;
+
+        // Lấy thông tin model của xe hiện tại
+        VehicleModel currentModel = vehicleModelService.findByVehicle(currentVehicle);
+        if (currentModel == null) {
+            throw new ResourceNotFoundException("VehicleModel không tồn tại cho vehicleId: " + vehicleId);
+        }
+
+        String carmodel = currentModel.getCarmodel();
+
+        if (carmodel == null || carmodel.isBlank()) {
+            throw new BadRequestException("Xe không có thông tin carmodel");
+        }
+
+        // Tìm các xe có cùng carmodel (cùng model xe)
+        List<VehicleModel> similarModels = vehicleModelRepository
+                .findByCarmodelIgnoreCase(carmodel);
+
+        // Lọc các xe:
+        // 1. Không phải xe hiện tại
+        // 2. Status = "available"
+        // 3. Cùng trạm với xe hiện tại
+        List<VehicleResponse> similarAvailable = similarModels.stream()
+                .map(VehicleModel::getVehicle)
+                .filter(vehicle -> !vehicle.getVehicleId().equals(vehicleId)) // Loại trừ xe hiện tại
+                .filter(vehicle -> "available".equalsIgnoreCase(vehicle.getStatus())) // Chỉ lấy xe available
+                .filter(vehicle -> {
+                    // Lọc theo cùng trạm
+                    if (currentStationId == null) {
+                        return vehicle.getRentalStation() == null;
+                    }
+                    return vehicle.getRentalStation() != null && 
+                           vehicle.getRentalStation().getStationId().equals(currentStationId);
+                })
+                .limit(2) // Chỉ lấy tối đa 2 xe
+                .map(vehicle -> vehicleModelService.convertToDto(vehicle, vehicleModelService.findByVehicle(vehicle)))
+                .collect(Collectors.toList());
+
+        return similarAvailable;
+    }
+
+    @Override
     public VehicleDetailResponse getVehicleDetailById(Long vehicleId) {
         // Lấy xe
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
@@ -203,6 +372,7 @@ public class VehicleServiceImpl implements VehicleService {
                 .status(vehicle.getStatus())
                 .vehicleName(vehicle.getVehicleName())
                 .description(vehicle.getDescription())
+                .imageUrl(vehicle.getImageUrl())
                 .hasBooking(false)
                 .bookingNote("Chưa có đơn thuê")
                 .build();

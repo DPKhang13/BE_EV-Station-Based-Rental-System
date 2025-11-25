@@ -28,4 +28,22 @@ public class OrderDetailResponse {
     private String description;
     private String status;
     private String methodPayment;
+    
+    // Thông tin khách hàng
+    private String customerName;
+    private String phone;
+    private String email;
+    
+    // Thông tin xe
+    private String vehicleName;
+    private String plateNumber;
+    private String color;
+    private String carmodel;
+    private String vehicleStatus;
+    
+    // Thông tin trạm
+    private String stationName;
+    
+    // Tiền còn lại chưa thanh toán
+    private BigDecimal remainingAmount;
 }

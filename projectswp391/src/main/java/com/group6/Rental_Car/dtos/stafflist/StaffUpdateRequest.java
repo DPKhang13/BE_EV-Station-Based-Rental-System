@@ -1,4 +1,4 @@
-package com.group6.Rental_Car.dtos.staffList;
+package com.group6.Rental_Car.dtos.stafflist;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;

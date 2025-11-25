@@ -73,7 +73,7 @@ public class    StaffScheduleController {
 
     @PutMapping("/staff/update/{email}")
     public ResponseEntity<?> updateStaff(@PathVariable String email,
-                                         @RequestBody com.group6.Rental_Car.dtos.staffList.StaffUpdateRequest request) {
+                                         @RequestBody com.group6.Rental_Car.dtos.stafflist.StaffUpdateRequest request) {
         return ResponseEntity.ok(userService.updateStaffByEmail(email, request));
     }
 

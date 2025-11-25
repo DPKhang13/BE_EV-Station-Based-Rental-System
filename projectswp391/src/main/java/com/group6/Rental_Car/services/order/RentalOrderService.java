@@ -21,4 +21,6 @@ public interface RentalOrderService {
     List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId);
     List<OrderDetailCompactResponse> getCompactDetailsByVehicle(Long vehicleId);
     public OrderDetailCompactResponse updateCompactOrder(Long vehicleId, UUID orderId, CompactOrderUpdateRequest req);
+    OrderResponse cancelOrder(UUID orderId, String cancellationReason);
+    OrderResponse completeOrder(UUID orderId);
 }

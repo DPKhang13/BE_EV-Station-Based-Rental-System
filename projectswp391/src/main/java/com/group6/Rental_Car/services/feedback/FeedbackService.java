@@ -11,7 +11,7 @@ public interface FeedbackService {
     FeedbackResponse create(FeedbackCreateRequest req);
     FeedbackResponse update(Integer feedbackId, FeedbackUpdateRequest req);
     void delete(Integer feedbackId);
-    FeedbackResponse getById(Integer feedbackId);
+    List<FeedbackResponse> getByOrderId(UUID orderId);
     List<FeedbackResponse> list();
 
     List<FeedbackResponse> getFeedbackByUserId(UUID userId);

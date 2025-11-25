@@ -32,6 +32,7 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
 
+ 
     @GetMapping("/get/my-orders")
     public ResponseEntity<List<OrderResponse>> getMyOrders(@AuthenticationPrincipal JwtUserDetails userDetails) {
         UUID customerId = userDetails.getUserId();
@@ -58,6 +59,15 @@ public class OrderController {
                 request.getNewVehicleId(),
                 request.getNote()
         );
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/cancel/{orderId}")
+    public ResponseEntity<OrderResponse> cancel(
+            @PathVariable UUID orderId,
+            @RequestBody(required = false) CancelOrderRequest request) {
+        String cancellationReason = request != null ? request.getCancellationReason() : null;
+        OrderResponse response = rentalOrderService.cancelOrder(orderId, cancellationReason);
         return ResponseEntity.ok(response);
     }
 
@@ -114,5 +124,11 @@ public class OrderController {
             @RequestBody CompactOrderUpdateRequest req
     ) {
         return ResponseEntity.ok(rentalOrderService.updateCompactOrder(vehicleId, orderId, req));
+    }
+
+    @PutMapping("/{orderId}/complete")
+    public ResponseEntity<OrderResponse> completeOrder(@PathVariable UUID orderId) {
+        OrderResponse response = rentalOrderService.completeOrder(orderId);
+        return ResponseEntity.ok(response);
     }
 }

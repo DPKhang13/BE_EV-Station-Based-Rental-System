@@ -38,9 +38,9 @@ public class FeedbackController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/getById/{feedbackId}")
-    public ResponseEntity<FeedbackResponse> getById(@PathVariable Integer feedbackId) {
-        return ResponseEntity.ok(feedbackService.getById(feedbackId));
+    @GetMapping("/getByOrderId/{orderId}")
+    public ResponseEntity<List<FeedbackResponse>> getByOrderId(@PathVariable UUID orderId) {
+        return ResponseEntity.ok(feedbackService.getByOrderId(orderId));
     }
 
     @GetMapping("/getAllList")

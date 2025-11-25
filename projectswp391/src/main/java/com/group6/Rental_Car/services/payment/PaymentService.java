@@ -22,4 +22,11 @@ public interface PaymentService {
     public void approveCashPaymentByOrder(UUID orderId);
     
     List<PaymentResponse> getPaymentsByOrderId(UUID orderId);
+    
+    /**
+     * Tự động kiểm tra và chuyển order sang COMPLETED nếu:
+     * - Xe đang ở trạng thái CHECKING (đã trả xe)
+     * - Đã thanh toán hết (remainingAmount = 0)
+     */
+    void autoCompleteOrderIfReady(UUID orderId);
 }

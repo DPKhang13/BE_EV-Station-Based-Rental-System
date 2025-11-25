@@ -7,9 +7,9 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderServiceResponse {
-    private Long serviceId;
+public class ServicePriceCreateRequest {
     private String serviceType;
-    private String description;
     private BigDecimal cost;
+    private String description;
 }
+

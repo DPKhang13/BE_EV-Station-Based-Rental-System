@@ -293,7 +293,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public StaffResponse updateStaffByEmail(String email,
-                                            com.group6.Rental_Car.dtos.staffList.StaffUpdateRequest request) {
+                                            com.group6.Rental_Car.dtos.stafflist.StaffUpdateRequest request) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user với email: " + email));

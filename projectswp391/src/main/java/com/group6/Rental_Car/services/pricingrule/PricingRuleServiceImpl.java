@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,8 +41,12 @@ public class PricingRuleServiceImpl implements PricingRuleService {
         if (startDate == null || endDate == null || !endDate.isAfter(startDate))
             throw new BadRequestException("Ngày thuê không hợp lệ");
 
-        long days = startDate.until(endDate).getDays();
+        // Tính số ngày: từ startDate đến endDate (KHÔNG bao gồm endDate vì đó là ngày trả)
+        // Ví dụ: 23/11 đến 28/11 = 5 ngày (23, 24, 25, 26, 27) - ngày 28 là ngày trả, không tính
+        long days = ChronoUnit.DAYS.between(startDate, endDate);
         BigDecimal total = BigDecimal.ZERO;
+
+        System.out.println("📅 [calculateRentalPrice] Start: " + startDate + ", End: " + endDate + ", Days: " + days);
 
         for (int i = 0; i < days; i++) {
             LocalDate current = startDate.plusDays(i);
@@ -49,11 +54,15 @@ public class PricingRuleServiceImpl implements PricingRuleService {
 
             if (isWeekend(current) && pricingRule.getHolidayPrice() != null) {
                 dayPrice = pricingRule.getHolidayPrice();
+                System.out.println("📅 [calculateRentalPrice] " + current + " (WEEKEND) = " + dayPrice);
+            } else {
+                System.out.println("📅 [calculateRentalPrice] " + current + " (WEEKDAY) = " + dayPrice);
             }
 
             total = total.add(dayPrice);
         }
 
+        System.out.println("💰 [calculateRentalPrice] Total: " + total);
         return total;
     }
 

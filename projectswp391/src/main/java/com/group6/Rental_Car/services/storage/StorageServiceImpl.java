@@ -42,7 +42,7 @@ public class StorageServiceImpl implements StorageService {
                         .key(key)
                         .contentType(contentType)
                         .contentLength(file.getSize())
-                        .acl(ObjectCannedACL.PUBLIC_READ)
+                        // .acl(ObjectCannedACL.PUBLIC_READ) // thử bỏ nếu Long Vân không bật ACL
                         .build(),
                 RequestBody.fromInputStream(file.getInputStream(), file.getSize())
         );
@@ -51,7 +51,6 @@ public class StorageServiceImpl implements StorageService {
         return base + "/" + bucket + "/" + urlEncodePath(key);
     }
 
-    /** Upload private → trả presigned URL (hết hạn sau ttl) cho admin xem */
 
     // =================================== helpers ===================================
     private String buildKey(String folder, String originalName) {

@@ -2,6 +2,7 @@ package com.group6.Rental_Car.controllers;
 
 import com.group6.Rental_Car.dtos.orderservice.OrderServiceCreateRequest;
 import com.group6.Rental_Car.dtos.orderservice.OrderServiceResponse;
+import com.group6.Rental_Car.dtos.orderservice.ServicePriceCreateRequest;
 import com.group6.Rental_Car.services.orderservice.OrderServiceService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,11 @@ public class OrderServiceController {
     @PostMapping
     public ResponseEntity<OrderServiceResponse> create(@RequestBody OrderServiceCreateRequest request) {
         return ResponseEntity.ok(orderServiceService.createService(request));
+    }
+
+    @PostMapping("/price")
+    public ResponseEntity<OrderServiceResponse> createServicePrice(@RequestBody ServicePriceCreateRequest request) {
+        return ResponseEntity.ok(orderServiceService.createServicePrice(request));
     }
 
     @PutMapping("/{serviceId}")
@@ -56,5 +62,10 @@ public class OrderServiceController {
     @GetMapping("/status/{status}")
     public ResponseEntity<List<OrderServiceResponse>> getByStatus(@PathVariable String status) {
         return ResponseEntity.ok(orderServiceService.getServicesByStatus(status));
+    }
+
+    @GetMapping("/price-list")
+    public ResponseEntity<List<OrderServiceResponse>> getPriceList() {
+        return ResponseEntity.ok(orderServiceService.getPriceList());
     }
 }

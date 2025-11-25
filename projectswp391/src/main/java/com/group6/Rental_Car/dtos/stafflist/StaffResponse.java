@@ -8,7 +8,7 @@ import lombok.*;
 @AllArgsConstructor
 public class StaffResponse {
 
-    private Object staffId;      // để UserId (UUID) không lỗi
+    private Object staffId;
     private String staffName;
     private String staffEmail;
     private String staffPhone;

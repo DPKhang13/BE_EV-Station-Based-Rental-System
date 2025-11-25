@@ -5,7 +5,6 @@ import com.group6.Rental_Car.dtos.loginpage.AccountDtoResponse;
 import com.group6.Rental_Car.dtos.loginpage.RegisterAccountDto;
 import com.group6.Rental_Car.dtos.otpverify.OtpRequest;
 import com.group6.Rental_Car.dtos.stafflist.StaffCreateRequest;
-
 import com.group6.Rental_Car.dtos.stafflist.StaffResponse;
 import com.group6.Rental_Car.dtos.verifyfile.UserVerificationResponse;
 import com.group6.Rental_Car.entities.User;
@@ -31,14 +30,14 @@ public interface UserService  {
     public AccountDtoResponse resetPassword(AccountDto accountDto, String inputOtp);
 
     public UserVerificationResponse verifyUserProfile(UUID userId);
-     public List<UserVerificationResponse> getPendingVerificationUsers();
-     public List<AccountDtoResponse> getAllCustomer();
-     public AccountDtoResponse getUserById(UUID userId);
+    public List<UserVerificationResponse> getPendingVerificationUsers();
+    public List<AccountDtoResponse> getAllCustomer();
+    public AccountDtoResponse getUserById(UUID userId);
 
     User createStaff(StaffCreateRequest request);
 
     StaffResponse updateStaffByEmail(String email,
-                                     com.group6.Rental_Car.dtos.staffList.StaffUpdateRequest request);
+                                     com.group6.Rental_Car.dtos.stafflist.StaffUpdateRequest request);
     void deleteByEmail(String email);
 
 

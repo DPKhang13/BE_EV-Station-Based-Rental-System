@@ -11,6 +11,7 @@ import java.util.UUID;
 
 public interface FeedbackRepository extends JpaRepository<Feedback,Integer> {
     Optional<Feedback> findByOrder(RentalOrder order);
+    List<Feedback> findAllByOrder(RentalOrder order);
     boolean existsByOrder(RentalOrder order); // 1 order chỉ cho 1 feedback
     //Admin Dashboard
     @Query("select coalesce(avg(f.rating),0) from Feedback f")
