@@ -31,5 +31,7 @@ public class Photo {
 
     @Column(name = "uploaded_at")
     private LocalDateTime uploadedAt;
+
+
 }
 
