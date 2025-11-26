@@ -15,6 +15,7 @@ public interface RentalOrderService {
     List<OrderResponse> getRentalOrders();
     List<OrderSimpleResponse> getRentalOrdersSimple();
     List<OrderResponse> findByCustomer_UserId(UUID customerId);
+    OrderResponse reviewReturn(UUID orderId);
     OrderResponse confirmPickup(UUID orderId);
     OrderResponse confirmReturn(UUID orderId, OrderReturnRequest request);
     List<OrderVerificationResponse> getPendingVerificationOrders();

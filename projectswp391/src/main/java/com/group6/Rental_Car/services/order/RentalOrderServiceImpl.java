@@ -542,6 +542,20 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
+    public OrderResponse reviewReturn(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        if (mainDetail == null) {
+            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê chính (RENTAL)");
+        }
+
+        // Tái sử dụng mapToResponse để trả về đầy đủ thông tin đơn + xe
+        return mapToResponse(order, mainDetail);
+    }
+
+    @Override
     @Transactional
     public OrderResponse confirmPickup(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
