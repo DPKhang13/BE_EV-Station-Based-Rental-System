@@ -1,6 +1,7 @@
 package com.group6.Rental_Car.services.photo;
 
 import com.group6.Rental_Car.entities.Photo;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,4 +16,5 @@ public interface PhotoService {
     Optional<Photo> getLatestUserPhoto(UUID userId, String type);
 
     void deletePhoto(Long photoId, UUID userId);
+
 }

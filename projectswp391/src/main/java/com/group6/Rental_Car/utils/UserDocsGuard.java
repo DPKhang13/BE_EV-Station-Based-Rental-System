@@ -6,7 +6,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.UUID;
 import java.util.function.BiFunction;
 
-public final class UserDocsGuard {
+public final class  UserDocsGuard {
     private UserDocsGuard() {}
 
     public static void assertHasDocs(UUID userId,

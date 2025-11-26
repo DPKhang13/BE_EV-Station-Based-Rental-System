@@ -11,5 +11,4 @@ public interface PhotoRepository extends JpaRepository<Photo, Long> {
     List<Photo> findByUser_UserIdOrderByUploadedAtDesc(UUID userId);
     Optional<Photo> findFirstByUser_UserIdAndTypeOrderByUploadedAtDesc(UUID userId, String type);
     boolean existsByUser_UserIdAndTypeIgnoreCase(UUID userId, String type);
-
 }
