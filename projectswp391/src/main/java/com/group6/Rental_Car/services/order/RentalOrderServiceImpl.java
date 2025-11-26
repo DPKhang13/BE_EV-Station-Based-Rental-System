@@ -328,27 +328,66 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
         }
 
-        // Cập nhật TẤT CẢ các detail của order thành FAILED
+        // Chỉ set FAILED cho các detail chưa thanh toán (status != SUCCESS)
+        // Giữ nguyên các detail đã SUCCESS
         List<RentalOrderDetail> allDetails = order.getDetails();
         if (allDetails != null && !allDetails.isEmpty()) {
+            List<RentalOrderDetail> detailsToUpdate = new ArrayList<>();
             for (RentalOrderDetail detail : allDetails) {
-                detail.setStatus("FAILED");
+                // Chỉ set FAILED nếu detail chưa SUCCESS
+                if (!"SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                    detail.setStatus("FAILED");
+                    detailsToUpdate.add(detail);
+                }
             }
-            rentalOrderDetailRepository.saveAll(allDetails);
+            if (!detailsToUpdate.isEmpty()) {
+                rentalOrderDetailRepository.saveAll(detailsToUpdate);
+            }
         }
         
         // Cập nhật status của order thành FAILED
         order.setStatus("FAILED");
         rentalOrderRepository.save(order);
 
-        // Giải phóng xe - cập nhật status dựa vào timeline
+        // Giải phóng xe - xóa timeline và cập nhật lại status xe
         Vehicle vehicle = mainDetail.getVehicle();
         if (vehicle != null) {
+            Long vehicleId = vehicle.getVehicleId();
+
             // Xóa timeline của đơn hàng đã hủy
-            deleteTimelineForOrder(orderId, vehicle.getVehicleId());
-            
-            // Cập nhật status dựa vào timeline còn lại
-            updateVehicleStatusFromTimeline(vehicle.getVehicleId());
+            deleteTimelineForOrder(orderId, vehicleId);
+
+            // Tính lại status xe dựa trên các timeline còn lại (kể cả khi xe đang không ở trạng thái AVAILABLE)
+            if (vehicleId != null) {
+                List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                LocalDateTime now = LocalDateTime.now();
+
+                boolean hasActiveRental = timelines.stream()
+                        .anyMatch(t -> {
+                            if (!"RENTAL".equalsIgnoreCase(t.getStatus())) return false;
+                            LocalDateTime start = t.getStartTime();
+                            LocalDateTime end = t.getEndTime();
+                            return start != null && end != null &&
+                                    !now.isBefore(start) && !now.isAfter(end);
+                        });
+
+                if (hasActiveRental) {
+                    vehicle.setStatus("RENTAL");
+                } else {
+                    var nextBooked = timelines.stream()
+                            .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus()))
+                            .filter(t -> t.getStartTime() != null && t.getStartTime().isAfter(now))
+                            .min(Comparator.comparing(VehicleTimeline::getStartTime));
+
+                    if (nextBooked.isPresent()) {
+                        vehicle.setStatus("BOOKED");
+                    } else {
+                        vehicle.setStatus("AVAILABLE");
+                    }
+                }
+
+                vehicleRepository.save(vehicle);
+            }
         }
 
         // Gửi thông báo cho khách hàng
@@ -508,6 +547,20 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             .build();
                 }))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public OrderResponse reviewReturn(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        if (mainDetail == null) {
+            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê chính (RENTAL)");
+        }
+
+        // Tái sử dụng mapToResponse để trả về đầy đủ thông tin đơn + xe
+        return mapToResponse(order, mainDetail);
     }
 
     @Override
@@ -748,12 +801,16 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
                     return s.startsWith("PENDING")
                             || s.equals("COMPLETED")
-                            || s.equals("AWAITING")             // đã thanh toán đặt cọc, chờ nhận xe
-                            || s.equals("PAID")                 // đã thanh toán hết dịch vụ
-                            || s.equals("RENTAL")               // đang thuê
+                            || s.equals("AWAITING")               // đã thanh toán đặt cọc, chờ nhận xe
+                            || s.equals("PAID")                   // đã thanh toán hết dịch vụ
+                            || s.equals("RENTAL")                 // đang thuê
                             || s.equals("DEPOSITED")
-                            || s.equals("SERVICE_PAID")         // đã đặt cọc
-                            || s.equals("PENDING_FINAL_PAYMENT"); // chờ thanh toán cuối (services + phí trễ)
+                            || s.equals("SERVICE_PAID")           // đã đặt cọc
+                            || s.equals("PENDING_FINAL_PAYMENT")  // chờ thanh toán cuối (services + phí trễ)
+                            || s.equals("FAILED")                 // đơn đã hủy
+                            || s.equals("REFUNDED")               // đơn đã hoàn tiền
+                            || s.equals("PAYMENT_FAILED")
+                            ||  s.equals("CANCELLED");      // thanh toán thất bại
                 })
                 //  sort theo createdAt mới nhất
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))

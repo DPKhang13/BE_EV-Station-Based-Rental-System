@@ -97,6 +97,12 @@ public class OrderController {
         OrderResponse response = rentalOrderService.confirmReturn(orderId, request);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/{orderId}/review-return")
+    public ResponseEntity<OrderResponse> reviewReturn(@PathVariable UUID orderId) {
+        OrderResponse response = rentalOrderService.reviewReturn(orderId);
+        return ResponseEntity.ok(response);
+    }
     @GetMapping("/pending-verification")
     public List<OrderVerificationResponse> getPendingVerificationOrders() {
         return rentalOrderService.getPendingVerificationOrders();
