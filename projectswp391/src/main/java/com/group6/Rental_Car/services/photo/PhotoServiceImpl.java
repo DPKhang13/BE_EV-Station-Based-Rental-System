@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -28,12 +29,24 @@ public class PhotoServiceImpl implements PhotoService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        Photo entity = Photo.builder()
-                .user(user)
-                .photoUrl(url)
-                .type(type)                         // "cccd" | "driver-license" ...
-                .uploadedAt(LocalDateTime.now())
-                .build();
+        Optional<Photo> existing = photoRepo.findFirstByUser_UserIdAndTypeOrderByUploadedAtDesc(userId, type);
+
+        Photo entity;
+
+        if (existing.isPresent()) {
+            entity = existing.get();
+            entity.setPhotoUrl(url);
+            entity.setUploadedAt(LocalDateTime.now());
+            System.out.println("🔄 Updated existing " + type + " photo for user " + userId);
+        } else {
+            entity = Photo.builder()
+                    .user(user)
+                    .photoUrl(url)
+                    .type(type)
+                    .uploadedAt(LocalDateTime.now())
+                    .build();
+            System.out.println("🆕 Created new " + type + " photo for user " + userId);
+        }
 
         return photoRepo.save(entity);
     }
@@ -60,4 +73,5 @@ public class PhotoServiceImpl implements PhotoService {
         }
         photoRepo.delete(p);
     }
+
 }

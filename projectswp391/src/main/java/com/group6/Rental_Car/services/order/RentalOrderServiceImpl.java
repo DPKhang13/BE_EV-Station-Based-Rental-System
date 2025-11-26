@@ -91,7 +91,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Xe đã được đặt trong khoảng thời gian này...");
         }
 
-        System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " có thể đặt từ " + start + " đến " + end);
         VehicleModel model = vehicleModelService.findByVehicle(vehicle);
         PricingRule rule = pricingRuleService.getPricingRuleByCarmodel(model.getCarmodel());
 
@@ -111,13 +110,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             basePrice = pricingRuleService.calculateRentalPrice(rule, start.toLocalDate(), end.toLocalDate());
         }
 
-        System.out.println("💰 [createOrder] Base price (trước coupon): " + basePrice);
-        System.out.println("💰 [createOrder] Coupon code: " + (request.getCouponCode() != null ? request.getCouponCode() : "null"));
-        System.out.println("💰 [createOrder] Coupon object: " + (coupon != null ? coupon.getCode() + " (discount: " + coupon.getDiscount() + ")" : "null"));
-
         BigDecimal totalPrice = couponService.applyCouponIfValid(coupon, basePrice);
-        
-        System.out.println("💰 [createOrder] Total price (sau coupon): " + totalPrice);
 
         // ====== TẠO ORDER ======
         RentalOrder order = new RentalOrder();
@@ -169,13 +162,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 // Đây là lần đầu tiên đặt xe (chỉ có timeline vừa tạo) → set BOOKED
                 vehicle.setStatus("BOOKED");
                 vehicleRepository.save(vehicle);
-                System.out.println(" [createOrder] Lần đầu tiên đặt xe " + vehicle.getVehicleId() + " → Set status = BOOKED");
-            } else {
-                System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " đã có " + (existingBookings.size() - 1) + " đơn đặt, giữ nguyên status");
             }
-        } else {
-            // Xe đang ở trạng thái khác (CHECKING, RENTAL, BOOKED) → giữ nguyên status
-            System.out.println(" [createOrder] Xe " + vehicle.getVehicleId() + " đang ở trạng thái " + currentVehicleStatus + ", giữ nguyên status");
         }
 
         // ====== TRẢ RESPONSE ======
@@ -210,7 +197,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Đơn hàng không có trạng thái hợp lệ");
         }
         String upperStatus = currentStatus.trim().toUpperCase();
-        System.out.println("[changeVehicle] Order ID: " + orderId + ", Current Status: '" + currentStatus + "' (normalized: '" + upperStatus + "')");
         
         // Chỉ cho phép đổi xe khi order ở trạng thái: DEPOSITED, AWAITING, PENDING (chưa pickup)
         // Không cho phép khi đã RENTAL (đã pickup) hoặc các trạng thái khác
@@ -237,9 +223,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Xe mới đã được đặt trong khoảng thời gian này...");
         }
 
-        System.out.println("[changeVehicle] Có thể thay đổi từ xe " + mainDetail.getVehicle().getVehicleId() +
-                         " sang xe " + newVehicle.getVehicleId());
-
         Vehicle oldVehicle = mainDetail.getVehicle();
         Long oldVehicleId = oldVehicle.getVehicleId();
 
@@ -249,15 +232,19 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         // Giải phóng xe cũ - cập nhật status dựa vào timeline
         updateVehicleStatusFromTimeline(oldVehicleId);
 
-        // Gán xe mới
-        mainDetail.setVehicle(newVehicle);
-        mainDetail.setStatus("SWITCHED");
-        if (note != null && !note.isBlank()) {
-            mainDetail.setDescription(note);
+        // Đổi vehicle cho TẤT CẢ các detail trong order (không chỉ RENTAL)
+        List<RentalOrderDetail> allDetails = order.getDetails();
+        if (allDetails != null && !allDetails.isEmpty()) {
+            for (RentalOrderDetail detail : allDetails) {
+                // Đổi vehicle cho tất cả detail
+                detail.setVehicle(newVehicle);
+                // Thêm note vào mainDetail (RENTAL) nếu có
+                if ("RENTAL".equalsIgnoreCase(detail.getType()) && note != null && !note.isBlank()) {
+                    detail.setDescription(note);
+                }
+            }
+            rentalOrderDetailRepository.saveAll(allDetails);
         }
-        rentalOrderDetailRepository.save(mainDetail);
-        System.out.println("[changeVehicle] Đã cập nhật detail với vehicle mới: " + newVehicle.getVehicleId() + 
-                         " (detail ID: " + mainDetail.getDetailId() + ")");
 
         // ====== TẠO TIMELINE MỚI ======
         VehicleTimeline timeline = VehicleTimeline.builder()
@@ -278,15 +265,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         // ====== CẬP NHẬT STATUS XE MỚI THÀNH BOOKED ======
         newVehicle.setStatus("BOOKED");
         vehicleRepository.save(newVehicle);
-        System.out.println("[changeVehicle] Đã cập nhật xe mới " + newVehicle.getVehicleId() + " sang trạng thái BOOKED");
-
-        // ====== CẬP NHẬT PAYMENT NẾU CÓ ======
-        // Payment không có vehicle_id, chỉ liên kết với order, nên không cần cập nhật
-        // Tuy nhiên, nếu có payment liên quan đến vehicle (nếu có trong tương lai), có thể cập nhật ở đây
-        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(orderId);
-        if (!payments.isEmpty()) {
-            System.out.println("[changeVehicle] Đơn hàng có " + payments.size() + " payment(s). Payment liên kết với order nên không cần cập nhật vehicle.");
-        }
 
         rentalOrderRepository.save(order);
         return mapToResponse(order, mainDetail);
@@ -330,8 +308,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setStatus("COMPLETED");
         rentalOrderRepository.save(order);
 
-        System.out.println(" [completeOrder] Đã hoàn tất đơn hàng " + orderId + " từ status: " + currentStatus);
-
         // Lấy main detail để map response
         RentalOrderDetail mainDetail = getMainDetail(order);
         return mapToResponse(order, mainDetail);
@@ -348,7 +324,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         String currentStatus = order.getStatus();
         if (currentStatus != null) {
             String upperStatus = currentStatus.toUpperCase();
-            if (upperStatus.equals("COMPLETED") || upperStatus.equals("FAILED")) {
+            if (upperStatus.equals("COMPLETED") || upperStatus.equals("FAILED") || upperStatus.equals("CANCELLED")) {
                 throw new BadRequestException("Không thể hủy đơn hàng đã hoàn thành hoặc đã hủy");
             }
         }
@@ -359,27 +335,71 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
         }
 
-        // Cập nhật TẤT CẢ các detail của order thành FAILED
+        // Chỉ set FAILED cho các detail nhỏ (không phải RENTAL) chưa thanh toán (status != SUCCESS)
+        // KHÔNG set FAILED cho detail RENTAL
+        // Giữ nguyên các detail đã SUCCESS
         List<RentalOrderDetail> allDetails = order.getDetails();
         if (allDetails != null && !allDetails.isEmpty()) {
+            List<RentalOrderDetail> detailsToUpdate = new ArrayList<>();
             for (RentalOrderDetail detail : allDetails) {
-                detail.setStatus("FAILED");
+                // Bỏ qua detail RENTAL
+                if ("RENTAL".equalsIgnoreCase(detail.getType())) {
+                    continue;
+                }
+                // Chỉ set FAILED nếu detail chưa SUCCESS
+                if (!"SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                    detail.setStatus("FAILED");
+                    detailsToUpdate.add(detail);
+                }
             }
-            rentalOrderDetailRepository.saveAll(allDetails);
+            if (!detailsToUpdate.isEmpty()) {
+                rentalOrderDetailRepository.saveAll(detailsToUpdate);
+            }
         }
         
-        // Cập nhật status của order thành FAILED
-        order.setStatus("FAILED");
+        // Cập nhật status của order thành CANCELLED
+        order.setStatus("CANCELLED");
         rentalOrderRepository.save(order);
 
-        // Giải phóng xe - cập nhật status dựa vào timeline
+        // Giải phóng xe - xóa timeline và cập nhật lại status xe
         Vehicle vehicle = mainDetail.getVehicle();
         if (vehicle != null) {
+            Long vehicleId = vehicle.getVehicleId();
+
             // Xóa timeline của đơn hàng đã hủy
-            deleteTimelineForOrder(orderId, vehicle.getVehicleId());
-            
-            // Cập nhật status dựa vào timeline còn lại
-            updateVehicleStatusFromTimeline(vehicle.getVehicleId());
+            deleteTimelineForOrder(orderId, vehicleId);
+
+            // Tính lại status xe dựa trên các timeline còn lại (kể cả khi xe đang không ở trạng thái AVAILABLE)
+            if (vehicleId != null) {
+                List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                LocalDateTime now = LocalDateTime.now();
+
+                boolean hasActiveRental = timelines.stream()
+                        .anyMatch(t -> {
+                            if (!"RENTAL".equalsIgnoreCase(t.getStatus())) return false;
+                            LocalDateTime start = t.getStartTime();
+                            LocalDateTime end = t.getEndTime();
+                            return start != null && end != null &&
+                                    !now.isBefore(start) && !now.isAfter(end);
+                        });
+
+                if (hasActiveRental) {
+                    vehicle.setStatus("RENTAL");
+                } else {
+                    var nextBooked = timelines.stream()
+                            .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus()))
+                            .filter(t -> t.getStartTime() != null && t.getStartTime().isAfter(now))
+                            .min(Comparator.comparing(VehicleTimeline::getStartTime));
+
+                    if (nextBooked.isPresent()) {
+                        vehicle.setStatus("BOOKED");
+                    } else {
+                        vehicle.setStatus("AVAILABLE");
+                    }
+                }
+
+                vehicleRepository.save(vehicle);
+            }
         }
 
         // Gửi thông báo cho khách hàng
@@ -426,8 +446,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             );
         }
 
-        System.out.println("[deleteOrder] Xóa đơn hàng " + orderId + " với status: " + currentStatus);
-
         // Lấy chi tiết chính
         RentalOrderDetail mainDetail = getMainDetail(order);
 
@@ -441,14 +459,12 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 deleteTimelineForOrder(orderId, vehicleId);
 
                 // Cập nhật status dựa vào timeline còn lại
-                System.out.println("[deleteOrder] Đơn " + orderId + " bị xóa, cập nhật status xe " + vehicleId + " dựa vào timeline");
                 updateVehicleStatusFromTimeline(vehicleId);
             }
         }
 
         // Xóa order (cascade sẽ xóa các bản ghi liên quan nếu có)
         rentalOrderRepository.delete(order);
-        System.out.println("[deleteOrder] Đã xóa đơn hàng " + orderId + " thành công");
     }
 
 
@@ -456,6 +472,13 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     public List<OrderResponse> getRentalOrders() {
         return rentalOrderRepository.findAll().stream()
                 .map(order -> mapToResponse(order, getMainDetail(order)))
+                .toList();
+    }
+
+    @Override
+    public List<OrderSimpleResponse> getRentalOrdersSimple() {
+        return rentalOrderRepository.findAll().stream()
+                .map(this::mapToSimpleResponse)
                 .toList();
     }
 
@@ -539,13 +562,27 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     @Override
+    public OrderResponse reviewReturn(UUID orderId) {
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
+
+        RentalOrderDetail mainDetail = getMainDetail(order);
+        if (mainDetail == null) {
+            throw new BadRequestException("Không tìm thấy chi tiết đơn thuê chính (RENTAL)");
+        }
+
+        // Tái sử dụng mapToResponse để trả về đầy đủ thông tin đơn + xe
+        return mapToResponse(order, mainDetail);
+    }
+
+    @Override
     @Transactional
     public OrderResponse confirmPickup(UUID orderId) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
 
         String currentStatus = order.getStatus();
-        if (!"AWAITING".equals(currentStatus) && !"PAID".equals(currentStatus)) {
+        if (!"AWAITING".equals(currentStatus) ) {
             throw new BadRequestException("Chỉ có thể bàn giao xe khi đơn hàng ở trạng thái AWAITING (đã thanh toán đặt cọc) hoặc PAID (đã thanh toán hết dịch vụ)");
         }
 
@@ -558,14 +595,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         Vehicle vehicle = mainDetail.getVehicle();
         if (vehicle == null)
             throw new BadRequestException("Không tìm thấy xe trong chi tiết đơn");
-
-        // Lưu batteryStatus ban đầu vào description của detail PICKUP để dùng khi trả xe
-        // (Battery status được lưu trong VehicleModel, không cần thêm vào description)
-        VehicleModel vehicleModel = vehicleModelService.findByVehicle(vehicle);
-        if (vehicleModel != null && vehicleModel.getBatteryStatus() != null) {
-            String initialBattery = vehicleModel.getBatteryStatus();
-            System.out.println("🔋 [confirmPickup] BatteryStatus ban đầu: " + initialBattery);
-        }
 
         // Kiểm tra xe không đang được người khác thuê
         // Đây là check quan trọng: nếu có khách hàng khác đã nhận xe (order status = RENTAL),
@@ -601,7 +630,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         
         if (!bookedTimelines.isEmpty()) {
             vehicleTimelineRepository.deleteAll(bookedTimelines);
-            System.out.println("[confirmPickup] Đã xóa " + bookedTimelines.size() + " timeline BOOKED của đơn " + orderId);
         }
 
         //  Tạo timeline RENTAL mới
@@ -624,12 +652,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         // Tăng pickup_count cho staff hiện tại (nếu có)
         UUID staffId = getCurrentStaffId();
-        System.out.println("[confirmPickup] staffId from JWT: " + staffId);
         if (staffId != null) {
-            System.out.println("[confirmPickup] Calling incrementPickupCount...");
             incrementPickupCount(staffId);
-        } else {
-            System.out.println("[confirmPickup] staffId is null, skip incrementPickupCount");
         }
 
         return mapToResponse(order, mainDetail);
@@ -666,14 +690,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             BigDecimal lateFeePerDay = rule.getLateFeePerDay() != null ? rule.getLateFeePerDay() : BigDecimal.ZERO;
             BigDecimal lateFee = lateFeePerDay.multiply(BigDecimal.valueOf(lateDays));
             
-            System.out.println("💰 [confirmReturn] Khách trả xe trễ " + lateDays + " ngày, phí trễ: " + lateFee);
-            System.out.println("💰 [confirmReturn] TotalPrice trước: " + currentTotal);
-            
             // Cộng phí trễ vào totalPrice
             currentTotal = currentTotal.add(lateFee);
             order.setTotalPrice(currentTotal);
-            
-            System.out.println("💰 [confirmReturn] TotalPrice sau khi cộng phí trễ: " + currentTotal);
             
             // Tạo detail cho phí trễ (nếu có)
             if (lateFee.compareTo(BigDecimal.ZERO) > 0) {
@@ -688,7 +707,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                         .description("Phí trễ hạn " + lateDays + " ngày")
                         .build();
                 rentalOrderDetailRepository.save(lateFeeDetail);
-                System.out.println("✅ [confirmReturn] Đã tạo detail phí trễ: " + lateFee);
                 
                 // Cập nhật remainingAmount của payment nếu có (giống logic createService)
                 List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(order.getOrderId());
@@ -705,8 +723,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             : BigDecimal.ZERO;
                     deposit.setRemainingAmount(currentRemaining.add(lateFee));
                     paymentRepository.save(deposit);
-                    System.out.println("✅ [confirmReturn] Đã cập nhật remainingAmount cho deposit payment: " + 
-                            currentRemaining + " + " + lateFee + " = " + deposit.getRemainingAmount());
                 } else {
                     // Tìm payment type 3 (full payment) SUCCESS
                     Optional<Payment> fullPayment = payments.stream()
@@ -721,13 +737,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                                 : BigDecimal.ZERO;
                         full.setRemainingAmount(currentRemaining.add(lateFee));
                         paymentRepository.save(full);
-                        System.out.println("✅ [confirmReturn] Đã cập nhật remainingAmount cho full payment: " + 
-                                currentRemaining + " + " + lateFee + " = " + full.getRemainingAmount());
                     }
                 }
             }
-        } else if (actualDays < expectedDays) {
-            System.out.println("ℹ️ [confirmReturn] Khách trả xe sớm " + (expectedDays - actualDays) + " ngày");
         }
 
         // Tự động giả lập pin khi trả xe
@@ -753,9 +765,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     
                     vehicleModel.setBatteryStatus(newBattery + "%");
                     vehicleModelRepository.save(vehicleModel);
-                    System.out.println("🔋 [confirmReturn] Pin ban đầu: " + initialBattery + "%, Pin sau khi trả: " + newBattery + "%");
                 } catch (NumberFormatException e) {
-                    System.out.println("⚠️ [confirmReturn] Không thể parse batteryStatus: " + initialBatteryStr);
+                    // Ignore parse error
                 }
             }
         }
@@ -764,11 +775,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
         
-        // Kiểm tra xem còn số tiền chưa thanh toán không (phí trễ hoặc dịch vụ)
-        BigDecimal remainingAmount = calculateRemainingAmount(order);
-        
-        System.out.println("💰 [confirmReturn] RemainingAmount sau khi tính: " + remainingAmount);
-        System.out.println("💰 [confirmReturn] Order status hiện tại: " + order.getStatus());
+   
         
         // Set vehicle status
         vehicle.setStatus("CHECKING");
@@ -776,15 +783,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         // Nếu có phí trễ hoặc dịch vụ chưa thanh toán → chuyển thành PENDING_FINAL_PAYMENT
         // KHÔNG tự động set COMPLETED khi đã thanh toán hết
         // Chỉ khi gọi API /complete thì mới set COMPLETED
-        if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
-            // Đã thanh toán hết → chuyển thành PENDING_FINAL_PAYMENT (chờ gọi API /complete)
-            order.setStatus("PENDING_FINAL_PAYMENT");
-            System.out.println("✅ [confirmReturn] Đã thanh toán hết → chuyển thành PENDING_FINAL_PAYMENT (chờ gọi API /complete)");
-        } else {
-            // Có phí trễ hoặc dịch vụ chưa thanh toán → chuyển thành PENDING_FINAL_PAYMENT
-            order.setStatus("PENDING_FINAL_PAYMENT");
-            System.out.println("ℹ️ [confirmReturn] Còn " + remainingAmount + " chưa thanh toán (phí trễ/dịch vụ) → chuyển thành PENDING_FINAL_PAYMENT");
-        }
+        // Chuyển thành PENDING_FINAL_PAYMENT (chờ gọi API /complete)
+        order.setStatus("PENDING_FINAL_PAYMENT");
 
         // Xóa timeline khi order hoàn thành (xe đã trả, không cần track nữa)
         deleteTimelineForOrder(orderId, vehicle.getVehicleId());
@@ -798,48 +798,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
 
         // Tăng return_count cho staff hiện tại (nếu có)
         UUID staffId = getCurrentStaffId();
-        System.out.println("[confirmReturn] staffId from JWT: " + staffId);
         if (staffId != null) {
-            System.out.println("[confirmReturn] Calling incrementReturnCount...");
             incrementReturnCount(staffId);
-        } else {
-            System.out.println("[confirmReturn] staffId is null, skip incrementReturnCount");
         }
 
         return mapToResponse(order, mainDetail);
-    }
-
-    @Override
-    public OrderResponse previewReturn(UUID orderId, Integer actualDays) {
-        RentalOrder order = rentalOrderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn thuê"));
-
-        RentalOrderDetail mainDetail = getMainDetail(order);
-        Vehicle vehicle = mainDetail.getVehicle();
-        VehicleModel model = vehicleModelService.findByVehicle(vehicle);
-        PricingRule rule = pricingRuleService.getPricingRuleByCarmodel(model.getCarmodel());
-
-        long actualDaysCount = actualDays != null
-                ? actualDays
-                : ChronoUnit.DAYS.between(mainDetail.getStartTime(), LocalDateTime.now());
-
-        long expectedDays = ChronoUnit.DAYS.between(mainDetail.getStartTime(), mainDetail.getEndTime());
-
-        // Bắt đầu với giá đã thanh toán
-        BigDecimal total = order.getTotalPrice();
-
-        // Chỉ cộng thêm phí trễ nếu trả muộn
-        if (actualDaysCount > expectedDays) {
-            long lateDays = actualDaysCount - expectedDays;
-            BigDecimal lateFee = rule.getLateFeePerDay().multiply(BigDecimal.valueOf(lateDays));
-            total = total.add(lateFee);
-        }
-
-        //  KHÔNG cập nhật order, chỉ tạo response
-        OrderResponse response = mapToResponse(order, mainDetail);
-        response.setTotalPrice(total);
-        response.setStatus(order.getStatus()); // Giữ nguyên trạng thái hiện tại
-        return response;
     }
 
     @Override
@@ -850,12 +813,16 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
                     return s.startsWith("PENDING")
                             || s.equals("COMPLETED")
-                            || s.equals("AWAITING")             // đã thanh toán đặt cọc, chờ nhận xe
-                            || s.equals("PAID")                 // đã thanh toán hết dịch vụ
-                            || s.equals("RENTAL")               // đang thuê
+                            || s.equals("AWAITING")               // đã thanh toán đặt cọc, chờ nhận xe
+                            || s.equals("PAID")                   // đã thanh toán hết dịch vụ
+                            || s.equals("RENTAL")                 // đang thuê
                             || s.equals("DEPOSITED")
-                            || s.equals("SERVICE_PAID")         // đã đặt cọc
-                            || s.equals("PENDING_FINAL_PAYMENT"); // chờ thanh toán cuối (services + phí trễ)
+                            || s.equals("SERVICE_PAID")           // đã đặt cọc
+                            || s.equals("PENDING_FINAL_PAYMENT")  // chờ thanh toán cuối (services + phí trễ)
+                            || s.equals("FAILED")                 // đơn đã hủy
+                            || s.equals("REFUNDED")               // đơn đã hoàn tiền
+                            || s.equals("PAYMENT_FAILED")
+                            ||  s.equals("CANCELLED");      // thanh toán thất bại
                 })
                 //  sort theo createdAt mới nhất
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
@@ -1053,7 +1020,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (payments == null || payments.isEmpty()) {
             // Chưa thanh toán gì → trả về totalPrice
             BigDecimal totalPrice = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
-            System.out.println("⚠️ [calculateRemainingAmount] Không có payment SUCCESS nào → remainingAmount = " + totalPrice);
             return totalPrice;
         }
         
@@ -1068,7 +1034,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             BigDecimal result = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
                     ? remaining 
                     : BigDecimal.ZERO;
-            System.out.println("✅ [calculateRemainingAmount] FULL_PAYMENT SUCCESS → remainingAmount = " + result);
             return result;
         }
         
@@ -1087,11 +1052,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 BigDecimal result = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
                         ? remaining 
                         : BigDecimal.ZERO;
-                System.out.println("✅ [calculateRemainingAmount] FINAL_PAYMENT SUCCESS, còn remainingAmount từ DEPOSIT = " + result);
                 return result;
             }
             // Đã thanh toán hết
-            System.out.println("✅ [calculateRemainingAmount] FINAL_PAYMENT SUCCESS → remainingAmount = 0");
             return BigDecimal.ZERO;
         }
         
@@ -1106,13 +1069,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             BigDecimal result = remaining != null && remaining.compareTo(BigDecimal.ZERO) > 0 
                     ? remaining 
                     : BigDecimal.ZERO;
-            System.out.println("💰 [calculateRemainingAmount] DEPOSIT SUCCESS → remainingAmount = " + result);
             return result;
         }
         
         // Chưa thanh toán gì → trả về totalPrice
         BigDecimal totalPrice = order.getTotalPrice() != null ? order.getTotalPrice() : BigDecimal.ZERO;
-        System.out.println("⚠️ [calculateRemainingAmount] Không có payment SUCCESS nào → remainingAmount = " + totalPrice);
         return totalPrice;
     }
 
@@ -1150,6 +1111,30 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         return res;
     }
 
+    private OrderSimpleResponse mapToSimpleResponse(RentalOrder order) {
+        OrderSimpleResponse res = OrderSimpleResponse.builder()
+                .orderId(order.getOrderId())
+                .createdAt(order.getCreatedAt())
+                .totalPrice(order.getTotalPrice())
+                .status(order.getStatus())
+                .couponCode(order.getCoupon() != null ? order.getCoupon().getCode() : null)
+                .build();
+
+        // Lấy số tiền còn lại chưa thanh toán từ Payment
+        BigDecimal remainingAmount = calculateRemainingAmount(order);
+        res.setRemainingAmount(remainingAmount);
+
+        // Thông tin khách hàng
+        if (order.getCustomer() != null) {
+            res.setCustomerId(order.getCustomer().getUserId());
+            res.setCustomerName(order.getCustomer().getFullName());
+            res.setCustomerPhone(order.getCustomer().getPhone());
+            res.setCustomerEmail(order.getCustomer().getEmail());
+        }
+
+        return res;
+    }
+
     private JwtUserDetails currentUser() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !(auth.getPrincipal() instanceof JwtUserDetails jwt))
@@ -1168,7 +1153,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 return jwt.getUserId();
             }
         } catch (Exception e) {
-            System.err.println("Không thể lấy userId từ JWT: " + e.getMessage());
+            // Ignore error
         }
         return null;
     }
@@ -1203,13 +1188,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 int oldCount = schedule.getPickupCount();
                 schedule.setPickupCount(oldCount + 1);
                 employeeScheduleRepository.save(schedule);
-                System.out.println("Đã cập nhật pickup_count: " + oldCount + " → " + (oldCount + 1) +
-                        " cho staff " + staffId + " vào ca " + shiftTime);
             } else {
                 // Nếu không tìm thấy schedule, tự động tạo mới
-                System.out.println("Không tìm thấy schedule cho staff " + staffId +
-                        " vào ngày " + today + " ca " + shiftTime);
-
                 // Lấy thông tin staff để lấy station
                 User staff = userRepository.findById(staffId).orElse(null);
                 if (staff != null && staff.getRentalStation() != null) {
@@ -1222,15 +1202,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             .returnCount(0)
                             .build();
                     employeeScheduleRepository.save(newSchedule);
-                    System.out.println("Đã tự động tạo schedule mới và cập nhật pickup_count = 1");
-                } else {
-                    System.err.println("Không thể tạo schedule: Staff không có station");
                 }
             }
         } catch (Exception e) {
-            // Log error nhưng không throw exception để không ảnh hưởng flow chính
-            System.err.println("Failed to increment pickup count: " + e.getMessage());
-            e.printStackTrace();
+            // Ignore error để không ảnh hưởng flow chính
         }
     }
 
@@ -1238,11 +1213,9 @@ public class RentalOrderServiceImpl implements RentalOrderService {
      * Tăng return_count cho staff trong ca làm việc hiện tại
      */
     private void incrementReturnCount(UUID staffId) {
-        System.out.println("[incrementReturnCount] START - staffId: " + staffId);
         try {
             String shiftTime = getCurrentShiftTime();
             java.time.LocalDate today = java.time.LocalDate.now();
-            System.out.println("[incrementReturnCount] Shift: " + shiftTime + ", Date: " + today);
 
             Optional<EmployeeSchedule> scheduleOpt =
                     employeeScheduleRepository.findByStaff_UserIdAndShiftDateAndShiftTime(
@@ -1253,13 +1226,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 int oldCount = schedule.getReturnCount();
                 schedule.setReturnCount(oldCount + 1);
                 employeeScheduleRepository.save(schedule);
-                System.out.println("Đã cập nhật return_count: " + oldCount + " → " + (oldCount + 1) +
-                        " cho staff " + staffId + " vào ca " + shiftTime);
             } else {
                 // Nếu không tìm thấy schedule, tự động tạo mới
-                System.out.println("Không tìm thấy schedule cho staff " + staffId +
-                        " vào ngày " + today + " ca " + shiftTime);
-
                 // Lấy thông tin staff để lấy station
                 User staff = userRepository.findById(staffId).orElse(null);
                 if (staff != null && staff.getRentalStation() != null) {
@@ -1272,17 +1240,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             .returnCount(1)
                             .build();
                     employeeScheduleRepository.save(newSchedule);
-                    System.out.println("Đã tự động tạo schedule mới và cập nhật return_count = 1");
-                } else {
-                    System.err.println("Không thể tạo schedule: Staff không có station");
                 }
             }
         } catch (Exception e) {
-            // Log error nhưng không throw exception để không ảnh hưởng flow chính
-            System.err.println("Failed to increment return count: " + e.getMessage());
-            e.printStackTrace();
+            // Ignore error để không ảnh hưởng flow chính
         }
-        System.out.println("[incrementReturnCount] END");
     }
 
     /**
@@ -1291,21 +1253,14 @@ public class RentalOrderServiceImpl implements RentalOrderService {
      * Status: pending | confirmed | active | done | cancelled
      */
     private boolean hasOverlappingActiveBooking(Long vehicleId, LocalDateTime requestStart, LocalDateTime requestEnd) {
-        System.out.println("[hasOverlappingActiveBooking] Kiểm tra xe " + vehicleId +
-                         " cho thời gian: [" + requestStart + " - " + requestEnd + "]");
-
         // Lấy tất cả chi tiết đơn đang ACTIVE (pending, confirmed, active - không including done/cancelled)
         List<RentalOrderDetail> activeDetails = rentalOrderDetailRepository
                 .findByVehicle_VehicleIdAndStatusIn(vehicleId, List.of("pending", "confirmed", "active"));
-
-        System.out.println("Tổng booking active: " + activeDetails.size());
 
         for (RentalOrderDetail detail : activeDetails) {
             // Kiểm tra overlap: (start1 < end2) AND (end1 > start2)
             LocalDateTime existingStart = detail.getStartTime();
             LocalDateTime existingEnd = detail.getEndTime();
-
-            System.out.println("  - Booking: [" + existingStart + " - " + existingEnd + "] Status: " + detail.getStatus() + " Type: " + detail.getType());
 
             if (existingStart != null && existingEnd != null) {
                 // Nếu booking mới bắt đầu trước hoặc bằng lúc booking cũ kết thúc → OK
@@ -1313,16 +1268,11 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 // Nếu không thì bị overlap
                 boolean overlaps = requestStart.isBefore(existingEnd) && requestEnd.isAfter(existingStart);
                 if (overlaps) {
-                    System.out.println("Có booking trùng lặp: [" + existingStart + " - " + existingEnd +
-                                     "] với request [" + requestStart + " - " + requestEnd + "]");
                     return true; // Có overlap với booking đang active
-                } else {
-                    System.out.println("Không trùng lặp");
                 }
             }
         }
 
-        System.out.println("Không có booking trùng lặp cho xe " + vehicleId);
         return false; // Không có overlap
     }
 
@@ -1344,22 +1294,17 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     }
 
     private void checkAndTransitionToNextBooking(Long vehicleId) {
-        System.out.println("[checkAndTransitionToNextBooking] Kiểm tra xe " + vehicleId);
-
         // Bước 1: Kiểm tra trạng thái xe hiện tại
         Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
         if (vehicleOpt.isEmpty()) {
-            System.out.println("Không tìm thấy xe " + vehicleId);
             return;
         }
 
         Vehicle vehicle = vehicleOpt.get();
         String currentStatus = vehicle.getStatus();
-        System.out.println("Trạng thái xe hiện tại: " + currentStatus);
 
         // Bước 2: Chỉ kiểm tra và chuyển đổi NẾU xe đang AVAILABLE
         if (!"AVAILABLE".equals(currentStatus)) {
-            System.out.println("Xe không ở trạng thái AVAILABLE, bỏ qua kiểm tra booking");
             return;
         }
 
@@ -1373,7 +1318,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                 : waitingBookings;
 
         if (pendingBookings.isEmpty()) {
-            System.out.println("Xe AVAILABLE, không có booking tiếp theo trong hàng chờ");
             return;
         }
 
@@ -1387,14 +1331,10 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             LocalDateTime nextStart = nextBooking.getStartTime();
             LocalDateTime nextEnd = nextBooking.getEndTime();
 
-            System.out.println("Booking tiếp theo: [" + nextStart + " - " + nextEnd +
-                             "] Status: " + nextBooking.getStatus());
-
             // Nếu booking có status WAITING, chuyển về CONFIRMED để khách hàng có thể nhận xe
             if ("WAITING".equalsIgnoreCase(nextBooking.getStatus())) {
                 nextBooking.setStatus("CONFIRMED");
                 rentalOrderDetailRepository.save(nextBooking);
-                System.out.println("Đã chuyển status từ WAITING → CONFIRMED cho booking " + nextBooking.getOrder().getOrderId());
                 
                 // Gửi thông báo cho khách hàng rằng xe đã có sẵn
                 RentalOrder waitingOrder = nextBooking.getOrder();
@@ -1407,7 +1347,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                             .createdAt(LocalDateTime.now())
                             .build();
                     notificationRepository.save(notification);
-                    System.out.println("Đã gửi thông báo xe có sẵn cho khách hàng " + waitingOrder.getCustomer().getUserId());
                 }
             }
 
@@ -1428,7 +1367,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             vehicleTimelineRepository.save(timeline);
 
             // Cập nhật status dựa vào timeline
-            System.out.println("Xe " + vehicleId + " → cập nhật status dựa vào timeline sau khi tạo booking tiếp theo");
             updateVehicleStatusFromTimeline(vehicleId);
         }
     }
@@ -1438,8 +1376,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
      * Khi một khách hàng nhận xe, các khách hàng khác đã book cùng xe sẽ nhận thông báo
      */
     private void notifyOtherCustomersAndUpdateStatus(Long vehicleId, UUID currentOrderId, String plateNumber) {
-        System.out.println("[notifyOtherCustomersAndUpdateStatus] Xe " + vehicleId + " đã được khách hàng nhận, tìm các booking khác...");
-        
         // Tìm tất cả các booking của xe này có status PENDING hoặc CONFIRMED (không phải đơn hiện tại)
         List<RentalOrderDetail> otherBookings = rentalOrderDetailRepository
                 .findByVehicle_VehicleIdAndStatusIn(vehicleId, List.of("PENDING", "CONFIRMED"))
@@ -1449,8 +1385,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     return detail.getOrder() != null && !detail.getOrder().getOrderId().equals(currentOrderId);
                 })
                 .collect(Collectors.toList());
-
-        System.out.println("Tìm thấy " + otherBookings.size() + " booking khác của xe " + vehicleId);
 
         for (RentalOrderDetail detail : otherBookings) {
             RentalOrder otherOrder = detail.getOrder();
@@ -1463,7 +1397,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             // Cập nhật status của detail thành WAITING (hardcoded)
             detail.setStatus("WAITING");
             rentalOrderDetailRepository.save(detail);
-            System.out.println("Đã cập nhật status của order " + otherOrder.getOrderId() + " → WAITING");
 
             // Tạo thông báo cho khách hàng
             String message = "Xe " + (plateNumber != null ? plateNumber : "của bạn") + 
@@ -1476,11 +1409,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     .build();
             
             notificationRepository.save(notification);
-            System.out.println("Đã gửi thông báo cho khách hàng " + otherCustomer.getUserId() + 
-                            " (Order: " + otherOrder.getOrderId() + ")");
         }
-
-        System.out.println("Hoàn tất thông báo cho " + otherBookings.size() + " khách hàng khác");
     }
 
     /**
@@ -1494,7 +1423,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
     private void updateVehicleStatusFromTimeline(Long vehicleId) {
         Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
         if (vehicleOpt.isEmpty()) {
-            System.out.println("[updateVehicleStatusFromTimeline] Không tìm thấy xe " + vehicleId);
             return;
         }
 
@@ -1503,7 +1431,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         
         // CHỈ cập nhật nếu xe đang AVAILABLE
         if (!"AVAILABLE".equals(currentStatus)) {
-            System.out.println("[updateVehicleStatusFromTimeline] Xe " + vehicleId + " đang ở trạng thái " + currentStatus + ", không cập nhật");
             return;
         }
 
@@ -1523,7 +1450,6 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (hasActiveRental) {
             vehicle.setStatus("RENTAL");
             vehicleRepository.save(vehicle);
-            System.out.println("[updateVehicleStatusFromTimeline] Xe " + vehicleId + " → RENTAL (có timeline RENTAL đang active)");
             return;
         }
 
@@ -1536,13 +1462,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         if (nextBooked.isPresent()) {
             vehicle.setStatus("BOOKED");
             vehicleRepository.save(vehicle);
-            System.out.println("[updateVehicleStatusFromTimeline] Xe " + vehicleId + " → BOOKED (có booking sớm nhất: " + 
-                    nextBooked.get().getStartTime() + ")");
             return;
         }
-
-        // Không có timeline nào active hoặc trong tương lai → giữ AVAILABLE
-        System.out.println("[updateVehicleStatusFromTimeline] Xe " + vehicleId + " → giữ AVAILABLE (không có timeline active)");
     }
 }
 
