@@ -779,12 +779,16 @@ public class RentalOrderServiceImpl implements RentalOrderService {
                     String s = Optional.ofNullable(o.getStatus()).orElse("").toUpperCase();
                     return s.startsWith("PENDING")
                             || s.equals("COMPLETED")
-                            || s.equals("AWAITING")             // đã thanh toán đặt cọc, chờ nhận xe
-                            || s.equals("PAID")                 // đã thanh toán hết dịch vụ
-                            || s.equals("RENTAL")               // đang thuê
+                            || s.equals("AWAITING")               // đã thanh toán đặt cọc, chờ nhận xe
+                            || s.equals("PAID")                   // đã thanh toán hết dịch vụ
+                            || s.equals("RENTAL")                 // đang thuê
                             || s.equals("DEPOSITED")
-                            || s.equals("SERVICE_PAID")         // đã đặt cọc
-                            || s.equals("PENDING_FINAL_PAYMENT"); // chờ thanh toán cuối (services + phí trễ)
+                            || s.equals("SERVICE_PAID")           // đã đặt cọc
+                            || s.equals("PENDING_FINAL_PAYMENT")  // chờ thanh toán cuối (services + phí trễ)
+                            || s.equals("FAILED")                 // đơn đã hủy
+                            || s.equals("REFUNDED")               // đơn đã hoàn tiền
+                            || s.equals("PAYMENT_FAILED")
+                            ||  s.equals("CANCELLED");      // thanh toán thất bại
                 })
                 //  sort theo createdAt mới nhất
                 .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
