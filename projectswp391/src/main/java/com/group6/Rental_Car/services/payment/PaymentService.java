@@ -25,6 +25,13 @@ public interface PaymentService {
     List<PaymentResponse> getPaymentsByOrderId(UUID orderId);
     
     /**
+     * Lấy tổng số tiền đã hoàn của một đơn hàng
+     * @param orderId ID của đơn hàng
+     * @return Tổng số tiền đã hoàn (số dương)
+     */
+    BigDecimal getRefundedAmountByOrderId(UUID orderId);
+    
+    /**
      * Tự động kiểm tra và chuyển order sang COMPLETED nếu:
      * - Xe đang ở trạng thái CHECKING (đã trả xe)
      * - Đã thanh toán hết (remainingAmount = 0)
