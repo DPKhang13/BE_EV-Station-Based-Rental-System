@@ -1466,4 +1466,29 @@ public class PaymentServiceImpl implements PaymentService {
 
         return totalRefunded;
     }
+
+    @Override
+    public String getRefundReasonByOrderId(UUID orderId) {
+        // Kiểm tra order tồn tại
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // Kiểm tra order có status REFUNDED không
+        if (!"REFUNDED".equalsIgnoreCase(order.getStatus())) {
+            return null; // Đơn chưa được hoàn tiền
+        }
+
+        // Lấy payment REFUND đầu tiên (hoặc mới nhất) để lấy lý do
+        // Hiện tại Payment entity chưa có field lưu lý do, nên trả về null
+        // Có thể mở rộng sau bằng cách thêm field refundReason vào Payment entity
+        Optional<Payment> refundPayment = paymentRepository.findByRentalOrder_OrderId(orderId)
+                .stream()
+                .filter(p -> p.getPaymentType() == 4) // Type 4 = REFUND
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+
+        // Nếu có payment REFUND, có thể lấy lý do từ method hoặc description (nếu có)
+        // Hiện tại trả về null vì chưa có field lưu lý do
+        return refundPayment.isPresent() ? null : null;
+    }
 }

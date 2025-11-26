@@ -32,6 +32,13 @@ public interface PaymentService {
     BigDecimal getRefundedAmountByOrderId(UUID orderId);
     
     /**
+     * Lấy lý do hoàn đơn của một đơn hàng
+     * @param orderId ID của đơn hàng
+     * @return Lý do hoàn đơn (có thể null nếu chưa có)
+     */
+    String getRefundReasonByOrderId(UUID orderId);
+    
+    /**
      * Tự động kiểm tra và chuyển order sang COMPLETED nếu:
      * - Xe đang ở trạng thái CHECKING (đã trả xe)
      * - Đã thanh toán hết (remainingAmount = 0)

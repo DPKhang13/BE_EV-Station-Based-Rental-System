@@ -143,6 +143,17 @@ public class PaymentController {
                 "refundedAmount", refundedAmount
         ));
     }
+
+    @GetMapping("/order/{orderId}/refund-reason")
+    @Operation(summary = "Get refund reason for an order")
+    public ResponseEntity<Map<String, Object>> getRefundReasonByOrderId(@PathVariable UUID orderId) {
+        log.info("📝 Getting refund reason for order: {}", orderId);
+        String refundReason = paymentService.getRefundReasonByOrderId(orderId);
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("orderId", orderId);
+        response.put("refundReason", refundReason != null ? refundReason : "");
+        return ResponseEntity.ok(response);
+    }
 }
 
 
