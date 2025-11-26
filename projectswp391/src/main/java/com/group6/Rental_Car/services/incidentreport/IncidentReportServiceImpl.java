@@ -123,7 +123,7 @@ public class IncidentReportServiceImpl implements IncidentReportService {
             response.setVehicleId(incidentReport.getVehicle().getVehicleId());
         }
         if (incidentReport.getReportedBy() != null) {
-            response.setReportedBy(incidentReport.getReportedBy().getUserId());
+            response.setFullName(incidentReport.getReportedBy().getFullName());
         }
         return response;
     }
