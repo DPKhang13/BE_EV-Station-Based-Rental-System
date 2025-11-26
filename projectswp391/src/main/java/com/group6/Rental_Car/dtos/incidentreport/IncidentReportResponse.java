@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Data
 @AllArgsConstructor
@@ -13,7 +12,7 @@ import java.util.UUID;
 public class IncidentReportResponse {
     private Integer incidentId;
     private Long vehicleId;
-    private UUID reportedBy;
+    private String fullName;
     private String description;
     private LocalDateTime createdAt;
 }
