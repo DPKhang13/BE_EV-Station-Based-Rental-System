@@ -328,13 +328,21 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
         }
 
-        // Cập nhật TẤT CẢ các detail của order thành FAILED
+        // Chỉ set FAILED cho các detail chưa thanh toán (status != SUCCESS)
+        // Giữ nguyên các detail đã SUCCESS
         List<RentalOrderDetail> allDetails = order.getDetails();
         if (allDetails != null && !allDetails.isEmpty()) {
+            List<RentalOrderDetail> detailsToUpdate = new ArrayList<>();
             for (RentalOrderDetail detail : allDetails) {
-                detail.setStatus("FAILED");
+                // Chỉ set FAILED nếu detail chưa SUCCESS
+                if (!"SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                    detail.setStatus("FAILED");
+                    detailsToUpdate.add(detail);
+                }
             }
-            rentalOrderDetailRepository.saveAll(allDetails);
+            if (!detailsToUpdate.isEmpty()) {
+                rentalOrderDetailRepository.saveAll(detailsToUpdate);
+            }
         }
         
         // Cập nhật status của order thành FAILED
