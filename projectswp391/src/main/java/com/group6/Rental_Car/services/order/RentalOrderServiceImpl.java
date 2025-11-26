@@ -341,14 +341,45 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         order.setStatus("FAILED");
         rentalOrderRepository.save(order);
 
-        // Giải phóng xe - cập nhật status dựa vào timeline
+        // Giải phóng xe - xóa timeline và cập nhật lại status xe
         Vehicle vehicle = mainDetail.getVehicle();
         if (vehicle != null) {
+            Long vehicleId = vehicle.getVehicleId();
+
             // Xóa timeline của đơn hàng đã hủy
-            deleteTimelineForOrder(orderId, vehicle.getVehicleId());
-            
-            // Cập nhật status dựa vào timeline còn lại
-            updateVehicleStatusFromTimeline(vehicle.getVehicleId());
+            deleteTimelineForOrder(orderId, vehicleId);
+
+            // Tính lại status xe dựa trên các timeline còn lại (kể cả khi xe đang không ở trạng thái AVAILABLE)
+            if (vehicleId != null) {
+                List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                LocalDateTime now = LocalDateTime.now();
+
+                boolean hasActiveRental = timelines.stream()
+                        .anyMatch(t -> {
+                            if (!"RENTAL".equalsIgnoreCase(t.getStatus())) return false;
+                            LocalDateTime start = t.getStartTime();
+                            LocalDateTime end = t.getEndTime();
+                            return start != null && end != null &&
+                                    !now.isBefore(start) && !now.isAfter(end);
+                        });
+
+                if (hasActiveRental) {
+                    vehicle.setStatus("RENTAL");
+                } else {
+                    var nextBooked = timelines.stream()
+                            .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus()))
+                            .filter(t -> t.getStartTime() != null && t.getStartTime().isAfter(now))
+                            .min(Comparator.comparing(VehicleTimeline::getStartTime));
+
+                    if (nextBooked.isPresent()) {
+                        vehicle.setStatus("BOOKED");
+                    } else {
+                        vehicle.setStatus("AVAILABLE");
+                    }
+                }
+
+                vehicleRepository.save(vehicle);
+            }
         }
 
         // Gửi thông báo cho khách hàng

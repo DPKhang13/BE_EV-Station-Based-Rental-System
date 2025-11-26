@@ -38,7 +38,6 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final UserRepository userRepository;
-    private final OrderServiceRepository orderServiceRepository;
     private final VehicleRepository vehicleRepository;
     private final VehicleTimelineRepository vehicleTimelineRepository;
 
@@ -934,12 +933,6 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepository.save(originalPayment);
         }
 
-        // Chỉ set REFUNDED nếu hoàn toàn bộ
-        if (refundAmount.compareTo(originalPayment.getAmount()) >= 0) {
-            order.setStatus("REFUNDED");
-            rentalOrderRepository.save(order);
-        }
-
         RentalOrderDetail rentalDetail = order.getDetails().stream()
                 .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
                 .findFirst()
@@ -963,6 +956,57 @@ public class PaymentServiceImpl implements PaymentService {
 
         // Ghi transaction với số tiền âm
         recordTransaction(order, refundPayment, "REFUND");
+
+        // Sau khi hoàn tiền (full hoặc partial) → coi như đơn đã được hoàn,
+        // cập nhật trạng thái order & trả xe về trạng thái phù hợp (thường là AVAILABLE)
+        order.setStatus("REFUNDED");
+        rentalOrderRepository.save(order);
+
+        if (rentalDetail != null && rentalDetail.getVehicle() != null) {
+            Vehicle vehicle = rentalDetail.getVehicle();
+            Long vehicleId = vehicle.getVehicleId();
+
+            // Xóa timeline gắn với đơn này
+            if (vehicleId != null) {
+                var timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                var toDelete = timelines.stream()
+                        .filter(t -> t.getOrder() != null && t.getOrder().getOrderId().equals(orderId))
+                        .toList();
+                if (!toDelete.isEmpty()) {
+                    vehicleTimelineRepository.deleteAll(toDelete);
+                }
+
+                // Tính lại status xe dựa trên các timeline còn lại
+                var remaining = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                LocalDateTime now = LocalDateTime.now();
+
+                boolean hasActiveRental = remaining.stream()
+                        .anyMatch(t -> {
+                            if (!"RENTAL".equalsIgnoreCase(t.getStatus())) return false;
+                            LocalDateTime start = t.getStartTime();
+                            LocalDateTime end = t.getEndTime();
+                            return start != null && end != null &&
+                                    !now.isBefore(start) && !now.isAfter(end);
+                        });
+
+                if (hasActiveRental) {
+                    vehicle.setStatus("RENTAL");
+                } else {
+                    var nextBooked = remaining.stream()
+                            .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus()))
+                            .filter(t -> t.getStartTime() != null && t.getStartTime().isAfter(now))
+                            .min(java.util.Comparator.comparing(VehicleTimeline::getStartTime));
+
+                    if (nextBooked.isPresent()) {
+                        vehicle.setStatus("BOOKED");
+                    } else {
+                        vehicle.setStatus("AVAILABLE");
+                    }
+                }
+
+                vehicleRepository.save(vehicle);
+            }
+        }
 
         return PaymentResponse.builder()
                 .paymentId(refundPayment.getPaymentId())
