@@ -132,6 +132,17 @@ public class PaymentController {
         List<PaymentResponse> payments = paymentService.getPaymentsByOrderId(orderId);
         return ResponseEntity.ok(payments);
     }
+
+    @GetMapping("/order/{orderId}/refunded-amount")
+    @Operation(summary = "Get total refunded amount for an order")
+    public ResponseEntity<Map<String, Object>> getRefundedAmountByOrderId(@PathVariable UUID orderId) {
+        log.info("💰 Getting refunded amount for order: {}", orderId);
+        BigDecimal refundedAmount = paymentService.getRefundedAmountByOrderId(orderId);
+        return ResponseEntity.ok(Map.of(
+                "orderId", orderId,
+                "refundedAmount", refundedAmount
+        ));
+    }
 }
 
 

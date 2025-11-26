@@ -933,29 +933,14 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepository.save(originalPayment);
         }
 
+        // Ghi transaction với số tiền âm
+        recordTransaction(order, refundPayment, "REFUND");
+
+        // Lấy rentalDetail để cập nhật vehicle status (không tạo detail mới)
         RentalOrderDetail rentalDetail = order.getDetails().stream()
                 .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
                 .findFirst()
                 .orElse(null);
-
-        LocalDateTime startTime = rentalDetail != null ? rentalDetail.getStartTime() : LocalDateTime.now();
-        LocalDateTime endTime = rentalDetail != null ? rentalDetail.getEndTime() : LocalDateTime.now();
-
-        RentalOrderDetail refundDetail = RentalOrderDetail.builder()
-                .order(order)
-                .vehicle(order.getDetails().getFirst().getVehicle())
-                .type("REFUND")
-                .startTime(startTime)
-                .endTime(endTime)
-                .price(refundAmount)
-                .status("SUCCESS")
-                .description("Hoàn tiền đơn thuê #" + order.getOrderId() + " - Số tiền: " + refundAmount)
-                .build();
-
-        rentalOrderDetailRepository.save(refundDetail);
-
-        // Ghi transaction với số tiền âm
-        recordTransaction(order, refundPayment, "REFUND");
 
         // Sau khi hoàn tiền (full hoặc partial) → coi như đơn đã được hoàn,
         // cập nhật trạng thái order & trả xe về trạng thái phù hợp (thường là AVAILABLE)
@@ -1460,5 +1445,25 @@ public class PaymentServiceImpl implements PaymentService {
                         .status(payment.getStatus())
                         .build())
                 .toList();
+    }
+
+    @Override
+    public BigDecimal getRefundedAmountByOrderId(UUID orderId) {
+        // Kiểm tra order tồn tại
+        rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // Lấy tất cả payment của order
+        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(orderId);
+
+        // Tính tổng số tiền đã hoàn (payment type = 4 REFUND, status = SUCCESS)
+        // Lấy giá trị tuyệt đối vì amount là số âm
+        BigDecimal totalRefunded = payments.stream()
+                .filter(p -> p.getPaymentType() == 4) // Type 4 = REFUND
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                .map(p -> p.getAmount().abs()) // Lấy giá trị tuyệt đối (vì amount là số âm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return totalRefunded;
     }
 }
