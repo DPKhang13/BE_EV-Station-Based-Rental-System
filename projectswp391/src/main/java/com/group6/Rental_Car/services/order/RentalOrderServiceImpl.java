@@ -232,12 +232,19 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         // Giải phóng xe cũ - cập nhật status dựa vào timeline
         updateVehicleStatusFromTimeline(oldVehicleId);
 
-        // Gán xe mới
-        mainDetail.setVehicle(newVehicle);
-        if (note != null && !note.isBlank()) {
-            mainDetail.setDescription(note);
+        // Đổi vehicle cho TẤT CẢ các detail trong order (không chỉ RENTAL)
+        List<RentalOrderDetail> allDetails = order.getDetails();
+        if (allDetails != null && !allDetails.isEmpty()) {
+            for (RentalOrderDetail detail : allDetails) {
+                // Đổi vehicle cho tất cả detail
+                detail.setVehicle(newVehicle);
+                // Thêm note vào mainDetail (RENTAL) nếu có
+                if ("RENTAL".equalsIgnoreCase(detail.getType()) && note != null && !note.isBlank()) {
+                    detail.setDescription(note);
+                }
+            }
+            rentalOrderDetailRepository.saveAll(allDetails);
         }
-        rentalOrderDetailRepository.save(mainDetail);
 
         // ====== TẠO TIMELINE MỚI ======
         VehicleTimeline timeline = VehicleTimeline.builder()
