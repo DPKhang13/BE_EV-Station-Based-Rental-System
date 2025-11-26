@@ -317,7 +317,7 @@ public class RentalOrderServiceImpl implements RentalOrderService {
         String currentStatus = order.getStatus();
         if (currentStatus != null) {
             String upperStatus = currentStatus.toUpperCase();
-            if (upperStatus.equals("COMPLETED") || upperStatus.equals("FAILED")) {
+            if (upperStatus.equals("COMPLETED") || upperStatus.equals("FAILED") || upperStatus.equals("CANCELLED")) {
                 throw new BadRequestException("Không thể hủy đơn hàng đã hoàn thành hoặc đã hủy");
             }
         }
@@ -328,12 +328,17 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             throw new BadRequestException("Không tìm thấy chi tiết đơn thuê");
         }
 
-        // Chỉ set FAILED cho các detail chưa thanh toán (status != SUCCESS)
+        // Chỉ set FAILED cho các detail nhỏ (không phải RENTAL) chưa thanh toán (status != SUCCESS)
+        // KHÔNG set FAILED cho detail RENTAL
         // Giữ nguyên các detail đã SUCCESS
         List<RentalOrderDetail> allDetails = order.getDetails();
         if (allDetails != null && !allDetails.isEmpty()) {
             List<RentalOrderDetail> detailsToUpdate = new ArrayList<>();
             for (RentalOrderDetail detail : allDetails) {
+                // Bỏ qua detail RENTAL
+                if ("RENTAL".equalsIgnoreCase(detail.getType())) {
+                    continue;
+                }
                 // Chỉ set FAILED nếu detail chưa SUCCESS
                 if (!"SUCCESS".equalsIgnoreCase(detail.getStatus())) {
                     detail.setStatus("FAILED");
@@ -345,8 +350,8 @@ public class RentalOrderServiceImpl implements RentalOrderService {
             }
         }
         
-        // Cập nhật status của order thành FAILED
-        order.setStatus("FAILED");
+        // Cập nhật status của order thành CANCELLED
+        order.setStatus("CANCELLED");
         rentalOrderRepository.save(order);
 
         // Giải phóng xe - xóa timeline và cập nhật lại status xe
