@@ -32,6 +32,12 @@ public class OrderController {
         return ResponseEntity.ok(orders);
     }
 
+    @GetMapping("/getAll/simple")
+    public ResponseEntity<List<OrderSimpleResponse>> getAllSimple() {
+        List<OrderSimpleResponse> orders = rentalOrderService.getRentalOrdersSimple();
+        return ResponseEntity.ok(orders);
+    }
+
  
     @GetMapping("/get/my-orders")
     public ResponseEntity<List<OrderResponse>> getMyOrders(@AuthenticationPrincipal JwtUserDetails userDetails) {
@@ -89,14 +95,6 @@ public class OrderController {
             @RequestBody(required = false) OrderReturnRequest request) {
 
         OrderResponse response = rentalOrderService.confirmReturn(orderId, request);
-        return ResponseEntity.ok(response);
-    }
-    @GetMapping("/{orderId}/preview-return")
-    public ResponseEntity<OrderResponse> previewReturn(
-            @PathVariable UUID orderId,
-            @RequestParam(required = false) Integer actualHours) {
-
-        OrderResponse response = rentalOrderService.previewReturn(orderId, actualHours);
         return ResponseEntity.ok(response);
     }
     @GetMapping("/pending-verification")

@@ -129,8 +129,8 @@ public class VehicleServiceImpl implements VehicleService {
         // status (nếu client gửi lên)
         if (req.getStatus() != null) {
             String status = req.getStatus().trim().toLowerCase();
-            if (!status.equalsIgnoreCase("available") && !status.equalsIgnoreCase("rented") && !status.equalsIgnoreCase("maintenance")) {
-                throw new BadRequestException("status must be one of: available|rented|maintenance");
+            if (!status.equalsIgnoreCase("available") && !status.equalsIgnoreCase("rental") && !status.equalsIgnoreCase("maintenance")) {
+                throw new BadRequestException("status must be one of: available|rental|maintenance");
             }
             vehicle.setStatus(status);
         }
@@ -223,7 +223,7 @@ public class VehicleServiceImpl implements VehicleService {
     }
 
     @Override
-    public List<VehicleResponse> getAvailableVehiclesByStation(Integer stationId) {
+    public List<VehicleResponse> getAvailableVehiclesByStation(Integer stationId, String carmodel) {
         // Validate stationId
         if (stationId == null || stationId <= 0) {
             throw new BadRequestException("stationId phải là số dương");
@@ -235,6 +235,17 @@ public class VehicleServiceImpl implements VehicleService {
 
         // Lấy xe có status AVAILABLE theo station, sắp xếp theo biển số
         return vehicleRepository.findByRentalStation_StationIdAndStatusOrderByPlateNumberAsc(stationId, "AVAILABLE").stream()
+                .filter(v -> {
+                    // Nếu có carmodel, filter theo carmodel
+                    if (carmodel != null && !carmodel.isBlank()) {
+                        VehicleModel model = vehicleModelService.findByVehicle(v);
+                        if (model == null || model.getCarmodel() == null) {
+                            return false;
+                        }
+                        return model.getCarmodel().equalsIgnoreCase(carmodel.trim());
+                    }
+                    return true;
+                })
                 .map(v -> vehicleModelService.convertToDto(v, vehicleModelService.findByVehicle(v)))
                 .collect(Collectors.toList());
     }
@@ -493,7 +504,6 @@ public class VehicleServiceImpl implements VehicleService {
             // Có booking trong tương lai → set xe thành BOOKED
             vehicle.setStatus("BOOKED");
             vehicleRepository.save(vehicle);
-            System.out.println("✅ Xe " + vehicle.getVehicleId() + " có booking trong tương lai → Tự động set status = BOOKED");
         }
     }
 

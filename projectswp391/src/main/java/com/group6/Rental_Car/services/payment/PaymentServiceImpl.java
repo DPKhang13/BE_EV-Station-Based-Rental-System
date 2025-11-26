@@ -887,25 +887,58 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public PaymentResponse refund(UUID orderId) {
+    public PaymentResponse refund(UUID orderId, BigDecimal amount) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        Payment payment = paymentRepository.findByRentalOrder_OrderId(orderId)
+        // Lấy payment SUCCESS đầu tiên để tính số tiền có thể hoàn
+        Payment originalPayment = paymentRepository.findByRentalOrder_OrderId(orderId)
                 .stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for order"));
 
-        BigDecimal refundAmount = payment.getAmount();
+        // Nếu không nhập amount, mặc định hoàn toàn bộ số tiền đã thanh toán
+        BigDecimal refundAmount;
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            refundAmount = originalPayment.getAmount();
+        } else {
+            refundAmount = amount;
+            // Validate: số tiền hoàn không được vượt quá số tiền đã thanh toán
+            if (refundAmount.compareTo(originalPayment.getAmount()) > 0) {
+                throw new BadRequestException("Số tiền hoàn không được vượt quá số tiền đã thanh toán: " + originalPayment.getAmount());
+            }
+        }
+
         if (refundAmount.compareTo(BigDecimal.ZERO) <= 0)
             throw new BadRequestException("Không có số tiền nào để hoàn");
 
-        payment.setStatus(PaymentStatus.SUCCESS);
-        payment.setPaymentType((short) 4);
-        order.setStatus("REFUNDED");
+        // Tạo payment mới với số tiền âm (hoàn tiền)
+        Payment refundPayment = Payment.builder()
+                .rentalOrder(order)
+                .amount(refundAmount.negate()) // Số tiền âm để thể hiện hoàn tiền
+                .remainingAmount(BigDecimal.ZERO)
+                .status(PaymentStatus.SUCCESS)
+                .paymentType((short) 4) // Type 4 = REFUND
+                .method("INTERNAL_REFUND")
+                .build();
 
-        paymentRepository.save(payment);
-        rentalOrderRepository.save(order);
+        paymentRepository.save(refundPayment);
+
+        // Cập nhật remainingAmount của payment gốc (nếu hoàn một phần)
+        if (refundAmount.compareTo(originalPayment.getAmount()) < 0) {
+            BigDecimal newRemaining = originalPayment.getRemainingAmount() != null 
+                    ? originalPayment.getRemainingAmount().add(refundAmount)
+                    : refundAmount;
+            originalPayment.setRemainingAmount(newRemaining);
+            paymentRepository.save(originalPayment);
+        }
+
+        // Chỉ set REFUNDED nếu hoàn toàn bộ
+        if (refundAmount.compareTo(originalPayment.getAmount()) >= 0) {
+            order.setStatus("REFUNDED");
+            rentalOrderRepository.save(order);
+        }
 
         RentalOrderDetail rentalDetail = order.getDetails().stream()
                 .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
@@ -923,36 +956,26 @@ public class PaymentServiceImpl implements PaymentService {
                 .endTime(endTime)
                 .price(refundAmount)
                 .status("SUCCESS")
-                .description("Hoàn tiền đơn thuê #" + order.getOrderId())
+                .description("Hoàn tiền đơn thuê #" + order.getOrderId() + " - Số tiền: " + refundAmount)
                 .build();
 
         rentalOrderDetailRepository.save(refundDetail);
 
-        recordTransaction(order, payment, "REFUND");
+        // Ghi transaction với số tiền âm
+        recordTransaction(order, refundPayment, "REFUND");
 
         return PaymentResponse.builder()
-                .paymentId(payment.getPaymentId())
+                .paymentId(refundPayment.getPaymentId())
                 .orderId(order.getOrderId())
                 .amount(refundAmount)
-                .remainingAmount(BigDecimal.ZERO)
+                .remainingAmount(originalPayment.getRemainingAmount() != null 
+                        ? originalPayment.getRemainingAmount() 
+                        : BigDecimal.ZERO)
                 .method("INTERNAL_REFUND")
                 .status(PaymentStatus.SUCCESS)
                 .paymentType((short) 4)
-                .message("Hoàn tiền thành công")
+                .message("Hoàn tiền thành công: " + refundAmount)
                 .build();
-    }
-
-    private void deleteTimelineForOrder(UUID orderId, Long vehicleId) {
-        if (vehicleId == null) return;
-
-        List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
-        List<VehicleTimeline> toDelete = timelines.stream()
-                .filter(t -> t.getOrder() != null && t.getOrder().getOrderId().equals(orderId))
-                .toList();
-
-        if (!toDelete.isEmpty()) {
-            vehicleTimelineRepository.deleteAll(toDelete);
-        }
     }
 
     @Override

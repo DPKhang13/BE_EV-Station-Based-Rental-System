@@ -21,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -64,8 +65,10 @@ public class PaymentController {
 
     @PostMapping("/refund/{orderId}")
     @Operation(summary = "Refund payment")
-    public ResponseEntity<PaymentResponse> refund(@PathVariable UUID orderId) {
-        PaymentResponse response = paymentService.refund(orderId);
+    public ResponseEntity<PaymentResponse> refund(
+            @PathVariable UUID orderId,
+            @RequestParam(required = false) BigDecimal amount) {
+        PaymentResponse response = paymentService.refund(orderId, amount);
         return ResponseEntity.ok(response);
     }
 
