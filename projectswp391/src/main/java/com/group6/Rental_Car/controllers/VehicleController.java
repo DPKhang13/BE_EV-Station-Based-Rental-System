@@ -105,6 +105,17 @@ public class VehicleController {
         return ResponseEntity.ok(vehicles);
     }
 
+<<<<<<< HEAD
+=======
+    @GetMapping("/station/{stationId}/available")
+    public ResponseEntity<List<VehicleResponse>> getAvailableVehiclesByStation(
+            @PathVariable Integer stationId,
+            @RequestParam(required = false) String carmodel) {
+        List<VehicleResponse> vehicles = vehicleService.getAvailableVehiclesByStation(stationId, carmodel);
+        return ResponseEntity.ok(vehicles);
+    }
+
+>>>>>>> 42511921db2cf6ea3186d9ad5c681a98adf1061b
     @GetMapping("/carmodel/{carmodel}")
     public ResponseEntity<List<VehicleResponse>> getVehiclesByCarmodel(
             @PathVariable String carmodel) {

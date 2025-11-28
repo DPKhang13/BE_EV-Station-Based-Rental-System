@@ -21,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -64,8 +65,10 @@ public class PaymentController {
 
     @PostMapping("/refund/{orderId}")
     @Operation(summary = "Refund payment")
-    public ResponseEntity<PaymentResponse> refund(@PathVariable UUID orderId) {
-        PaymentResponse response = paymentService.refund(orderId);
+    public ResponseEntity<PaymentResponse> refund(
+            @PathVariable UUID orderId,
+            @RequestParam(required = false) BigDecimal amount) {
+        PaymentResponse response = paymentService.refund(orderId, amount);
         return ResponseEntity.ok(response);
     }
 
@@ -128,6 +131,28 @@ public class PaymentController {
         log.info("📋 Getting payments for order: {}", orderId);
         List<PaymentResponse> payments = paymentService.getPaymentsByOrderId(orderId);
         return ResponseEntity.ok(payments);
+    }
+
+    @GetMapping("/order/{orderId}/refunded-amount")
+    @Operation(summary = "Get total refunded amount for an order")
+    public ResponseEntity<Map<String, Object>> getRefundedAmountByOrderId(@PathVariable UUID orderId) {
+        log.info("💰 Getting refunded amount for order: {}", orderId);
+        BigDecimal refundedAmount = paymentService.getRefundedAmountByOrderId(orderId);
+        return ResponseEntity.ok(Map.of(
+                "orderId", orderId,
+                "refundedAmount", refundedAmount
+        ));
+    }
+
+    @GetMapping("/order/{orderId}/refund-reason")
+    @Operation(summary = "Get refund reason for an order")
+    public ResponseEntity<Map<String, Object>> getRefundReasonByOrderId(@PathVariable UUID orderId) {
+        log.info("📝 Getting refund reason for order: {}", orderId);
+        String refundReason = paymentService.getRefundReasonByOrderId(orderId);
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("orderId", orderId);
+        response.put("refundReason", refundReason != null ? refundReason : "");
+        return ResponseEntity.ok(response);
     }
 }
 

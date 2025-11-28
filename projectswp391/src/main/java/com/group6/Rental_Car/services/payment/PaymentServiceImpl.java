@@ -38,7 +38,6 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final UserRepository userRepository;
-    private final OrderServiceRepository orderServiceRepository;
     private final VehicleRepository vehicleRepository;
     private final VehicleTimelineRepository vehicleTimelineRepository;
 
@@ -887,72 +886,125 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public PaymentResponse refund(UUID orderId) {
+    public PaymentResponse refund(UUID orderId, BigDecimal amount) {
         RentalOrder order = rentalOrderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
-        Payment payment = paymentRepository.findByRentalOrder_OrderId(orderId)
+        // Lấy payment SUCCESS đầu tiên để tính số tiền có thể hoàn
+        Payment originalPayment = paymentRepository.findByRentalOrder_OrderId(orderId)
                 .stream()
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for order"));
 
-        BigDecimal refundAmount = payment.getAmount();
+        // Nếu không nhập amount, mặc định hoàn toàn bộ số tiền đã thanh toán
+        BigDecimal refundAmount;
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            refundAmount = originalPayment.getAmount();
+        } else {
+            refundAmount = amount;
+            // Validate: số tiền hoàn không được vượt quá số tiền đã thanh toán
+            if (refundAmount.compareTo(originalPayment.getAmount()) > 0) {
+                throw new BadRequestException("Số tiền hoàn không được vượt quá số tiền đã thanh toán: " + originalPayment.getAmount());
+            }
+        }
+
         if (refundAmount.compareTo(BigDecimal.ZERO) <= 0)
             throw new BadRequestException("Không có số tiền nào để hoàn");
 
-        payment.setStatus(PaymentStatus.SUCCESS);
-        payment.setPaymentType((short) 4);
-        order.setStatus("REFUNDED");
+        // Tạo payment mới với số tiền âm (hoàn tiền)
+        Payment refundPayment = Payment.builder()
+                .rentalOrder(order)
+                .amount(refundAmount.negate()) // Số tiền âm để thể hiện hoàn tiền
+                .remainingAmount(BigDecimal.ZERO)
+                .status(PaymentStatus.SUCCESS)
+                .paymentType((short) 4) // Type 4 = REFUND
+                .method("INTERNAL_REFUND")
+                .build();
 
-        paymentRepository.save(payment);
-        rentalOrderRepository.save(order);
+        paymentRepository.save(refundPayment);
 
+        // Cập nhật remainingAmount của payment gốc (nếu hoàn một phần)
+        if (refundAmount.compareTo(originalPayment.getAmount()) < 0) {
+            BigDecimal newRemaining = originalPayment.getRemainingAmount() != null 
+                    ? originalPayment.getRemainingAmount().add(refundAmount)
+                    : refundAmount;
+            originalPayment.setRemainingAmount(newRemaining);
+            paymentRepository.save(originalPayment);
+        }
+
+        // Ghi transaction với số tiền âm
+        recordTransaction(order, refundPayment, "REFUND");
+
+        // Lấy rentalDetail để cập nhật vehicle status (không tạo detail mới)
         RentalOrderDetail rentalDetail = order.getDetails().stream()
                 .filter(d -> "RENTAL".equalsIgnoreCase(d.getType()))
                 .findFirst()
                 .orElse(null);
 
-        LocalDateTime startTime = rentalDetail != null ? rentalDetail.getStartTime() : LocalDateTime.now();
-        LocalDateTime endTime = rentalDetail != null ? rentalDetail.getEndTime() : LocalDateTime.now();
+        // Sau khi hoàn tiền (full hoặc partial) → coi như đơn đã được hoàn,
+        // cập nhật trạng thái order & trả xe về trạng thái phù hợp (thường là AVAILABLE)
+        order.setStatus("REFUNDED");
+        rentalOrderRepository.save(order);
 
-        RentalOrderDetail refundDetail = RentalOrderDetail.builder()
-                .order(order)
-                .vehicle(order.getDetails().getFirst().getVehicle())
-                .type("REFUND")
-                .startTime(startTime)
-                .endTime(endTime)
-                .price(refundAmount)
-                .status("SUCCESS")
-                .description("Hoàn tiền đơn thuê #" + order.getOrderId())
-                .build();
+        if (rentalDetail != null && rentalDetail.getVehicle() != null) {
+            Vehicle vehicle = rentalDetail.getVehicle();
+            Long vehicleId = vehicle.getVehicleId();
 
-        rentalOrderDetailRepository.save(refundDetail);
+            // Xóa timeline gắn với đơn này
+            if (vehicleId != null) {
+                var timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                var toDelete = timelines.stream()
+                        .filter(t -> t.getOrder() != null && t.getOrder().getOrderId().equals(orderId))
+                        .toList();
+                if (!toDelete.isEmpty()) {
+                    vehicleTimelineRepository.deleteAll(toDelete);
+                }
 
-        recordTransaction(order, payment, "REFUND");
+                // Tính lại status xe dựa trên các timeline còn lại
+                var remaining = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
+                LocalDateTime now = LocalDateTime.now();
+
+                boolean hasActiveRental = remaining.stream()
+                        .anyMatch(t -> {
+                            if (!"RENTAL".equalsIgnoreCase(t.getStatus())) return false;
+                            LocalDateTime start = t.getStartTime();
+                            LocalDateTime end = t.getEndTime();
+                            return start != null && end != null &&
+                                    !now.isBefore(start) && !now.isAfter(end);
+                        });
+
+                if (hasActiveRental) {
+                    vehicle.setStatus("RENTAL");
+                } else {
+                    var nextBooked = remaining.stream()
+                            .filter(t -> "BOOKED".equalsIgnoreCase(t.getStatus()))
+                            .filter(t -> t.getStartTime() != null && t.getStartTime().isAfter(now))
+                            .min(java.util.Comparator.comparing(VehicleTimeline::getStartTime));
+
+                    if (nextBooked.isPresent()) {
+                        vehicle.setStatus("BOOKED");
+                    } else {
+                        vehicle.setStatus("AVAILABLE");
+                    }
+                }
+
+                vehicleRepository.save(vehicle);
+            }
+        }
 
         return PaymentResponse.builder()
-                .paymentId(payment.getPaymentId())
+                .paymentId(refundPayment.getPaymentId())
                 .orderId(order.getOrderId())
                 .amount(refundAmount)
-                .remainingAmount(BigDecimal.ZERO)
+                .remainingAmount(originalPayment.getRemainingAmount() != null 
+                        ? originalPayment.getRemainingAmount() 
+                        : BigDecimal.ZERO)
                 .method("INTERNAL_REFUND")
                 .status(PaymentStatus.SUCCESS)
                 .paymentType((short) 4)
-                .message("Hoàn tiền thành công")
+                .message("Hoàn tiền thành công: " + refundAmount)
                 .build();
-    }
-
-    private void deleteTimelineForOrder(UUID orderId, Long vehicleId) {
-        if (vehicleId == null) return;
-
-        List<VehicleTimeline> timelines = vehicleTimelineRepository.findByVehicle_VehicleId(vehicleId);
-        List<VehicleTimeline> toDelete = timelines.stream()
-                .filter(t -> t.getOrder() != null && t.getOrder().getOrderId().equals(orderId))
-                .toList();
-
-        if (!toDelete.isEmpty()) {
-            vehicleTimelineRepository.deleteAll(toDelete);
-        }
     }
 
     @Override
@@ -1393,5 +1445,50 @@ public class PaymentServiceImpl implements PaymentService {
                         .status(payment.getStatus())
                         .build())
                 .toList();
+    }
+
+    @Override
+    public BigDecimal getRefundedAmountByOrderId(UUID orderId) {
+        // Kiểm tra order tồn tại
+        rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // Lấy tất cả payment của order
+        List<Payment> payments = paymentRepository.findByRentalOrder_OrderId(orderId);
+
+        // Tính tổng số tiền đã hoàn (payment type = 4 REFUND, status = SUCCESS)
+        // Lấy giá trị tuyệt đối vì amount là số âm
+        BigDecimal totalRefunded = payments.stream()
+                .filter(p -> p.getPaymentType() == 4) // Type 4 = REFUND
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                .map(p -> p.getAmount().abs()) // Lấy giá trị tuyệt đối (vì amount là số âm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return totalRefunded;
+    }
+
+    @Override
+    public String getRefundReasonByOrderId(UUID orderId) {
+        // Kiểm tra order tồn tại
+        RentalOrder order = rentalOrderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        // Kiểm tra order có status REFUNDED không
+        if (!"REFUNDED".equalsIgnoreCase(order.getStatus())) {
+            return null; // Đơn chưa được hoàn tiền
+        }
+
+        // Lấy payment REFUND đầu tiên (hoặc mới nhất) để lấy lý do
+        // Hiện tại Payment entity chưa có field lưu lý do, nên trả về null
+        // Có thể mở rộng sau bằng cách thêm field refundReason vào Payment entity
+        Optional<Payment> refundPayment = paymentRepository.findByRentalOrder_OrderId(orderId)
+                .stream()
+                .filter(p -> p.getPaymentType() == 4) // Type 4 = REFUND
+                .filter(p -> p.getStatus() == PaymentStatus.SUCCESS)
+                .findFirst();
+
+        // Nếu có payment REFUND, có thể lấy lý do từ method hoặc description (nếu có)
+        // Hiện tại trả về null vì chưa có field lưu lý do
+        return refundPayment.isPresent() ? null : null;
     }
 }

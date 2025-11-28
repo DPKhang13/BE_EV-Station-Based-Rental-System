@@ -13,11 +13,12 @@ public interface RentalOrderService {
     List<VehicleOrderHistoryResponse> getOrderHistoryByCustomer(UUID customerId);
     void deleteOrder(UUID orderId);
     List<OrderResponse> getRentalOrders();
+    List<OrderSimpleResponse> getRentalOrdersSimple();
     List<OrderResponse> findByCustomer_UserId(UUID customerId);
+    OrderResponse reviewReturn(UUID orderId);
     OrderResponse confirmPickup(UUID orderId);
     OrderResponse confirmReturn(UUID orderId, OrderReturnRequest request);
     List<OrderVerificationResponse> getPendingVerificationOrders();
-    OrderResponse previewReturn(UUID orderId, Integer actualDays);
     List<VehicleOrderHistoryResponse> getOrderHistoryByVehicle(Long vehicleId);
     List<OrderDetailCompactResponse> getCompactDetailsByVehicle(Long vehicleId);
     public OrderDetailCompactResponse updateCompactOrder(Long vehicleId, UUID orderId, CompactOrderUpdateRequest req);
