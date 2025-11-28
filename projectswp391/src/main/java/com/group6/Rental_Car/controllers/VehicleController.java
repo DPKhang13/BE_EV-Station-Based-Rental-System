@@ -9,7 +9,6 @@ import com.group6.Rental_Car.dtos.vehicle.VehicleUpdateStatusRequest;
 import com.group6.Rental_Car.services.vehicle.VehicleService;
 import com.group6.Rental_Car.utils.JwtUserDetails;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +27,7 @@ import java.util.List;
 public class VehicleController {
     @Autowired
     private VehicleService vehicleService;
-    
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -38,9 +37,9 @@ public class VehicleController {
             @ModelAttribute VehicleCreateRequest reqModel,
             @RequestParam(value = "images", required = false) List<MultipartFile> images,
             @AuthenticationPrincipal JwtUserDetails userDetails) throws IOException {
-        
+
         VehicleCreateRequest req;
-        
+
         if (StringUtils.hasText(vehicleJson)) {
             System.out.println("[VehicleController] Received JSON string: " + vehicleJson);
             try {
@@ -49,7 +48,7 @@ public class VehicleController {
                 throw new IllegalArgumentException("Invalid JSON format in 'vehicle' part: " + e.getMessage());
             }
         }
-        
+        // Nếu frontend gửi form data thông thường
         else if (reqModel != null && reqModel.getPlateNumber() != null) {
             System.out.println("[VehicleController] Received form data");
             req = reqModel;
@@ -105,8 +104,6 @@ public class VehicleController {
         return ResponseEntity.ok(vehicles);
     }
 
-<<<<<<< HEAD
-=======
     @GetMapping("/station/{stationId}/available")
     public ResponseEntity<List<VehicleResponse>> getAvailableVehiclesByStation(
             @PathVariable Integer stationId,
@@ -115,7 +112,6 @@ public class VehicleController {
         return ResponseEntity.ok(vehicles);
     }
 
->>>>>>> 42511921db2cf6ea3186d9ad5c681a98adf1061b
     @GetMapping("/carmodel/{carmodel}")
     public ResponseEntity<List<VehicleResponse>> getVehiclesByCarmodel(
             @PathVariable String carmodel) {
